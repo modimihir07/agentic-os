@@ -261,8 +261,7 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 │   ├── utils.js
 │   └── pages/
 │       ├── dashboard.js
-│       ├── skills.js
-│       ├── skill-detail.js
+│       ├── skills.js          # detail view inline
 │       ├── memory.js
 │       ├── scheduler.js
 │       ├── audit.js
