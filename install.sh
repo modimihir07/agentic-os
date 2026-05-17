@@ -67,9 +67,9 @@ mkdir -p backups audit
 if [ ! -d .git ]; then
     echo "Initializing git repository..."
     git init
-    echo "audit/*" >> .gitignore
-    echo "backups/*.tar.gz" >> .gitignore
-    echo "data/settings.json" >> .gitignore
+    grep -qxF "audit/*" .gitignore || echo "audit/*" >> .gitignore
+    grep -qxF "backups/*.tar.gz" .gitignore || echo "backups/*.tar.gz" >> .gitignore
+    grep -qxF "data/settings.json" .gitignore || echo "data/settings.json" >> .gitignore
 fi
 
 echo ""

@@ -10,7 +10,7 @@
     </linearGradient>
     <linearGradient id="dashGrad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%" stop-color="#6c5ce7" stop-opacity="0.3"/>
-      <stop offset="0.5" stop-color="#6c5cev" stop-opacity="0.6"/>
+      <stop offset="0.5" stop-color="#6c5ce7" stop-opacity="0.6"/>
       <stop offset="1" stop-color="#6c5ce7" stop-opacity="0.3"/>
     </linearGradient>
     <linearGradient id="opencodeGrad" x1="0" y1="0" x2="0" y2="1">
