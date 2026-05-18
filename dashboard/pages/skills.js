@@ -156,6 +156,7 @@ async function quickRunSkill(name) {
         <option value="gemini">Gemini CLI</option>
       </select>
     </div>
+    <div id="skillResult" style="display:none"></div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
     <button class="btn btn-primary" onclick="executeSkillRun('${name}')">▶ Run</button>
@@ -165,11 +166,32 @@ async function quickRunSkill(name) {
 async function executeSkillRun(name) {
   const input = document.getElementById('qrsInput').value;
   const agent = document.getElementById('qrsAgent').value;
+  const runBtn = document.querySelector('#modalContainer .btn-primary');
+  const resultArea = document.getElementById('skillResult');
+
+  if (runBtn) { runBtn.disabled = true; runBtn.textContent = '⏳ Running...'; }
+  if (resultArea) {
+    resultArea.style.display = 'block';
+    resultArea.innerHTML = '<div class="loading" style="padding:20px"><div class="loading-spinner"></div><span style="margin-left:8px">Executing skill...</span></div>';
+  }
+
   try {
     const r = await api.runSkill(name, input, agent);
-    closeModal();
-    showToast(`"${name}" dispatched to ${r.agent} #${r.run_id}`, 'success');
+    if (resultArea) {
+      const outputText = r.output || '(no output)';
+      resultArea.innerHTML = `
+        <div class="card" style="margin-top:8px">
+          <div class="card-header" style="border-color:var(--green-dim)">
+            <span class="card-title" style="color:var(--green)">✓ Completed — ${r.agent} #${r.run_id}</span>
+          </div>
+          <pre style="max-height:400px;overflow:auto;font-size:12px;white-space:pre-wrap;margin:0;padding:12px;background:var(--bg-code, #1a1a2e);border-radius:0 0 8px 8px">${escapeHtml(outputText)}</pre>
+        </div>`;
+    }
+    if (runBtn) { runBtn.textContent = '✓ Done'; runBtn.disabled = false; }
   } catch (err) {
-    showToast(`Error: ${err.message}`, 'error');
+    if (resultArea) {
+      resultArea.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
+    }
+    if (runBtn) { runBtn.textContent = '▶ Run'; runBtn.disabled = false; }
   }
 }

@@ -205,6 +205,10 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
     agent_choice = req.agent if req else "auto"
     skill_input = req.input if req else ""
 
+    # Read skill files
+    skill_md = read_file(path / "SKILL.md")
+    learnings = read_file(path / "learnings.md")
+
     # Determine which agent based on skill type
     if agent_choice == "auto":
         devops_keywords = ["devops", "audit", "deploy", "k8s", "gcp", "infra", "terraform"]
@@ -214,23 +218,65 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
         elif any(k in name for k in research_keywords):
             agent_choice = "gemini"
         else:
-            agent_choice = "opencode"
+            # Check SKILL.md for explicit agent assignment
+            for line in skill_md.split('\n'):
+                line = line.strip()
+                if "Primary:" in line:
+                    candidate = line.split(":")[-1].strip().lower()
+                    if candidate in ("opencode", "hermes", "gemini"):
+                        agent_choice = candidate
+                        break
+            if agent_choice == "auto":
+                agent_choice = "opencode"
+
+    # Build prompt from skill instructions + learnings + user input
+    prompt = f"Execute the '{name}' skill.\n\n"
+    if skill_md:
+        prompt += f"## Skill Instructions\n{skill_md}\n\n"
+    if learnings and learnings.strip():
+        prompt += f"## Past Learnings\n{learnings}\n\n"
+    if skill_input:
+        prompt += f"## User Input\n{skill_input}"
+
+    run_id = str(uuid.uuid4())[:8]
+
+    # Execute via agent
+    try:
+        response_text = execute_agent(agent_choice, prompt)
+    except subprocess.TimeoutExpired:
+        response_text = f"⏱ Skill '{name}' timed out on agent '{agent_choice}'."
+    except FileNotFoundError:
+        response_text = f"⚠ Agent '{agent_choice}' CLI not installed. Install it and try again."
+    except Exception as e:
+        response_text = f"⚠ Error executing skill: {str(e)}"
+
+    # Save output to learnings.md
+    timestamp = get_timestamp()[:10]
+    existing = read_file(path / "learnings.md")
+    new_entry = (
+        f"\n## {timestamp} (Run {run_id})\n"
+        f"- Agent: {agent_choice}\n"
+        f"- Input: {skill_input or '(none)'}\n"
+        f"- Output: {response_text[:500]}\n"
+    )
+    write_file(path / "learnings.md", existing + new_entry)
 
     # Log execution
-    run_id = str(uuid.uuid4())[:8]
     append_audit({
         "action": "skill_run",
         "skill": name,
         "agent": agent_choice,
         "run_id": run_id,
+        "output_preview": response_text[:100],
     })
 
     return {
-        "status": "started",
+        "status": "completed",
         "run_id": run_id,
         "skill": name,
         "agent": agent_choice,
-        "message": f"Skill '{name}' dispatched to {agent_choice}",
+        "output": response_text,
+        "message": f"Skill '{name}' completed via {agent_choice}",
     }
 
 @app.get("/api/skills/{name}/eval")
