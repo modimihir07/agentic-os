@@ -10,9 +10,9 @@
   <br/><br/>
 </div>
 
-# Agentic OS 🧠 — Multi-Agent Orchestration Platform
+# Agentic OS (agentic-os) 🧠 — Multi-Agent Orchestration Platform
 
-A locally-hosted operating system for AI agents that coordinates **opencode**, **Hermes Agent**, and **Gemini CLI** into a unified dashboard with persistent memory, cron scheduling, skill execution, cost analytics, and disaster recovery.
+A locally-hosted operating system for AI agents — an open-source GitHub repository — that coordinates **opencode**, **Hermes Agent**, and **Gemini CLI** into a unified dashboard with persistent memory, cron scheduling, skill execution, cost analytics, and disaster recovery.
 
 > **Why Agentic OS?** Most agent tools work in isolation — a terminal for coding, a separate chat for research, another for memory. Agentic OS is the **control plane** that unifies them: one dashboard, one memory layer, one scheduler, one skill hub. Three agents, infinite capabilities.
 
