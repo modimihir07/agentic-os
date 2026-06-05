@@ -15,5 +15,4 @@
 - Dashboard binds to localhost only — no external exposure without explicit config
 
 ## Time
-- User is a BTech 1st year — study schedule takes priority
 - Project builds during free time and weekends

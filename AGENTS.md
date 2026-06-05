@@ -13,9 +13,9 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 | Field | Value |
 |-------|-------|
 | **Name** | Agentic OS |
-| **Location** | `/home/mihir/Desktop/Agentic OS Project/` |
+| **Location** | `~/Desktop/Agentic OS Project/` |
 | **GitHub** | [github.com/modimihir07/agentic-os](https://github.com/modimihir07/agentic-os) |
-| **Author** | Mihir N Modi (Gujarat, India — BTech CSE 1st year) |
+| **Author** | modimihir07 |
 | **Created** | May 17, 2026 |
 | **License** | MIT |
 | **Inspiration** | "Agent OS: Claude + Hermes AI = Superpowers!" (YouTube), MindStudio 4-layer architecture, obra/superpowers, NousResearch/hermes-agent, buildermethods/agent-os, shivsoji/claude-os |
@@ -182,7 +182,7 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 ## Directory Structure
 
 ```
-/home/mihir/Desktop/Agentic OS Project/
+~/Desktop/Agentic OS Project/
 ├── AGENTS.md                  # THIS FILE — complete context for any AI agent
 ├── README.md                  # User-facing documentation
 ├── server.py                  # FastAPI backend (REST API for dashboard)
@@ -316,17 +316,10 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 
 | Detail | Info |
 |--------|------|
-| **Name** | Mihir N Modi |
-| **Email** | rinkumi0210@gmail.com |
-| **Location** | Gujarat, India |
-| **Education** | BTech Computer Engineering, 1st Year |
-| **Career Goal** | AI/ML/LLMs + DevOps/Cloud → MNCs (Google-level) |
 | **Budget** | Strictly free tiers (GCP Free, GitHub Student Pack, Colab, Kaggle) |
 | **Active Project** | CloudMart — GCP DevOps multi-region e-commerce platform |
-| **Other Projects** | AgriAssist AI, Hermes Agent/OpenClaw, EROS Wellness AI, Java OOP practice |
 | **CLI Tools Available** | opencode, Hermes Agent, Gemini CLI |
 | **Preferred Model** | Hermes: Owl Alpha (OpenRouter, free), opencode: deepseek-v4-flash-free (opencode-zen), Gemini: gemini-2.5-flash (Google OAuth) |
-| **Obsidian Vaults** | 4 vaults: DevOps, DeepSeek Chat, AI/ML, SEM-2 Academics (192 files) |
 
 ---
 

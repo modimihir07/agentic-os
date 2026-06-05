@@ -1,11 +1,9 @@
 # USER.md — User Profile for Hermes
 
 ## User
-- Name: Mihir N Modi
-- Location: Gujarat, India
+- Name: User
 - Tech Stack: opencode, Hermes Agent, Gemini CLI, deepseek-v4-flash-free
-- Projects: CloudMart (GCP DevOps), Agentic OS, AgriAssist AI
-- Goals: AI/ML/LLMs + DevOps/Cloud → MNCs
+- Projects: CloudMart (GCP DevOps), Agentic OS
 - Budget: Free tiers only
 
 ## Preferences
@@ -15,6 +13,5 @@
 - Cost-conscious — always free tier first
 
 ## Communication
-- Email: rinkumi0210@gmail.com
 - Primary interaction: CLI (opencode/Hermes/Gemini)
-- Channels: CLI, Telegram (configured)
+- Channels: CLI, messaging (Telegram)
