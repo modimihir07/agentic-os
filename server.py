@@ -631,6 +631,585 @@ def chat(req: ChatRequest):
 def get_chat_history():
     return load_chat_history()
 
+# ═══════════════════════════════════════════════════════════════════
+# v0.2.0 — New Feature Endpoints
+# ═══════════════════════════════════════════════════════════════════
+
+# ─── Models ─────────────────────────────────────────────────────
+
+class KanbanTaskCreate(BaseModel):
+    title: str
+    body: str = ""
+    status: str = "triage"
+    priority: str = "medium"
+    assignee: str = ""
+
+class KanbanTaskUpdate(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    assignee: Optional[str] = None
+
+class KanbanComplete(BaseModel):
+    summary: str = ""
+
+class KanbanBlock(BaseModel):
+    reason: str = ""
+
+class KanbanCommentCreate(BaseModel):
+    message: str
+
+class KanbanLinkCreate(BaseModel):
+    parent_id: str
+    child_id: str
+
+class GoalCreate(BaseModel):
+    title: str
+    description: str = ""
+    category: str = "general"
+    target_date: str = ""
+
+class GoalUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    target_date: Optional[str] = None
+    progress: Optional[int] = None
+    status: Optional[str] = None
+
+class JournalSave(BaseModel):
+    content: str
+
+class RouterSuggest(BaseModel):
+    task: str
+
+class RouterRoute(BaseModel):
+    task: str
+    agent: str
+
+# ─── Data Helpers ───────────────────────────────────────────────
+
+KANBAN_DIR = BASE_DIR / "data" / "kanban"
+GOALS_FILE = BASE_DIR / "data" / "goals.json"
+JOURNAL_DIR = BASE_DIR / "brain" / "journal"
+
+def ensure_dir(d: Path):
+    d.mkdir(parents=True, exist_ok=True)
+
+def load_kanban_tasks():
+    ensure_dir(KANBAN_DIR)
+    tasks = []
+    for f in sorted(KANBAN_DIR.glob("*.json")):
+        tasks.append(json.loads(f.read_text()))
+    return tasks
+
+def save_kanban_task(task: dict):
+    ensure_dir(KANBAN_DIR)
+    (KANBAN_DIR / f"{task['id']}.json").write_text(json.dumps(task, indent=2))
+
+def load_goals():
+    if GOALS_FILE.exists():
+        return json.loads(GOALS_FILE.read_text())
+    return []
+
+def save_goals(goals: list):
+    GOALS_FILE.write_text(json.dumps(goals, indent=2))
+
+# ─── Routes: Kanban Board (13 endpoints) ────────────────────────
+
+@app.get("/api/kanban/board")
+def kanban_board(status: Optional[str] = None):
+    try:
+        tasks = load_kanban_tasks()
+        if status:
+            tasks = [t for t in tasks if t.get("status") == status]
+        columns = {"triage": [], "todo": [], "ready": [], "in_progress": [], "blocked": [], "done": []}
+        for t in tasks:
+            s = t.get("status", "triage")
+            if s in columns:
+                columns[s].append(t)
+        return {"columns": columns, "total": len(tasks)}
+    except Exception as e:
+        return {"error": str(e), "columns": {}, "total": 0}
+
+@app.get("/api/kanban/tasks/{task_id}")
+def kanban_get_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    return json.loads(path.read_text())
+
+@app.post("/api/kanban/tasks")
+def kanban_create_task(data: KanbanTaskCreate):
+    try:
+        task = {
+            "id": str(uuid.uuid4())[:8],
+            "title": data.title,
+            "body": data.body,
+            "status": data.status,
+            "priority": data.priority,
+            "assignee": data.assignee,
+            "comments": [],
+            "links": [],
+            "created": get_timestamp(),
+            "updated": get_timestamp(),
+        }
+        save_kanban_task(task)
+        append_audit({"action": "kanban_task_created", "title": data.title})
+        return task
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.patch("/api/kanban/tasks/{task_id}")
+def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    for field in ["title", "body", "status", "priority", "assignee"]:
+        val = getattr(data, field, None)
+        if val is not None:
+            task[field] = val
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    append_audit({"action": "kanban_task_updated", "task_id": task_id})
+    return task
+
+@app.post("/api/kanban/tasks/{task_id}/complete")
+def kanban_complete_task(task_id: str, data: KanbanComplete):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    task["status"] = "done"
+    task["summary"] = data.summary
+    task["completed_at"] = get_timestamp()
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    append_audit({"action": "kanban_task_completed", "task_id": task_id})
+    return task
+
+@app.post("/api/kanban/tasks/{task_id}/block")
+def kanban_block_task(task_id: str, data: KanbanBlock):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    task["status"] = "blocked"
+    task["block_reason"] = data.reason
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    append_audit({"action": "kanban_task_blocked", "task_id": task_id})
+    return task
+
+@app.post("/api/kanban/tasks/{task_id}/unblock")
+def kanban_unblock_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    task["status"] = "ready"
+    task["block_reason"] = ""
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    append_audit({"action": "kanban_task_unblocked", "task_id": task_id})
+    return task
+
+@app.post("/api/kanban/tasks/{task_id}/comments")
+def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    comment = {
+        "id": str(uuid.uuid4())[:8],
+        "message": data.message,
+        "timestamp": get_timestamp(),
+    }
+    task.setdefault("comments", []).append(comment)
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    return task
+
+@app.post("/api/kanban/links")
+def kanban_add_link(data: KanbanLinkCreate):
+    for tid in [data.parent_id, data.child_id]:
+        path = KANBAN_DIR / f"{tid}.json"
+        if not path.exists():
+            raise HTTPException(404, f"Task {tid} not found")
+        t = json.loads(path.read_text())
+        t.setdefault("links", [])
+        link = {"parent": data.parent_id, "child": data.child_id}
+        if link not in t["links"]:
+            t["links"].append(link)
+        t["updated"] = get_timestamp()
+        save_kanban_task(t)
+    append_audit({"action": "kanban_link_added", "parent": data.parent_id, "child": data.child_id})
+    return {"status": "linked"}
+
+@app.delete("/api/kanban/links")
+def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
+    for tid in [parent_id, child_id]:
+        path = KANBAN_DIR / f"{tid}.json"
+        if path.exists():
+            t = json.loads(path.read_text())
+            t.setdefault("links", [])
+            t["links"] = [l for l in t["links"] if not (l.get("parent") == parent_id and l.get("child") == child_id)]
+            t["updated"] = get_timestamp()
+            save_kanban_task(t)
+    return {"status": "unlinked"}
+
+@app.post("/api/kanban/dispatch")
+def kanban_dispatch():
+    append_audit({"action": "kanban_dispatch_triggered"})
+    return {"status": "dispatch_triggered", "message": "Dispatcher notified"}
+
+@app.post("/api/kanban/tasks/{task_id}/specify")
+def kanban_specify_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    if task.get("status") == "triage":
+        task["status"] = "todo"
+        task["updated"] = get_timestamp()
+        save_kanban_task(task)
+    return task
+
+@app.post("/api/kanban/tasks/{task_id}/decompose")
+def kanban_decompose_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    children = []
+    for i, subtask in enumerate(task.get("body", "").split("\n")):
+        subtask = subtask.strip().lstrip("-* ")
+        if subtask:
+            child = {
+                "id": str(uuid.uuid4())[:8],
+                "title": subtask[:80],
+                "body": subtask,
+                "status": "todo",
+                "priority": task.get("priority", "medium"),
+                "assignee": "",
+                "comments": [],
+                "links": [{"parent": task_id, "child": ""}],
+                "created": get_timestamp(),
+                "updated": get_timestamp(),
+            }
+            child["links"][0]["child"] = child["id"]
+            save_kanban_task(child)
+            children.append(child)
+    return {"parent": task_id, "children": children}
+
+# ─── Routes: Goals (4 endpoints) ─────────────────────────────────
+
+@app.get("/api/goals")
+def list_goals():
+    try:
+        return {"goals": load_goals()}
+    except Exception as e:
+        return {"goals": [], "error": str(e)}
+
+@app.post("/api/goals")
+def create_goal(data: GoalCreate):
+    try:
+        goals = load_goals()
+        goal = {
+            "id": str(uuid.uuid4())[:8],
+            "title": data.title,
+            "description": data.description,
+            "category": data.category,
+            "target_date": data.target_date,
+            "status": "active",
+            "progress": 0,
+            "created": get_timestamp(),
+            "updated": get_timestamp(),
+        }
+        goals.append(goal)
+        save_goals(goals)
+        # Auto-sync to brain/active-projects.md
+        active_path = BASE_DIR / "brain" / "active-projects.md"
+        if active_path.exists():
+            existing = active_path.read_text()
+            existing += f"\n- [{goal['title']}](goal:{goal['id']}) — {goal['description'][:80]}\n"
+            active_path.write_text(existing)
+        append_audit({"action": "goal_created", "title": data.title})
+        return goal
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.put("/api/goals/{goal_id}")
+def update_goal(goal_id: str, data: GoalUpdate):
+    try:
+        goals = load_goals()
+        for g in goals:
+            if g["id"] == goal_id:
+                for field in ["title", "description", "category", "target_date", "progress", "status"]:
+                    val = getattr(data, field, None)
+                    if val is not None:
+                        g[field] = val
+                g["updated"] = get_timestamp()
+                save_goals(goals)
+                return g
+        raise HTTPException(404, "Goal not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.delete("/api/goals/{goal_id}")
+def delete_goal(goal_id: str):
+    try:
+        goals = load_goals()
+        goals = [g for g in goals if g["id"] != goal_id]
+        save_goals(goals)
+        append_audit({"action": "goal_deleted", "goal_id": goal_id})
+        return {"status": "deleted"}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+# ─── Routes: Journal (4 endpoints) ───────────────────────────────
+
+@app.get("/api/journal/entries")
+def list_journal_entries():
+    try:
+        ensure_dir(JOURNAL_DIR)
+        entries = []
+        for f in sorted(JOURNAL_DIR.glob("*.md"), reverse=True):
+            entries.append({
+                "date": f.stem,
+                "preview": f.read_text()[:200],
+                "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+            })
+        return {"entries": entries}
+    except Exception as e:
+        return {"entries": [], "error": str(e)}
+
+@app.get("/api/journal/entries/{entry_date}")
+def get_journal_entry(entry_date: str):
+    try:
+        path = JOURNAL_DIR / f"{entry_date}.md"
+        ensure_dir(JOURNAL_DIR)
+        content = path.read_text() if path.exists() else ""
+        return {"date": entry_date, "content": content}
+    except Exception as e:
+        return {"date": entry_date, "content": "", "error": str(e)}
+
+@app.put("/api/journal/entries/{entry_date}")
+def save_journal_entry(entry_date: str, data: JournalSave):
+    try:
+        ensure_dir(JOURNAL_DIR)
+        path = JOURNAL_DIR / f"{entry_date}.md"
+        path.write_text(data.content)
+        append_audit({"action": "journal_saved", "date": entry_date})
+        return {"status": "saved", "date": entry_date}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.get("/api/journal/search")
+def search_journal(q: str = Query("")):
+    try:
+        ensure_dir(JOURNAL_DIR)
+        if not q:
+            return {"results": []}
+        results = []
+        for f in JOURNAL_DIR.glob("*.md"):
+            content = f.read_text()
+            if q.lower() in content.lower():
+                results.append({"date": f.stem, "preview": content[:200]})
+        return {"results": results, "query": q}
+    except Exception as e:
+        return {"results": [], "error": str(e)}
+
+# ─── Routes: Agent Health (3 endpoints) ──────────────────────────
+
+@app.get("/api/agents/health")
+def get_agent_health():
+    try:
+        agents = []
+        for name in ["opencode", "hermes", "gemini"]:
+            info = check_agent(name)
+            info["uptime"] = 0
+            info["success_rate"] = 100
+            info["last_seen"] = get_timestamp()
+            agents.append(info)
+        return {"agents": agents, "updated": get_timestamp()}
+    except Exception as e:
+        return {"agents": [], "error": str(e), "updated": get_timestamp()}
+
+@app.get("/api/agents/{name}/stats")
+def get_agent_stats(name: str):
+    try:
+        if name not in ["opencode", "hermes", "gemini"]:
+            raise HTTPException(400, "Invalid agent")
+        info = check_agent(name)
+        return {
+            "name": name,
+            "status": info["status"],
+            "total_runs": 0,
+            "successful_runs": 0,
+            "failed_runs": 0,
+            "avg_response_time": 0,
+            "last_seen": get_timestamp(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+@app.post("/api/agents/health/refresh")
+def refresh_agent_health():
+    try:
+        agents = []
+        for name in ["opencode", "hermes", "gemini"]:
+            info = check_agent(name)
+            agents.append(info)
+        append_audit({"action": "agent_health_refreshed"})
+        return {"agents": agents, "updated": get_timestamp()}
+    except Exception as e:
+        return {"agents": [], "error": str(e)}
+
+# ─── Routes: Smart Router (2 endpoints) ─────────────────────────
+
+ROUTER_RULES = {
+    "opencode": ["code", "devops", "deploy", "git", "file", "terraform", "docker", "test", "build", "infra", "script"],
+    "hermes": ["memory", "schedule", "channel", "skill", "cron", "reminder", "brain", "plugin", "backup"],
+    "gemini": ["research", "analyze", "search", "compare", "explain", "study", "learn", "document", "report", "review"],
+}
+
+@app.post("/api/router/suggest")
+def router_suggest(data: RouterSuggest):
+    try:
+        task_lower = data.task.lower()
+        scores = {}
+        for agent, keywords in ROUTER_RULES.items():
+            scores[agent] = sum(1 for k in keywords if k in task_lower)
+        best = max(scores, key=scores.get)
+        confidence = "high" if scores[best] >= 2 else "medium" if scores[best] == 1 else "low"
+        return {
+            "suggested_agent": best,
+            "confidence": confidence,
+            "scores": scores,
+            "task": data.task,
+        }
+    except Exception as e:
+        return {"suggested_agent": "opencode", "confidence": "low", "error": str(e)}
+
+@app.post("/api/router/route")
+def router_route(data: RouterRoute):
+    try:
+        agent = data.agent.lower()
+        if agent not in ["opencode", "hermes", "gemini"]:
+            return {"status": "error", "message": f"Invalid agent: {agent}"}
+        append_audit({"action": "task_routed", "agent": agent, "task_preview": data.task[:50]})
+        return {
+            "status": "routed",
+            "agent": agent,
+            "task": data.task,
+            "message": f"Task routed to {agent}",
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# ─── Routes: Learning Analytics (2 endpoints) ───────────────────
+
+@app.get("/api/analytics/skills")
+def get_skill_analytics():
+    try:
+        skills_dir = BASE_DIR / "skills"
+        analytics = []
+        for d in sorted(skills_dir.iterdir()):
+            if d.is_dir() and not d.name.startswith("_"):
+                eval_path = d / "eval.json"
+                score_path = d / "score-history.json"
+                scores = json.loads(score_path.read_text()) if score_path.exists() else []
+                eval_data = json.loads(eval_path.read_text()) if eval_path.exists() else {}
+                avg_score = sum(s.get("score", 0) for s in scores) / len(scores) if scores else 0
+                analytics.append({
+                    "name": d.name,
+                    "total_runs": len(scores),
+                    "avg_score": round(avg_score, 1),
+                    "last_score": scores[-1].get("score", 0) if scores else 0,
+                    "trend": "up" if len(scores) >= 2 and scores[-1].get("score", 0) > scores[-2].get("score", 0) else "down" if len(scores) >= 2 else "stable",
+                })
+        return {"skills": sorted(analytics, key=lambda x: x["total_runs"], reverse=True)}
+    except Exception as e:
+        return {"skills": [], "error": str(e)}
+
+@app.get("/api/analytics/trends")
+def get_trend_analytics():
+    try:
+        skills_dir = BASE_DIR / "skills"
+        trends = []
+        for d in sorted(skills_dir.iterdir()):
+            if d.is_dir() and not d.name.startswith("_"):
+                score_path = d / "score-history.json"
+                scores = json.loads(score_path.read_text()) if score_path.exists() else []
+                if scores:
+                    trends.append({
+                        "name": d.name,
+                        "scores": [s.get("score", 0) for s in scores[-10:]],
+                        "labels": [s.get("date", "") for s in scores[-10:]],
+                    })
+        return {"trends": trends}
+    except Exception as e:
+        return {"trends": [], "error": str(e)}
+
+# ─── Routes: Session Replay (2 endpoints) ───────────────────────
+
+@app.get("/api/sessions/list")
+def list_sessions():
+    try:
+        sessions = []
+        sessions_dir = Path.home() / ".local" / "share" / "opencode"
+        log_dir = sessions_dir / "log"
+        if log_dir.exists():
+            for f in sorted(log_dir.glob("*.log"), reverse=True)[:20]:
+                sessions.append({
+                    "id": f.stem,
+                    "name": f.stem,
+                    "size": f.stat().st_size,
+                    "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
+                    "source": "opencode",
+                })
+        hermes_sessions = Path.home() / ".hermes" / "sessions.json"
+        if hermes_sessions.exists():
+            sessions.append({
+                "id": "hermes-sessions",
+                "name": "Hermes Session Archive",
+                "size": hermes_sessions.stat().st_size,
+                "modified": datetime.fromtimestamp(hermes_sessions.stat().st_mtime).isoformat(),
+                "source": "hermes",
+            })
+        return {"sessions": sessions}
+    except Exception as e:
+        return {"sessions": [], "error": str(e)}
+
+@app.get("/api/sessions/{session_id}/replay")
+def get_session_replay(session_id: str):
+    try:
+        sessions_dir = Path.home() / ".local" / "share" / "opencode"
+        log_file = sessions_dir / "log" / f"{session_id}.log"
+        if log_file.exists():
+            content = log_file.read_text()
+            lines = content.split("\n")
+            messages = []
+            for line in lines:
+                if "user:" in line.lower() or "assistant:" in line.lower():
+                    messages.append(line)
+            return {
+                "session_id": session_id,
+                "lines": len(lines),
+                "messages": messages[:100],
+                "content": content[:5000],
+            }
+        return {"session_id": session_id, "messages": [], "content": "Session log not found"}
+    except Exception as e:
+        return {"session_id": session_id, "messages": [], "error": str(e)}
+
 # ─── Routes: Dashboard Static Files ──────────────────────────────
 
 dashboard_dir = BASE_DIR / "dashboard"

@@ -1,0 +1,12 @@
+{
+  "id": "0f822987",
+  "title": "Fix login bug",
+  "body": "The login page has a race condition",
+  "status": "todo",
+  "priority": "high",
+  "assignee": "opencode",
+  "comments": [],
+  "links": [],
+  "created": "2026-06-05T09:52:18.236452+00:00",
+  "updated": "2026-06-05T09:52:18.236473+00:00"
+}

@@ -16,6 +16,11 @@ const api = {
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
+  async patch(path, body = {}) {
+    const r = await fetch(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
+    return r.json();
+  },
   async del(path) {
     const r = await fetch(path, { method: 'DELETE' });
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
@@ -47,4 +52,41 @@ const api = {
   discoverStandards: () => api.post('/api/standards/discover'),
   chat: (agent, message, controller) => api.post('/api/chat', { agent, message }, controller),
   getChatHistory: () => api.get('/api/chat/history'),
+  // Kanban
+  getKanbanBoard: (status) => api.get(status ? `/api/kanban/board?status=${encodeURIComponent(status)}` : '/api/kanban/board'),
+  getKanbanTask: (id) => api.get(`/api/kanban/tasks/${encodeURIComponent(id)}`),
+  createKanbanTask: (data) => api.post('/api/kanban/tasks', data),
+  updateKanbanTask: (id, data) => api.patch(`/api/kanban/tasks/${encodeURIComponent(id)}`, data),
+  completeKanbanTask: (id, summary) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/complete`, { summary }),
+  blockKanbanTask: (id, reason) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/block`, { reason }),
+  unblockKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/unblock`, {}),
+  addKanbanComment: (id, message) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/comments`, { message }),
+  linkKanbanTasks: (parentId, childId) => api.post('/api/kanban/links', { parent_id: parentId, child_id: childId }),
+  unlinkKanbanTasks: (parentId, childId) => api.del(`/api/kanban/links?parent_id=${encodeURIComponent(parentId)}&child_id=${encodeURIComponent(childId)}`),
+  dispatchKanban: () => api.post('/api/kanban/dispatch', {}),
+  specifyKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/specify`, {}),
+  decomposeKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/decompose`, {}),
+  // Goals
+  getGoals: () => api.get('/api/goals'),
+  createGoal: (data) => api.post('/api/goals', data),
+  updateGoal: (id, data) => api.put(`/api/goals/${encodeURIComponent(id)}`, data),
+  deleteGoal: (id) => api.del(`/api/goals/${encodeURIComponent(id)}`),
+  // Journal
+  getJournalEntries: () => api.get('/api/journal/entries'),
+  getJournalEntry: (date) => api.get(`/api/journal/entries/${encodeURIComponent(date)}`),
+  saveJournalEntry: (date, content) => api.put(`/api/journal/entries/${encodeURIComponent(date)}`, { content }),
+  searchJournal: (query) => api.get(`/api/journal/search?q=${encodeURIComponent(query)}`),
+  // Agent Health
+  getAgentHealth: () => api.get('/api/agents/health'),
+  getAgentStats: (name) => api.get(`/api/agents/${encodeURIComponent(name)}/stats`),
+  refreshAgentHealth: () => api.post('/api/agents/health/refresh', {}),
+  // Smart Router
+  suggestRouter: (task) => api.post('/api/router/suggest', { task }),
+  routeTask: (task, agent) => api.post('/api/router/route', { task, agent }),
+  // Learning Analytics
+  getSkillAnalytics: () => api.get('/api/analytics/skills'),
+  getTrendAnalytics: () => api.get('/api/analytics/trends'),
+  // Session Replay
+  listSessions: () => api.get('/api/sessions/list'),
+  getSessionReplay: (id) => api.get(`/api/sessions/${encodeURIComponent(id)}/replay`),
 };

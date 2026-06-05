@@ -20,3 +20,5 @@
 ## AgriAssist AI
 - Status: On hold
 - Hackathon project (slides, MVP, pitch strategy)
+
+- [Test goal](goal:c1c992ef) — 

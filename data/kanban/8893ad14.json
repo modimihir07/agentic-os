@@ -1,0 +1,15 @@
+{
+  "id": "8893ad14",
+  "title": "Test kanban task",
+  "body": "",
+  "status": "blocked",
+  "priority": "medium",
+  "assignee": "",
+  "comments": [],
+  "links": [],
+  "created": "2026-06-05T09:50:30.293643+00:00",
+  "updated": "2026-06-05T09:52:18.274595+00:00",
+  "summary": "Test done",
+  "completed_at": "2026-06-05T09:50:46.473612+00:00",
+  "block_reason": "Waiting for API review"
+}
