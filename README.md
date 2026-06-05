@@ -5,6 +5,7 @@
   <img src="https://img.shields.io/badge/FastAPI-0.115+-green.svg" alt="FastAPI"/>
   <img src="https://img.shields.io/badge/agents-3-orange.svg" alt="3 Agents"/>
   <img src="https://img.shields.io/badge/skills-16-purple.svg" alt="16 Skills"/>
+  <img src="https://img.shields.io/badge/version-v0.2.0-blueviolet.svg" alt="v0.2.0"/>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Status: Stable"/>
   <a href="https://dev.to/mihir_nmodi_14a06a4019e1/i-built-an-open-source-agent-os-2h30"><img src="https://img.shields.io/badge/dev.to-article-blue.svg" alt="dev.to article"/></a>
   <br/><br/>
@@ -34,6 +35,13 @@ A locally-hosted operating system for AI agents — an open-source GitHub reposi
 | **🔌 Plugin Registry** | Marketplace-style plugin management (extensible via skills) |
 | **🎨 Dark/Light Theme** | GitHub-style dark mode + clean light theme, toggle from sidebar |
 | **⚡ Zero API Costs** | Built for free tiers — Gemini Flash, OpenRouter free models, local opencode |
+| **📋 Kanban Board** | Visual task management — drag-and-drop columns, priority/status filtering, block/unblock, detail view |
+| **🎯 Goals** | Project targets with progress tracking, auto-syncs to `brain/active-projects.md` |
+| **📓 Journal** | Daily markdown entries stored as `brain/journal/YYYY-MM-DD.md` with full-text search |
+| **❤️ Agent Health** | Real-time monitoring of opencode, Hermes, and Gemini CLI availability |
+| **🧭 Smart Router** | Keyword-based task routing with confidence scoring — suggests best agent for any task |
+| **📊 Learning Analytics** | Skill evaluation scores, performance trends, and historical charts |
+| **🎬 Session Replay** | Browse and replay past opencode sessions from the dashboard |
 
 ---
 
@@ -149,7 +157,7 @@ agentic-os/
 │   ├── api.js             # API client (all endpoints)
 │   ├── styles.css         # Full dark/light theme CSS
 │   ├── utils.js           # Shared utilities
-│   └── pages/             # 13 page modules
+│   └── pages/             # 20 page modules (13 original + 7 v0.2.0)
 │       ├── dashboard.js   # Overview with stats
 │       ├── skills.js      # Skill grid/list/detail
 │       ├── memory.js      # Brain file editor
@@ -162,7 +170,14 @@ agentic-os/
 │       ├── prompts.js     # Template library
 │       ├── standards.js   # Code conventions
 │       ├── settings.js    # Config editor
-│       └── setup-wizard.js  # Guided setup
+│       ├── setup-wizard.js  # Guided setup
+│       ├── kanban.js      # ▸ Kanban Board (v0.2.0)
+│       ├── goals.js       # ▸ Goals (v0.2.0)
+│       ├── journal.js     # ▸ Journal (v0.2.0)
+│       ├── agent-health.js # ▸ Agent Health (v0.2.0)
+│       ├── smart-router.js # ▸ Smart Router (v0.2.0)
+│       ├── learning-analytics.js # ▸ Learning Analytics (v0.2.0)
+│       └── session-replay.js # ▸ Session Replay (v0.2.0)
 │
 ├── brain/                 # Shared context (all agents read)
 │   ├── business-brain.md  # Current project context
@@ -170,7 +185,8 @@ agentic-os/
 │   ├── recent-decisions.md
 │   ├── active-projects.md
 │   ├── identity.md
-│   └── constitution.md
+│   ├── constitution.md
+│   └── journal/           # Daily markdown entries (YYYY-MM-DD.md)
 │
 ├── skills/                # 16 executable skills
 │   ├── devops-audit/      # GCP/CloudMart infra audit
@@ -202,6 +218,27 @@ agentic-os/
 
 ---
 
+## 🆕 What's New in v0.2.0
+
+| Feature | Description |
+|---------|-------------|
+| **📋 Kanban Board** | Visual task management with 6 columns (triage → todo → ready → in_progress → blocked → done), drag-and-drop, priority labels, filtering, and detail modals with complete/block/unblock actions |
+| **🎯 Goals** | Create and track project targets with progress bars, categories, and target dates. Auto-syncs to `brain/active-projects.md` for agent awareness |
+| **📓 Journal** | Daily markdown journal entries stored as `brain/journal/YYYY-MM-DD.md`. Full-text search, day streak tracking, word count |
+| **❤️ Agent Health** | Real-time dashboard showing online/offline status for all 3 agents (opencode, Hermes, Gemini CLI). Auto-refresh every 5 seconds |
+| **🧭 Smart Router** | Keyword-based routing engine — type a task description and get an AI-suggested agent with confidence score. Manual override available |
+| **📊 Learning Analytics** | Skill evaluation scores, performance trends, and per-skill detail breakdowns with mini bar charts |
+| **🎬 Session Replay** | Browse and replay past opencode sessions directly from the dashboard. View message content and timestamps |
+
+### UI Modernization
+- **Glass morphism cards** with subtle backdrop blur
+- **Glow borders** and gradient accents on interactive elements
+- **Skeleton loaders** with shimmer animation for async content
+- **Empty states** with icons and contextual messages
+- **All CSS additions are zero-breaking** — existing 13 pages and 28 endpoints unchanged
+
+---
+
 ## 🎮 Usage
 
 ### AI Chat
@@ -222,6 +259,27 @@ Create cron jobs: heartbeat (5 min), memory consolidation (weekly), daily standu
 ### Cost Analytics
 Track spending per provider/model/agent. Free-tier alerts warn when nearing limits.
 
+### Kanban Board (v0.2.0)
+Drag tasks across columns, filter by priority/category, click to view details. Block tasks when blocked, mark complete when done.
+
+### Goals (v0.2.0)
+Create goals with categories and target dates. Progress tracked via +25% increments. Completed goals auto-sync to brain context.
+
+### Journal (v0.2.0)
+Write daily entries with markdown support. Auto-saves after 2 seconds. Search across all entries from the dashboard.
+
+### Smart Router (v0.2.0)
+Describe a task in plain English — the router analyzes keywords and suggests the best agent. Route manually or let AI decide.
+
+### Agent Health (v0.2.0)
+Monitor online status of all 3 agents in real time with 5-second auto-refresh. Health checks are filesystem-based (no subprocess calls).
+
+### Learning Analytics (v0.2.0)
+View evaluation scores for all 16 skills. Trends chart shows score progression over time. Top skills ranked by performance.
+
+### Session Replay (v0.2.0)
+Browse opencode session logs by date and size. Click "Replay" to view all messages in a chat-like interface.
+
 ---
 
 ## 📊 Comparison: Agentic OS vs Claude Agent OS (Julian Goldie)
@@ -240,7 +298,7 @@ Track spending per provider/model/agent. Free-tier alerts warn when nearing limi
 | **Audit Trail** | Not shown | Full activity log |
 | **Standards System** | Not shown | Discover/inject conventions |
 | **Client Timeout** | Not shown | 200s AbortController |
-| **Kanban Board** | Yes | No (not needed for agent OS) |
+| **Kanban Board** | Yes | **Yes — built-in** with drag-and-drop, priority, block/unblock, filters |
 | **Open Source** | No (tutorial only) | **MIT License** |
 
 ---

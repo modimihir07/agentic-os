@@ -192,14 +192,15 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 ├── backup.sh                  # Manual backup [E3]
 ├── restore.sh                 # Manual restore [E3]
 │
-├── brain/                     # [F2, F7, F10, F49, F50] Shared context
+├── brain/                     # [F2, F7, F10, F49, F50, F54] Shared context
 │   ├── business-brain.md
 │   ├── memory.md
 │   ├── recent-decisions.md
 │   ├── active-projects.md
 │   ├── constraints.md
 │   ├── identity.md
-│   └── constitution.md
+│   ├── constitution.md
+│   └── journal/               # [F54] Daily markdown entries (YYYY-MM-DD.md)
 │
 ├── skills/                    # [F5, F8, F15, F17] Skills Hub
 │   ├── _template/
@@ -272,7 +273,14 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 │       ├── prompts.js
 │       ├── standards.js
 │       ├── settings.js
-│       └── setup-wizard.js
+│       ├── setup-wizard.js
+│       ├── kanban.js          # [F52] Kanban Board (v0.2.0)
+│       ├── goals.js           # [F53] Goals (v0.2.0)
+│       ├── journal.js         # [F54] Journal (v0.2.0)
+│       ├── agent-health.js    # [F55] Agent Health (v0.2.0)
+│       ├── smart-router.js    # [F56] Smart Router (v0.2.0)
+│       ├── learning-analytics.js # [F57] Learning Analytics (v0.2.0)
+│       └── session-replay.js  # [F58] Session Replay (v0.2.0)
 │
 ├── audit/                     # [F38] Audit Trail
 │   └── audit.log
@@ -295,7 +303,9 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 ├── data/                      # Runtime data
 │   ├── settings.json
 │   ├── cost-history.json
-│   └── agent-routes.json
+│   ├── agent-routes.json
+│   ├── kanban/                # [F52] Kanban task JSON files
+│   └── goals.json             # [F53] Goals storage
 │
 └── .git/                      # [E2] Auto-versioning
 ```
@@ -351,8 +361,9 @@ When you (an AI agent) are dropped into this directory for the first time:
 
 ---
 
-## API Endpoints (server.py FastAPI)
+## API Endpoints (server.py FastAPI, 58 total — 28 original + 30 v0.2.0)
 
+### Core (28 original endpoints)
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | GET | `/api/status` | System health + 3 agent status |
@@ -377,6 +388,64 @@ When you (an AI agent) are dropped into this directory for the first time:
 | PUT | `/api/settings` | Update user settings |
 | GET | `/api/standards` | List standards |
 | POST | `/api/standards/discover` | Run standards discovery |
+
+### Kanban Board (v0.2.0) — 13 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/kanban/board` | Get kanban board (all columns + tasks) |
+| GET | `/api/kanban/tasks/{id}` | Get single task |
+| POST | `/api/kanban/tasks` | Create task |
+| PATCH | `/api/kanban/tasks/{id}` | Update task fields |
+| POST | `/api/kanban/tasks/{id}/complete` | Mark task done |
+| POST | `/api/kanban/tasks/{id}/block` | Block task |
+| POST | `/api/kanban/tasks/{id}/unblock` | Unblock task |
+| POST | `/api/kanban/tasks/{id}/comments` | Add comment |
+| POST | `/api/kanban/links` | Link parent/child tasks |
+| DELETE | `/api/kanban/links` | Unlink tasks |
+| POST | `/api/kanban/dispatch` | Dispatch triage tasks |
+| POST | `/api/kanban/tasks/{id}/specify` | Generate spec |
+| POST | `/api/kanban/tasks/{id}/decompose` | Decompose into subtasks |
+
+### Goals (v0.2.0) — 4 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/goals` | List all goals |
+| POST | `/api/goals` | Create goal (auto-syncs to brain/active-projects.md) |
+| PUT | `/api/goals/{id}` | Update goal progress/status |
+| DELETE | `/api/goals/{id}` | Delete goal |
+
+### Journal (v0.2.0) — 4 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/journal/entries` | List all entry dates |
+| GET | `/api/journal/entries/{date}` | Get entry content |
+| PUT | `/api/journal/entries/{date}` | Save entry (creates/updates brain/journal/YYYY-MM-DD.md) |
+| GET | `/api/journal/search?q=` | Full-text search across entries |
+
+### Agent Health (v0.2.0) — 3 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/agents/health` | Get live status of all 3 agents |
+| GET | `/api/agents/{name}/stats` | Get per-agent statistics |
+| POST | `/api/agents/health/refresh` | Force refresh all status checks |
+
+### Smart Router (v0.2.0) — 2 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/router/suggest` | Suggest best agent for a task description |
+| POST | `/api/router/route` | Route task to a specific agent |
+
+### Learning Analytics (v0.2.0) — 2 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/analytics/skills` | Skill evaluation scores across all skills |
+| GET | `/api/analytics/trends` | Score history trends per skill |
+
+### Session Replay (v0.2.0) — 2 endpoints
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| GET | `/api/sessions/list` | List opencode sessions |
+| GET | `/api/sessions/{id}/replay` | Get session message content |
 
 ---
 
