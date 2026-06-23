@@ -91,11 +91,23 @@ A locally-hosted operating system for AI agents — an open-source GitHub reposi
 
 ## 🚀 Quick Start
 
+### Linux/macOS
+
 ```bash
 git clone https://github.com/modimihir07/agentic-os.git
 cd agentic-os
 chmod +x install.sh && ./install.sh
 ./start.sh
+# Open http://127.0.0.1:8080
+```
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/modimihir07/agentic-os.git
+cd agentic-os
+.\install.ps1
+python .\server.py
 # Open http://127.0.0.1:8080
 ```
 
@@ -105,13 +117,13 @@ chmod +x install.sh && ./install.sh
 
 | Tool | Required? | Install |
 |------|-----------|---------|
-| Python 3.10+ | ✅ Required | `sudo apt install python3 python3-pip` |
-| Node.js 18+ | ⚠ For opencode | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo bash - && sudo apt install -y nodejs` |
+| Python 3.10+ | ✅ Required | Install from your OS package manager or [python.org](https://www.python.org/downloads/) |
+| Node.js 18+ | ⚠ For opencode and Gemini CLI | Install from your OS package manager or [nodejs.org](https://nodejs.org/) |
 | opencode | ⚠ For code tasks | `npm install -g @opencode/cli` |
-| Hermes Agent | ⚠ For memory/scheduling | `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \| bash` |
+| Hermes Agent | ⚠ For memory/scheduling | Follow the upstream Hermes Agent documentation. If native Windows support is unavailable, use WSL for Hermes. |
 | Gemini CLI | ⚠ For Google AI | `npm install -g @google/gemini-cli` |
 
-> ⚠ = Optional — the dashboard works with any subset of installed agents.
+> ⚠ = Optional — the dashboard starts and core pages work without all agent CLIs installed. Agent-specific chat, routing, health, and skill execution features will show offline or warning status until the relevant CLI is installed and authenticated.
 
 ---
 
@@ -147,7 +159,7 @@ Edit `data/settings.json`:
 agentic-os/
 ├── server.py              # FastAPI backend (REST API)
 ├── requirements.txt       # Python dependencies
-├── install.sh             # One-command installer
+├── install.sh / install.ps1 # Platform installers
 ├── start.sh               # Launch dashboard
 ├── backup.sh / restore.sh # Disaster recovery
 │
@@ -305,7 +317,7 @@ Browse opencode session logs by date and size. Click "Replay" to view all messag
 
 ## 🧪 Tested On
 
-- **OS**: Linux (Ubuntu 22.04+), macOS
+- **OS**: Linux (Ubuntu 22.04+), macOS; Windows dashboard setup supported via PowerShell, with Hermes best used through WSL if native support is unavailable
 - **Python**: 3.10, 3.11, 3.12
 - **Browsers**: Chrome, Firefox, Edge
 - **Agents**: opencode v0.8+, Hermes Agent v1.0+, Gemini CLI v1.0+

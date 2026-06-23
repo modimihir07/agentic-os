@@ -1228,7 +1228,7 @@ def index():
         content = content.replace('src="app.js"', 'src="/dashboard/app.js"')
         content = content.replace('pages/', '/dashboard/pages/')
         return HTMLResponse(content=content)
-    return HTMLResponse("<h1>Agentic OS</h1><p>Dashboard not built yet. Run <code>./install.sh</code> first.</p>")
+    return HTMLResponse("<h1>Agentic OS</h1><p>Dashboard not built yet. Run the installer for your platform first (<code>./install.sh</code> on Linux/macOS or <code>.\\install.ps1</code> on Windows).</p>")
 
 # ─── Favicon ──────────────────────────────────────────────────────
 
