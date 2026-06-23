@@ -149,7 +149,8 @@ agentic-os/
 ├── requirements.txt       # Python dependencies
 ├── install.sh             # One-command installer
 ├── start.sh               # Launch dashboard
-├── backup.sh / restore.sh # Disaster recovery
+├── backup.sh / restore.sh # Unix disaster recovery
+├── backup.ps1 / restore.ps1 # Windows disaster recovery
 │
 ├── dashboard/             # Web frontend (SPA)
 │   ├── index.html         # Entry point + sidebar
@@ -259,6 +260,23 @@ Create cron jobs: heartbeat (5 min), memory consolidation (weekly), daily standu
 ### Cost Analytics
 Track spending per provider/model/agent. Free-tier alerts warn when nearing limits.
 
+### Disaster Recovery
+Create and restore local snapshots of `brain/`, `skills/`, `agents/`, `data/`, `registry/`, `standards/`, and `prompts/`. User-specific `data/settings.json` is excluded from backups.
+
+**Unix/macOS/Linux**
+```bash
+./backup.sh
+./restore.sh <backup-file>
+```
+
+**Windows PowerShell**
+```powershell
+.\backup.ps1
+.\restore.ps1 <backup-file>
+```
+
+Run the restore command without a backup file to list available backups.
+
 ### Kanban Board (v0.2.0)
 Drag tasks across columns, filter by priority/category, click to view details. Block tasks when blocked, mark complete when done.
 
@@ -294,7 +312,7 @@ Browse opencode session logs by date and size. Click "Replay" to view all messag
 | **Memory** | Obsidian vault (external) | Built-in brain/ + SQLite FTS5 |
 | **Scheduler** | Not shown | APScheduler cron jobs |
 | **Cost Tracking** | Not shown | Built-in per-provider analytics |
-| **Backup/Restore** | Not shown | One-click tar.gz snapshots |
+| **Backup/Restore** | Not shown | One-click Unix tar.gz and Windows zip snapshots |
 | **Audit Trail** | Not shown | Full activity log |
 | **Standards System** | Not shown | Discover/inject conventions |
 | **Client Timeout** | Not shown | 200s AbortController |
