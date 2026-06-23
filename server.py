@@ -139,7 +139,8 @@ def list_brain():
     brain_data = {}
     for f in files:
         path = BASE_DIR / "brain" / f
-        brain_data[f] = read_file(path)
+        if path.is_file():
+            brain_data[f] = read_file(path)
     return brain_data
 
 @app.get("/api/brain/{file_name}")
