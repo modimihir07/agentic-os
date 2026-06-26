@@ -14,22 +14,25 @@ esac
 echo "Detected OS: $OS"
 
 # Check Python
-if command -v python3 &>/dev/null; then
-    echo "Python: $(python3 --version)"
+if command -v python &>/dev/null; then
+    PYTHON="python"
+elif command -v python3 &>/dev/null; then
+    PYTHON="python3"
 else
-    echo "ERROR: Python 3.10+ required. Install via: sudo apt install python3 python3-pip"
+    echo "ERROR: Python 3.10+ required. Install from https://www.python.org/downloads/ or your OS package manager."
     exit 1
 fi
+echo "Python: $($PYTHON --version)"
 
 # Check pip
-if ! command -v pip3 &>/dev/null; then
+if ! $PYTHON -m pip --version &>/dev/null; then
     echo "Installing pip..."
-    python3 -m ensurepip --upgrade
+    $PYTHON -m ensurepip --upgrade
 fi
 
 # Install Python deps
 echo "Installing Python dependencies..."
-pip3 install -r requirements.txt --quiet
+$PYTHON -m pip install -r requirements.txt --quiet
 
 # Check Node.js (for opencode)
 if command -v node &>/dev/null; then

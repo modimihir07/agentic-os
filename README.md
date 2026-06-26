@@ -107,7 +107,7 @@ chmod +x install.sh && ./install.sh
 
 | Tool | Required? | Install |
 |------|-----------|---------|
-| Python 3.10+ | ✅ Required | `sudo apt install python3 python3-pip` |
+| Python 3.10+ | ✅ Required | Linux/macOS: install from your package manager or `python.org`. Windows: install from `python.org` and select **Add Python to PATH**. Verify with `python --version` or `py -3 --version`. |
 | Node.js 18+ | ⚠ For opencode | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo bash - && sudo apt install -y nodejs` |
 | opencode | ⚠ For code tasks | `npm install -g @opencode/cli` |
 | Hermes Agent | ⚠ For memory/scheduling | `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \| bash` |
@@ -125,6 +125,17 @@ chmod +x install.sh && ./install.sh
 
 > ⚠ = Optional — the dashboard works with any subset of installed agents.
 
+### Windows Quick Start
+
+```powershell
+git clone https://github.com/modimihir07/agentic-os.git
+cd agentic-os
+.\install.ps1
+.\start.ps1
+# Open http://127.0.0.1:8080
+```
+
+The PowerShell launchers resolve Python in this order: `py -3.10`, `py -3`, then `python`. For manual commands, prefer `python -m pip install -r requirements.txt` and `python server.py --port 8080` so the same interpreter runs both dependency installation and the server.
 > **PowerShell execution policy:** if you use PowerShell scripts, allow local scripts for your user with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run a single installer invocation with `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
 
 ---
