@@ -21,6 +21,8 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+BASE_DIR = Path(__file__).parent.resolve()
+
 app = FastAPI(title="Agentic OS", version="1.1.0")
 
 # Load OpenRouter API key from Hermes .env
@@ -33,16 +35,44 @@ if HERMES_ENV.exists():
             if k == "OPENROUTER_API_KEY":
                 os.environ[k] = v  # last value wins (matches shell sourcing)
 
+def get_cors_origins() -> list[str]:
+    """Return local dashboard origins allowed to call the API."""
+    port = 8080
+    settings_file = BASE_DIR / "data" / "settings.json"
+
+    if settings_file.exists():
+        try:
+            settings = json.loads(settings_file.read_text(encoding="utf-8"))
+            port = int(settings.get("dashboard", {}).get("port", port))
+        except (json.JSONDecodeError, OSError, TypeError, ValueError):
+            port = 8080
+
+    origins = {
+        "http://127.0.0.1:8080",
+        "http://localhost:8080",
+        f"http://127.0.0.1:{port}",
+        f"http://localhost:{port}",
+    }
+
+    extra_origins = os.environ.get("AGENTIC_OS_CORS_ORIGINS", "")
+    origins.update(
+        origin.strip()
+        for origin in extra_origins.split(",")
+        if origin.strip()
+    )
+
+    return sorted(origins)
+
+
 # CORS for local dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-BASE_DIR = Path(__file__).parent.resolve()
 
 # ─── Models ───────────────────────────────────────────────────────
 

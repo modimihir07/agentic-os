@@ -103,6 +103,8 @@ chmod +x install.sh && ./install.sh
 
 ## 📋 Prerequisites
 
+### Linux/macOS
+
 | Tool | Required? | Install |
 |------|-----------|---------|
 | Python 3.10+ | ✅ Required | Linux/macOS: install from your package manager or `python.org`. Windows: install from `python.org` and select **Add Python to PATH**. Verify with `python --version` or `py -3 --version`. |
@@ -110,6 +112,16 @@ chmod +x install.sh && ./install.sh
 | opencode | ⚠ For code tasks | `npm install -g @opencode/cli` |
 | Hermes Agent | ⚠ For memory/scheduling | `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \| bash` |
 | Gemini CLI | ⚠ For Google AI | `npm install -g @google/gemini-cli` |
+
+### Windows
+
+| Tool | Required? | Install | Verify / Next Step |
+|------|-----------|---------|--------------------|
+| Python 3.10+ | ✅ Required | Install from [python.org/downloads/windows](https://www.python.org/downloads/windows/) and enable **“Add python.exe to PATH”** during setup. | `python --version` |
+| Node.js 18+ | ⚠ For opencode and Gemini CLI | Install from [nodejs.org](https://nodejs.org/). | `node --version` and `npm --version` |
+| opencode | ⚠ For code tasks | `npm install -g @opencode/cli` | Confirm the CLI is available in a new terminal session. |
+| Gemini CLI | ⚠ For Google AI | `npm install -g @google/gemini-cli` | Run `gemini auth login` and complete OAuth in the browser. |
+| Hermes Agent | ⚠ For memory/scheduling | Windows support must be verified separately if the upstream installer remains Bash-only. | Check the upstream Hermes Agent install docs before relying on native Windows support. |
 
 > ⚠ = Optional — the dashboard works with any subset of installed agents.
 
@@ -124,6 +136,7 @@ cd agentic-os
 ```
 
 The PowerShell launchers resolve Python in this order: `py -3.10`, `py -3`, then `python`. For manual commands, prefer `python -m pip install -r requirements.txt` and `python server.py --port 8080` so the same interpreter runs both dependency installation and the server.
+> **PowerShell execution policy:** if you use PowerShell scripts, allow local scripts for your user with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run a single installer invocation with `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
 
 ---
 
