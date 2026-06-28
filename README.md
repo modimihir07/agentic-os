@@ -115,15 +115,43 @@ python .\server.py
 
 ## 📋 Prerequisites
 
+### Linux/macOS
+
 | Tool | Required? | Install |
 |------|-----------|---------|
 | Python 3.10+ | ✅ Required | Install from your OS package manager or [python.org](https://www.python.org/downloads/) |
 | Node.js 18+ | ⚠ For opencode and Gemini CLI | Install from your OS package manager or [nodejs.org](https://nodejs.org/) |
+| Python 3.10+ | ✅ Required | Linux/macOS: install from your package manager or `python.org`. Windows: install from `python.org` and select **Add Python to PATH**. Verify with `python --version` or `py -3 --version`. |
+| Node.js 18+ | ⚠ For opencode | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo bash - && sudo apt install -y nodejs` |
 | opencode | ⚠ For code tasks | `npm install -g @opencode/cli` |
 | Hermes Agent | ⚠ For memory/scheduling | Follow the upstream Hermes Agent documentation. If native Windows support is unavailable, use WSL for Hermes. |
 | Gemini CLI | ⚠ For Google AI | `npm install -g @google/gemini-cli` |
 
 > ⚠ = Optional — the dashboard starts and core pages work without all agent CLIs installed. Agent-specific chat, routing, health, and skill execution features will show offline or warning status until the relevant CLI is installed and authenticated.
+### Windows
+
+| Tool | Required? | Install | Verify / Next Step |
+|------|-----------|---------|--------------------|
+| Python 3.10+ | ✅ Required | Install from [python.org/downloads/windows](https://www.python.org/downloads/windows/) and enable **“Add python.exe to PATH”** during setup. | `python --version` |
+| Node.js 18+ | ⚠ For opencode and Gemini CLI | Install from [nodejs.org](https://nodejs.org/). | `node --version` and `npm --version` |
+| opencode | ⚠ For code tasks | `npm install -g @opencode/cli` | Confirm the CLI is available in a new terminal session. |
+| Gemini CLI | ⚠ For Google AI | `npm install -g @google/gemini-cli` | Run `gemini auth login` and complete OAuth in the browser. |
+| Hermes Agent | ⚠ For memory/scheduling | Windows support must be verified separately if the upstream installer remains Bash-only. | Check the upstream Hermes Agent install docs before relying on native Windows support. |
+
+> ⚠ = Optional — the dashboard works with any subset of installed agents.
+
+### Windows Quick Start
+
+```powershell
+git clone https://github.com/modimihir07/agentic-os.git
+cd agentic-os
+.\install.ps1
+.\start.ps1
+# Open http://127.0.0.1:8080
+```
+
+The PowerShell launchers resolve Python in this order: `py -3.10`, `py -3`, then `python`. For manual commands, prefer `python -m pip install -r requirements.txt` and `python server.py --port 8080` so the same interpreter runs both dependency installation and the server.
+> **PowerShell execution policy:** if you use PowerShell scripts, allow local scripts for your user with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run a single installer invocation with `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
 
 ---
 
