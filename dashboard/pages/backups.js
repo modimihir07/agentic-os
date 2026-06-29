@@ -27,10 +27,10 @@ async function renderBackups() {
           <tbody>
             ${backups.map(b => `
               <tr>
-                <td><strong>${b.name}</strong></td>
+                <td><strong>${escapeHtml(b.name)}</strong></td>
                 <td>${formatBytes(b.size)}</td>
                 <td style="font-size:12px">${formatDate(b.created)}</td>
-                <td><button class="btn btn-sm btn-danger" onclick="restoreBackup('${b.name}')">Restore</button></td>
+                <td><button class="btn btn-sm btn-danger" onclick="restoreBackup('${encodeURIComponent(b.name)}')">Restore</button></td>
               </tr>
             `).join('')}
           </tbody>
@@ -53,19 +53,21 @@ async function createBackup() {
   }
 }
 
-async function restoreBackup(name) {
+async function restoreBackup(encodedName) {
+  const name = decodeURIComponent(encodedName);
   showModal('Restore Backup', `
-    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">Restore <strong>${name}</strong>? This will overwrite current brain, skills, agents, registry, standards, and prompts data.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px">Restore <strong>${escapeHtml(name)}</strong>? This will overwrite current brain, skills, agents, registry, standards, and prompts data.</p>
     <div class="card" style="background:var(--red-dim);border-color:transparent">
       <div class="flex items-center gap-2"><span>⚠</span><span style="font-size:13px;font-weight:500">This action cannot be undone</span></div>
     </div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-danger" onclick="confirmRestore('${name}')">Restore</button>
+    <button class="btn btn-danger" onclick="confirmRestore('${encodeURIComponent(name)}')">Restore</button>
   `);
 }
 
-async function confirmRestore(name) {
+async function confirmRestore(encodedName) {
+  const name = decodeURIComponent(encodedName);
   try {
     const r = await api.restoreBackup(name);
     closeModal();

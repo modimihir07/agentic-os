@@ -53,8 +53,8 @@ async function renderCost() {
               ${entries.slice(-20).reverse().map(e => `
                 <tr>
                   <td style="font-size:12px">${formatDate(e.timestamp)}</td>
-                  <td><span class="badge badge-accent">${e.agent}</span></td>
-                  <td style="font-size:12px">${e.model}</td>
+                  <td><span class="badge badge-accent">${escapeHtml(e.agent)}</span></td>
+                  <td style="font-size:12px">${escapeHtml(e.model)}</td>
                   <td>${(e.tokens || 0).toLocaleString()}</td>
                   <td><span class="badge ${(e.cost || 0) > 0 ? 'badge-warning' : 'badge-success'}">$${(e.cost || 0).toFixed(6)}</span></td>
                 </tr>

@@ -27,8 +27,8 @@ async function renderStandards() {
       html += '<div class="empty-state"><div class="empty-state-icon">📐</div><div class="empty-state-title">No standards defined</div><div class="empty-state-desc">Run "Discover Patterns" to extract conventions from your codebase</div></div>';
     } else {
       html += `<div class="grid grid-2">${standards.map(s => `
-        <div class="card" style="cursor:pointer" onclick="viewStandard('${s.name}')">
-          <div class="card-header"><span class="card-title">${s.name.replace(/-/g, ' ')}</span></div>
+        <div class="card" style="cursor:pointer" onclick="viewStandard('${encodeURIComponent(s.name)}')">
+          <div class="card-header"><span class="card-title">${escapeHtml(s.name.replace(/-/g, ' '))}</span></div>
           <pre style="max-height:200px;overflow:hidden;font-size:12px">${escapeHtml(s.content.slice(0, 300))}${s.content.length > 300 ? '...' : ''}</pre>
         </div>
       `).join('')}</div>`;
@@ -40,7 +40,8 @@ async function renderStandards() {
   }
 }
 
-async function viewStandard(name) {
+async function viewStandard(encodedName) {
+  const name = decodeURIComponent(encodedName);
   let content = '';
   try {
     const data = await api.getStandards();
@@ -48,7 +49,7 @@ async function viewStandard(name) {
     if (std) content = std.content;
   } catch {}
 
-  showModal(`Standard: ${name.replace(/-/g, ' ')}`, `
+  showModal(`Standard: ${escapeHtml(name.replace(/-/g, ' '))}`, `
     <pre style="white-space:pre-wrap;font-size:12px;max-height:60vh;overflow:auto">${escapeHtml(content)}</pre>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Close</button>

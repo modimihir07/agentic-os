@@ -65,11 +65,12 @@ async function renderWizardStep() {
           <div class="grid grid-2">
             ${agents.map(a => {
               const sc = statusColor(a.status);
+              const safeStatus = ({online:'online',offline:'offline',warning:'warning'})[a.status] || 'offline';
               return `<div class="agent-card">
-                <div class="agent-dot ${a.status}" style="width:14px;height:14px"></div>
+                <div class="agent-dot ${safeStatus}" style="width:14px;height:14px"></div>
                 <div>
-                  <div style="font-weight:600;font-size:14px">${a.name}</div>
-                  <div style="font-size:12px;color:${sc.text}">${a.status}</div>
+                  <div style="font-weight:600;font-size:14px">${escapeHtml(a.name)}</div>
+                  <div style="font-size:12px;color:${sc.text}">${escapeHtml(a.status)}</div>
                 </div>
               </div>`;
             }).join('')}

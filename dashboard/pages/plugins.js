@@ -28,9 +28,9 @@ async function renderPlugins() {
           <tbody>
             ${plugins.map(p => `
               <tr>
-                <td><strong>${p.name}</strong></td>
-                <td><code>${p.version || '1.0.0'}</code></td>
-                <td><span class="badge badge-info">${p.type || 'skill'}</span></td>
+                <td><strong>${escapeHtml(p.name)}</strong></td>
+                <td><code>${escapeHtml(p.version || '1.0.0')}</code></td>
+                <td><span class="badge badge-info">${escapeHtml(p.type || 'skill')}</span></td>
                 <td style="font-size:12px;color:var(--text-muted)">${formatDate(p.installed)}</td>
               </tr>
             `).join('')}

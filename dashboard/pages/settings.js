@@ -34,7 +34,7 @@ async function renderSettings() {
               </label>
               <div class="form-group" style="margin-bottom:0;margin-top:8px">
                 <label class="form-label">Binary Path</label>
-                <input id="bin_${a}" class="form-input" value="${(prefs[a] && prefs[a].binary) || a}" style="font-size:12px">
+                <input id="bin_${a}" class="form-input" value="${escapeHtml((prefs[a] && prefs[a].binary) || a)}" style="font-size:12px">
               </div>
             </div>
           `).join('')}
@@ -50,7 +50,7 @@ async function renderSettings() {
           </div>
           <div class="form-group">
             <label class="form-label">Host</label>
-            <input id="setHost" class="form-input" value="${dashboard.host || '127.0.0.1'}">
+            <input id="setHost" class="form-input" value="${escapeHtml(dashboard.host || '127.0.0.1')}">
           </div>
         </div>
         <div class="form-group">
@@ -67,11 +67,11 @@ async function renderSettings() {
         <div class="form-row">
           <div class="form-group">
             <label class="form-label">Gemini API Key</label>
-            <input id="keyGemini" class="form-input" type="password" value="${apiKeys.gemini || ''}" placeholder="Enter Gemini API key">
+            <input id="keyGemini" class="form-input" type="password" value="${escapeHtml(apiKeys.gemini || '')}" placeholder="Enter Gemini API key">
           </div>
           <div class="form-group">
             <label class="form-label">OpenRouter API Key</label>
-            <input id="keyOpenrouter" class="form-input" type="password" value="${apiKeys.openrouter || ''}" placeholder="Enter OpenRouter API key">
+            <input id="keyOpenrouter" class="form-input" type="password" value="${escapeHtml(apiKeys.openrouter || '')}" placeholder="Enter OpenRouter API key">
           </div>
         </div>
       </div>

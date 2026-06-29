@@ -95,6 +95,62 @@ def append_audit(entry: dict):
     with open(audit_file, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
+def safe_resolve(base: Path, user_path: str) -> Path:
+    """Resolve a user-supplied path relative to base, preventing traversal."""
+    resolved = (base / user_path).resolve()
+    if not str(resolved).startswith(str(base.resolve())):
+        raise HTTPException(400, "Invalid path")
+    return resolved
+
+def safe_extractall(tar: tarfile.TarFile, path: Path):
+    """Extract tar archive with path traversal protection."""
+    for member in tar.getmembers():
+        member_path = (path / member.name).resolve()
+        if not str(member_path).startswith(str(path.resolve())):
+            raise HTTPException(400, f"Blocked path traversal: {member.name}")
+    tar.extractall(path=path)
+
+# ─── Security Headers Middleware ─────────────────────────────────
+
+class SecurityHeadersMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        async def send_with_headers(message):
+            if message["type"] == "http.response.start":
+                headers = message.get("headers", [])
+                extra = [
+                    (b"x-content-type-options", b"nosniff"),
+                    (b"x-frame-options", b"DENY"),
+                    (b"x-xss-protection", b"1; mode=block"),
+                    (b"strict-transport-security", b"max-age=31536000; includeSubDomains"),
+                    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+                ]
+                # Only add CSP for non-API routes (dashboard HTML)
+                path = scope.get("path", "")
+                if not path.startswith("/api/"):
+                    csp = (
+                        b"default-src 'self'; "
+                        b"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+                        b"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; "
+                        b"font-src 'self' https://fonts.gstatic.com; "
+                        b"img-src 'self' data:; "
+                        b"connect-src 'self' http://127.0.0.1:* http://localhost:*; "
+                        b"frame-ancestors 'none'"
+                    )
+                    extra.append((b"content-security-policy", csp))
+                message["headers"] = list(headers) + extra
+            await send(message)
+
+        await self.app(scope, receive, send_with_headers)
+
+app.add_middleware(SecurityHeadersMiddleware)
+
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
 def check_agent(name: str) -> dict:
@@ -144,6 +200,8 @@ def list_brain():
 
 @app.get("/api/brain/{file_name}")
 def get_brain_file(file_name: str):
+    if ".." in file_name or "/" in file_name:
+        raise HTTPException(400, "Invalid file name")
     path = BASE_DIR / "brain" / file_name
     if not path.exists() or path.is_dir():
         raise HTTPException(404, "File not found")
@@ -151,6 +209,8 @@ def get_brain_file(file_name: str):
 
 @app.put("/api/brain/{file_name}")
 def update_brain_file(file_name: str, data: BrainUpdate):
+    if ".." in file_name or "/" in file_name:
+        raise HTTPException(400, "Invalid file name")
     path = BASE_DIR / "brain" / file_name
     write_file(path, data.content)
     append_audit({"action": "brain_update", "file": file_name})
@@ -184,6 +244,8 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
+    if ".." in name or "/" in name:
+        raise HTTPException(400, "Invalid skill name")
     path = BASE_DIR / "skills" / name
     if not path.exists():
         raise HTTPException(404, "Skill not found")
@@ -198,6 +260,8 @@ def get_skill(name: str):
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
+    if ".." in name or "/" in name:
+        raise HTTPException(400, "Invalid skill name")
     path = BASE_DIR / "skills" / name
     if not path.exists():
         raise HTTPException(404, "Skill not found")
@@ -281,6 +345,8 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
+    if ".." in name or "/" in name:
+        raise HTTPException(400, "Invalid skill name")
     path = BASE_DIR / "skills" / name / "score-history.json"
     if not path.exists():
         return {"scores": []}
@@ -419,11 +485,13 @@ def create_backup():
 
 @app.post("/api/backup/restore")
 def restore_backup(data: BackupRestoreRequest):
+    if ".." in data.file or "/" in data.file:
+        raise HTTPException(400, "Invalid backup file")
     backup_file = BASE_DIR / "backups" / data.file
     if not backup_file.exists():
         raise HTTPException(404, "Backup file not found")
     with tarfile.open(backup_file, "r:gz") as tar:
-        tar.extractall(path=BASE_DIR)
+        safe_extractall(tar, BASE_DIR)
     append_audit({"action": "backup_restored", "file": data.file})
     return {"status": "restored"}
 
@@ -444,7 +512,11 @@ def get_settings():
     sf = BASE_DIR / "data" / "settings.json"
     if not sf.exists():
         return {}
-    return json.loads(sf.read_text())
+    data = json.loads(sf.read_text())
+    # Mask sensitive values
+    if "api_keys" in data:
+        data["api_keys"] = {k: v[:4] + "****" if len(v) > 8 else "****" for k, v in data["api_keys"].items()}
+    return data
 
 @app.put("/api/settings")
 def update_settings(data: SettingsUpdate):
@@ -602,6 +674,12 @@ def chat(req: ChatRequest):
     agent = req.agent.lower().strip()
     if agent not in ["opencode", "hermes", "gemini"]:
         raise HTTPException(400, "Agent must be one of: opencode, hermes, gemini")
+    message = (req.message or "").strip()
+    if not message:
+        raise HTTPException(400, "Message cannot be empty")
+    if len(message) > 10000:
+        raise HTTPException(400, "Message too long (max 10000 characters)")
+    req.message = message
 
     user_msg = {
         "id": str(uuid.uuid4())[:8],
@@ -1188,8 +1266,12 @@ def list_sessions():
     except Exception as e:
         return {"sessions": [], "error": str(e)}
 
+MAX_SESSION_CONTENT = 2000
+
 @app.get("/api/sessions/{session_id}/replay")
 def get_session_replay(session_id: str):
+    if ".." in session_id or "/" in session_id:
+        raise HTTPException(400, "Invalid session ID")
     try:
         sessions_dir = Path.home() / ".local" / "share" / "opencode"
         log_file = sessions_dir / "log" / f"{session_id}.log"
@@ -1203,8 +1285,8 @@ def get_session_replay(session_id: str):
             return {
                 "session_id": session_id,
                 "lines": len(lines),
-                "messages": messages[:100],
-                "content": content[:5000],
+                "messages": messages[:50],
+                "content": content[:MAX_SESSION_CONTENT],
             }
         return {"session_id": session_id, "messages": [], "content": "Session log not found"}
     except Exception as e:

@@ -22,9 +22,10 @@ async function renderMemory() {
 
     container.innerHTML = `<div style="display:grid;gap:12px">${files.map(([name, content]) => {
       const preview = content ? content.slice(0, 200) : '';
-      return `<div class="card" style="cursor:pointer" onclick="editMemory('${name}')">
+      const safeName = escapeHtml(name.replace('.md', '').replace(/-/g, ' '));
+      return `<div class="card" style="cursor:pointer" onclick="editMemory('${encodeURIComponent(name)}')">
         <div class="flex items-center justify-between mb-2">
-          <div><span class="card-title">${name.replace('.md', '').replace(/-/g, ' ')}</span></div>
+          <div><span class="card-title">${safeName}</span></div>
           <span class="badge badge-info">${content ? content.split('\n').length : 0} lines</span>
         </div>
         <pre style="max-height:80px;overflow:hidden;font-size:11px;color:var(--text-muted)">${escapeHtml(preview)}${preview.length >= 200 ? '...' : ''}</pre>
@@ -35,8 +36,9 @@ async function renderMemory() {
   }
 }
 
-async function editMemory(name) {
-  const display = name.replace('.md', '').replace(/-/g, ' ');
+async function editMemory(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  const display = escapeHtml(name.replace('.md', '').replace(/-/g, ' '));
   let content = '';
   try {
     const r = await api.getBrainFile(name);
@@ -50,11 +52,12 @@ async function editMemory(name) {
     </div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="saveMemory('${name}')">💾 Save</button>
+    <button class="btn btn-primary" onclick="saveMemory('${encodeURIComponent(name)}')">💾 Save</button>
   `);
 }
 
-async function saveMemory(name) {
+async function saveMemory(encodedName) {
+  const name = decodeURIComponent(encodedName);
   const content = document.getElementById('memContent').value;
   try {
     await api.updateBrainFile(name, content);

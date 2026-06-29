@@ -24,10 +24,10 @@ async function renderPrompts() {
       const displayName = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
       const preview = content.slice(0, 180);
       const lines = content.split('\n').length;
-      return `<div class="skill-card" onclick="viewPrompt('${name}')">
+      return `<div class="skill-card" onclick="viewPrompt('${encodeURIComponent(name)}')">
         <div class="skill-card-header">
           <div class="skill-card-icon">📝</div>
-          <div class="skill-card-name">${displayName}</div>
+          <div class="skill-card-name">${escapeHtml(displayName)}</div>
         </div>
         <div class="skill-card-desc"><pre style="background:none;border:none;padding:0;max-height:100px;overflow:hidden;font-size:11px;color:var(--text-muted)">${escapeHtml(preview)}${preview.length >= 180 ? '...' : ''}</pre></div>
         <div class="skill-card-footer"><span class="badge badge-info">${lines} lines</span></div>
@@ -38,14 +38,15 @@ async function renderPrompts() {
   }
 }
 
-async function viewPrompt(name) {
+async function viewPrompt(encodedName) {
+  const name = decodeURIComponent(encodedName);
   let content = '';
   try {
     const prompts = await api.getPrompts();
     content = prompts[name] || '';
   } catch {}
 
-  const displayName = name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const displayName = escapeHtml(name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
 
   // Store raw content for clipboard copy (avoids HTML entity encoding issue)
   window._promptCopyContent = content;

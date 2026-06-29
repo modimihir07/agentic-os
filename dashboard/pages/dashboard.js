@@ -86,7 +86,7 @@ async function renderDashboard() {
         <div class="event-item">
           <div class="event-dot" style="background:${e.action === 'skill_run' ? 'var(--accent)' : 'var(--blue)'}"></div>
           <div class="event-content">
-            <div class="event-title">${e.action}${e.skill ? `: ${e.skill}` : ''}</div>
+            <div class="event-title">${escapeHtml(e.action)}${e.skill ? `: ${escapeHtml(e.skill)}` : ''}</div>
             <div class="event-meta">${e.agent ? `via ${e.agent}` : ''} ${e.run_id ? `#${e.run_id}` : ''}</div>
           </div>
           <div class="event-time">${timeAgo(e.timestamp)}</div>

@@ -33,22 +33,24 @@ function renderSkillGrid(skills) {
     container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚡</div><div class="empty-state-title">No skills installed</div></div>';
     return;
   }
-  container.innerHTML = `<div class="grid grid-3" id="skillGrid">${skills.map(s => {
+    container.innerHTML = `<div class="grid grid-3" id="skillGrid">${skills.map(s => {
     const lastScore = s.scores && s.scores.length > 0 ? s.scores[s.scores.length - 1] : null;
     const avg = lastScore && lastScore.criteria_scores ? (lastScore.criteria_scores.reduce((a, b) => a + b, 0) / lastScore.criteria_scores.length) : null;
     const icons = ['⚡', '🔧', '📝', '🔍', '🔄', '🎯', '📊', '🛠', '💡', '🧪', '📋', '💾', '💰', '🔄', '🎨'];
     const iconIdx = s.name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % icons.length;
     const icon = icons[iconIdx];
-    return `<div class="skill-card" onclick="showSkillDetail('${s.name}')">
+    const sName = escapeHtml(s.name);
+    const sDesc = escapeHtml(s.description || '').slice(0, 120) + ((s.description || '').length > 120 ? '...' : '');
+    return `<div class="skill-card" onclick="showSkillDetail('${encodeURIComponent(s.name)}')">
       <div class="skill-card-header">
         <div class="skill-card-icon">${icon}</div>
-        <div class="skill-card-name">${s.name.replace(/-/g, ' ')}</div>
+        <div class="skill-card-name">${sName.replace(/-/g, ' ')}</div>
       </div>
-      <div class="skill-card-desc">${s.description ? s.description.slice(0, 120) + (s.description.length > 120 ? '...' : '') : 'No description'}</div>
+      <div class="skill-card-desc">${sDesc || 'No description'}</div>
       <div class="skill-card-footer">
         ${avg !== null ? `<span class="badge badge-success">${(avg * 100).toFixed(0)}%</span>` : '<span class="badge badge-info">New</span>'}
         ${s.has_learnings ? '<span class="badge badge-accent">📖</span>' : ''}
-        <button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="event.stopPropagation();quickRunSkill('${s.name}')">▶ Run</button>
+        <button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="event.stopPropagation();quickRunSkill('${encodeURIComponent(s.name)}')">▶ Run</button>
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -61,11 +63,12 @@ function switchSkillView(view) {
     document.getElementById('skillsContainer').innerHTML = `<div class="table-wrapper"><table><thead><tr><th>Skill</th><th>Score</th><th>Learnings</th><th></th></tr></thead><tbody>${skills.map(s => {
       const lastScore = s.scores && s.scores.length > 0 ? s.scores[s.scores.length - 1] : null;
       const avg = lastScore && lastScore.criteria_scores ? (lastScore.criteria_scores.reduce((a, b) => a + b, 0) / lastScore.criteria_scores.length) : null;
-      return `<tr onclick="showSkillDetail('${s.name}')" style="cursor:pointer">
-        <td><strong>${s.name.replace(/-/g, ' ')}</strong></td>
+      const sName = escapeHtml(s.name);
+      return `<tr onclick="showSkillDetail('${encodeURIComponent(s.name)}')" style="cursor:pointer">
+        <td><strong>${sName.replace(/-/g, ' ')}</strong></td>
         <td>${avg !== null ? `<span class="badge badge-success">${(avg * 100).toFixed(0)}%</span>` : '<span class="badge badge-info">—</span>'}</td>
         <td>${s.has_learnings ? '<span class="badge badge-accent">✓</span>' : '<span class="badge">—</span>'}</td>
-        <td><button class="btn btn-sm btn-primary" onclick="event.stopPropagation();quickRunSkill('${s.name}')">▶</button></td>
+        <td><button class="btn btn-sm btn-primary" onclick="event.stopPropagation();quickRunSkill('${encodeURIComponent(s.name)}')">▶</button></td>
       </tr>`;
     }).join('')}</tbody></table></div>`;
   } else {
@@ -79,7 +82,8 @@ function filterSkills() {
   renderSkillGrid(skills);
 }
 
-async function showSkillDetail(name) {
+async function showSkillDetail(encodedName) {
+  const name = decodeURIComponent(encodedName);
   document.getElementById('skillsContainer').style.display = 'none';
   document.getElementById('skillTabs').style.display = 'none';
   document.getElementById('skillFilter').style.display = 'none';
@@ -92,11 +96,12 @@ async function showSkillDetail(name) {
     const scores = skill.score_history || [];
     const lastScore = scores.length > 0 ? scores[scores.length - 1] : null;
     const avg = lastScore && lastScore.criteria_scores ? (lastScore.criteria_scores.reduce((a, b) => a + b, 0) / lastScore.criteria_scores.length) : null;
+    const safeName = escapeHtml(name);
 
     detail.innerHTML = `
       <div style="margin-bottom:16px">
         <button class="btn btn-ghost" onclick="backToSkills()">← Back to Skills</button>
-        <button class="btn btn-primary" style="margin-left:8px" onclick="quickRunSkill('${name}')">▶ Run ${name.replace(/-/g, ' ')}</button>
+        <button class="btn btn-primary" style="margin-left:8px" onclick="quickRunSkill('${encodeURIComponent(name)}')">▶ Run ${safeName.replace(/-/g, ' ')}</button>
       </div>
       <div class="grid grid-2">
         <div class="card">
@@ -122,9 +127,9 @@ async function showSkillDetail(name) {
         <div class="card">
           <div class="card-header"><span class="card-title">📁 Context Files</span></div>
           ${skill.context && skill.context.length > 0
-            ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${skill.context.map(f => `<span class="badge badge-info">${f}</span>`).join('')}</div>`
+            ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${skill.context.map(f => `<span class="badge badge-info">${escapeHtml(f)}</span>`).join('')}</div>`
             : '<div style="color:var(--text-muted);font-size:13px">No context files</div>'}
-          ${skill.eval && skill.eval.criteria ? `<div style="margin-top:12px"><strong style="font-size:12px">Eval Criteria:</strong><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${skill.eval.criteria.map(c => `<span class="badge badge-accent">${c}</span>`).join('')}</div></div>` : ''}
+          ${skill.eval && skill.eval.criteria ? `<div style="margin-top:12px"><strong style="font-size:12px">Eval Criteria:</strong><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${skill.eval.criteria.map(c => `<span class="badge badge-accent">${escapeHtml(c)}</span>`).join('')}</div></div>` : ''}
         </div>
       </div>
     `;
@@ -140,8 +145,9 @@ function backToSkills() {
   document.getElementById('skillDetail').style.display = 'none';
 }
 
-async function quickRunSkill(name) {
-  const displayName = name.replace(/-/g, ' ');
+async function quickRunSkill(encodedName) {
+  const name = decodeURIComponent(encodedName);
+  const displayName = escapeHtml(name.replace(/-/g, ' '));
   showModal(`Run: ${displayName}`, `
     <div class="form-group">
       <label class="form-label">Input (optional)</label>
@@ -159,11 +165,12 @@ async function quickRunSkill(name) {
     <div id="skillResult" style="display:none"></div>
   `, `
     <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
-    <button class="btn btn-primary" onclick="executeSkillRun('${name}')">▶ Run</button>
+    <button class="btn btn-primary" onclick="executeSkillRun('${encodeURIComponent(name)}')">▶ Run</button>
   `);
 }
 
-async function executeSkillRun(name) {
+async function executeSkillRun(encodedName) {
+  const name = decodeURIComponent(encodedName);
   const input = document.getElementById('qrsInput').value;
   const agent = document.getElementById('qrsAgent').value;
   const runBtn = document.querySelector('#modalContainer .btn-primary');
