@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agentic OS</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="manifest" href="/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Agentic OS">
+<meta name="theme-color" content="#6c5ce7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -48,6 +53,7 @@
       <a href="#smart-router" class="nav-item" data-page="smart-router"><span class="nav-icon">🧭</span><span class="nav-label">Smart Router</span></a>
       <a href="#learning-analytics" class="nav-item" data-page="learning-analytics"><span class="nav-icon">📊</span><span class="nav-label">Learning Analytics</span></a>
       <a href="#session-replay" class="nav-item" data-page="session-replay"><span class="nav-icon">🔄</span><span class="nav-label">Session Replay</span></a>
+      <a href="#errors" class="nav-item" data-page="errors"><span class="nav-icon">⚠</span><span class="nav-label">Error Dashboard</span><span class="nav-badge" id="errorCount">0</span></a>
       <div class="sidebar-section"><div class="sidebar-section-label">Management</div></div>
       <a href="#cost" class="nav-item" data-page="cost"><span class="nav-icon">💰</span><span class="nav-label">Cost Analytics</span></a>
       <a href="#plugins" class="nav-item" data-page="plugins"><span class="nav-icon">🔌</span><span class="nav-label">Plugins</span></a>
@@ -88,8 +94,21 @@
   <div id="toastContainer" class="toast-container"></div>
   <div id="modalContainer"></div>
 
+  <nav id="bottomNav" class="bottom-nav">
+    <a href="#chat" class="bottom-nav-item" data-page="chat"><span class="bottom-nav-icon">💬</span><span class="bottom-nav-label">Chat</span></a>
+    <a href="#dashboard" class="bottom-nav-item" data-page="dashboard"><span class="bottom-nav-icon">◉</span><span class="bottom-nav-label">Home</span></a>
+    <a href="#skills" class="bottom-nav-item" data-page="skills"><span class="bottom-nav-icon">⚡</span><span class="bottom-nav-label">Skills</span></a>
+    <a href="#kanban" class="bottom-nav-item" data-page="kanban"><span class="bottom-nav-icon">📌</span><span class="bottom-nav-label">Board</span></a>
+    <a href="#errors" class="bottom-nav-item" data-page="errors"><span class="bottom-nav-icon">⚠</span><span class="bottom-nav-label">Errors</span></a>
+  </nav>
+
   <script src="utils.js"></script>
   <script src="api.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>

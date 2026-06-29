@@ -32,7 +32,7 @@ async function navigate(page) {
   const bar = document.getElementById('topLoadingBar');
   if (bar) { bar.classList.add('active'); bar.style.width = '30%'; }
 
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.nav-item, .bottom-nav-item').forEach(el => el.classList.remove('active'));
   const navItem = document.querySelector(`[data-page="${hash}"]`);
   if (navItem) navItem.classList.add('active');
 

@@ -11,3 +11,9 @@ audit/*
 data/settings.json
 data/chat-history.json
 data/cost-history.json
+data/scheduler-history.json
+data/error-log.json
+data/circuit-breaker.json
+data/memory.db
+data/kanban/*.json
+scheduler/*.pyc

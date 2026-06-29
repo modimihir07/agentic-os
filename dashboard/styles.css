@@ -1352,6 +1352,77 @@ pre {
   color: var(--text-muted);
 }
 
+/* Bottom Navigation (PWA mobile) */
+.bottom-nav {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border);
+  z-index: 1000;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 10px;
+  transition: var(--transition);
+  min-width: 56px;
+  min-height: 44px;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  -webkit-tap-highlight-color: transparent;
+}
+.bottom-nav-item.active {
+  color: var(--accent-light);
+}
+.bottom-nav-item:active {
+  background: var(--accent-glow);
+}
+.bottom-nav-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+@media (max-width: 768px) {
+  .bottom-nav { display: flex; }
+  .main-content { padding-bottom: 80px; }
+  .sidebar { display: none; }
+  .topbar { padding: 10px 16px; }
+  .topbar-title { font-size: 16px; }
+  .grid { grid-template-columns: 1fr !important; }
+  .grid-2 { grid-template-columns: 1fr !important; }
+  .grid-3 { grid-template-columns: 1fr !important; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+  .form-row { flex-direction: column; }
+  .kanban-board { flex-direction: column; overflow-x: hidden; }
+  .kanban-column { min-width: 100%; max-height: 300px; }
+  .page-header { flex-direction: column; gap: 8px; }
+  .btn-group { width: 100%; }
+  .btn-group .btn, .btn-group .form-input, .btn-group .form-select { flex: 1; }
+  .metric-tile { padding: 12px; }
+  .stat-value { font-size: 20px; }
+  .table-wrapper { overflow-x: auto; }
+  .card { padding: 14px; }
+}
+
+/* Touch-friendly: larger tap targets */
+@media (pointer: coarse) {
+  .nav-item, .btn, .bottom-nav-item { min-height: 44px; }
+  .form-input, .form-select, .form-textarea { font-size: 16px; }
+  input, select, textarea, button { font-size: 16px; }
+}
+
 /* Skeleton loader */
 .skeleton {
   background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);

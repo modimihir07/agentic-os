@@ -6,6 +6,7 @@ Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -527,6 +528,200 @@ def update_settings(data: SettingsUpdate):
     sf.write_text(json.dumps(existing, indent=2))
     append_audit({"action": "settings_updated"})
     return {"status": "ok"}
+
+# ─── Routes: Webhooks & Scheduler Events (v0.3.0) ─────────────────
+
+@app.post("/api/webhook")
+def webhook_receiver(data: dict):
+    """Generic webhook receiver — triggers skill execution by event type."""
+    event_type = data.get("event", data.get("type", "unknown"))
+    skill_name = data.get("skill", "")
+    payload = data.get("payload", {})
+    if skill_name:
+        from scheduler.scheduler import run_skill
+        result = run_skill(skill_name, trigger=f"webhook:{event_type}", input_text=json.dumps(payload))
+        append_audit({"action": "webhook_received", "event": event_type, "skill": skill_name})
+        return {"status": "processed", "event": event_type, "skill": skill_name, "result": result}
+    append_audit({"action": "webhook_received", "event": event_type})
+    return {"status": "received", "event": event_type}
+
+@app.get("/api/scheduler/events")
+def get_scheduler_events(limit: int = Query(50, le=200)):
+    from scheduler.scheduler import get_history
+    return {"events": get_history(limit=limit)}
+
+@app.post("/api/scheduler/trigger/{job_id}")
+def trigger_job(job_id: str):
+    from scheduler.scheduler import get_job_by_id, run_skill
+    job = get_job_by_id(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+    result = run_skill(job["skill"], trigger="manual")
+    append_audit({"action": "job_triggered", "job_id": job_id, "skill": job["skill"]})
+    return result
+
+@app.post("/api/webhook/generic")
+def generic_webhook(data: dict):
+    """Catch-all webhook receiver for external tool integrations."""
+    source = data.get("source", "unknown")
+    event = data.get("event", data.get("action", "trigger"))
+    skill = data.get("skill", "")
+    if skill:
+        from scheduler.scheduler import run_skill
+        run_skill(skill, trigger=f"webhook:{source}:{event}")
+        append_audit({"action": "generic_webhook", "source": source, "event": event, "skill": skill})
+    return {"status": "ok", "source": source, "event": event}
+
+# ─── Routes: Memory Search & Auto-Skill Generator (v0.3.0) ─────────
+
+@app.get("/api/memory/search")
+def memory_search(q: str = Query(""), limit: int = Query(20, le=100)):
+    from brain.memory_search import search, extract_entities
+    results = search(q, limit) if q else []
+    entities = extract_entities(q) if q else []
+    return {"results": results, "entities": entities, "query": q}
+
+@app.post("/api/memory/reindex")
+def memory_reindex():
+    from brain.memory_search import reindex_all
+    reindex_all()
+    append_audit({"action": "memory_reindexed"})
+    return {"status": "reindexed"}
+
+@app.get("/api/memory/entities")
+def list_entities(entity_type: str = "", limit: int = Query(50, le=200)):
+    from brain.memory_search import get_entities
+    return {"entities": get_entities(entity_type=entity_type, limit=limit)}
+
+@app.post("/api/skills/generate")
+def generate_skill(data: dict):
+    """Auto-generate a SKILL.md from a natural language description."""
+    name = data.get("name", "").strip().lower().replace(" ", "-")
+    description = data.get("description", "").strip()
+    if not name or not description:
+        raise HTTPException(400, "Both 'name' and 'description' are required")
+    if not re.match(r'^[a-z0-9-]+$', name):
+        raise HTTPException(400, "Skill name must be alphanumeric with hyphens")
+    skill_dir = BASE_DIR / "skills" / name
+    if skill_dir.exists():
+        raise HTTPException(409, "Skill already exists")
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "context").mkdir(exist_ok=True)
+    skill_md = f"""# {description}
+
+{description}
+
+## Usage
+Generate this skill by running it with appropriate input.
+
+## Input
+- Natural language description of what to do
+
+## Output
+- Executed task result
+
+## Primary: opencode
+"""
+    (skill_dir / "SKILL.md").write_text(skill_md)
+    (skill_dir / "learnings.md").write_text(f"# {name}\n\nAuto-generated skill.\n")
+    eval_data = {"criteria": ["completeness", "accuracy", "efficiency"], "weights": [0.4, 0.3, 0.3]}
+    (skill_dir / "eval.json").write_text(json.dumps(eval_data, indent=2))
+    (skill_dir / "score-history.json").write_text("[]")
+    append_audit({"action": "skill_generated", "name": name, "description": description})
+    return {"status": "created", "name": name, "skill": skill_md}
+
+# ─── Routes: Error Tracking (v0.3.0) ───────────────────────────────
+
+ERROR_LOG_FILE = BASE_DIR / "data" / "error-log.json"
+
+def log_error(source: str, message: str, category: str = "general", details: dict = None):
+    errors = []
+    if ERROR_LOG_FILE.exists():
+        errors = json.loads(ERROR_LOG_FILE.read_text())
+    errors.append({
+        "id": str(uuid.uuid4())[:8],
+        "source": source,
+        "message": message,
+        "category": category,
+        "details": details or {},
+        "timestamp": get_timestamp(),
+    })
+    if len(errors) > 500:
+        errors = errors[-500:]
+    ERROR_LOG_FILE.write_text(json.dumps(errors, indent=2))
+
+@app.get("/api/errors")
+def get_errors(limit: int = Query(50, le=200), category: str = ""):
+    if not ERROR_LOG_FILE.exists():
+        return {"errors": []}
+    errors = json.loads(ERROR_LOG_FILE.read_text())
+    if category:
+        errors = [e for e in errors if e.get("category") == category]
+    return {"errors": errors[-limit:]}
+
+@app.delete("/api/errors")
+def clear_errors():
+    if ERROR_LOG_FILE.exists():
+        ERROR_LOG_FILE.write_text("[]")
+    return {"status": "cleared"}
+
+@app.post("/api/errors/report")
+def report_error(data: dict):
+    log_error(
+        source=data.get("source", "unknown"),
+        message=data.get("message", ""),
+        category=data.get("category", "general"),
+        details=data.get("details"),
+    )
+    return {"status": "reported"}
+
+# ─── Circuit Breaker (v0.3.0) ──────────────────────────────────────
+
+CIRCUIT_BREAKER_FILE = BASE_DIR / "data" / "circuit-breaker.json"
+
+def _get_circuit_state() -> dict:
+    if CIRCUIT_BREAKER_FILE.exists():
+        return json.loads(CIRCUIT_BREAKER_FILE.read_text())
+    return {"agents": {}, "threshold": 3, "recovery_timeout": 300}
+
+def _save_circuit_state(state: dict):
+    CIRCUIT_BREAKER_FILE.write_text(json.dumps(state, indent=2))
+
+@app.get("/api/circuit-breaker")
+def get_circuit_breaker():
+    state = _get_circuit_state()
+    now = time.time()
+    for agent, cb in state.get("agents", {}).items():
+        if cb.get("state") == "open" and now - cb.get("opened_at", 0) > state.get("recovery_timeout", 300):
+            cb["state"] = "half-open"
+    return state
+
+@app.post("/api/circuit-breaker/trip")
+def trip_circuit_breaker(data: dict):
+    agent = data.get("agent", "")
+    if agent not in ["opencode", "hermes", "gemini"]:
+        raise HTTPException(400, "Invalid agent")
+    state = _get_circuit_state()
+    if agent not in state["agents"]:
+        state["agents"][agent] = {"state": "closed", "failures": 0, "opened_at": None}
+    cb = state["agents"][agent]
+    cb["failures"] = cb.get("failures", 0) + 1
+    if cb["failures"] >= state["threshold"]:
+        cb["state"] = "open"
+        cb["opened_at"] = time.time()
+    _save_circuit_state(state)
+    append_audit({"action": "circuit_tripped", "agent": agent, "failures": cb["failures"]})
+    return {"agent": agent, "state": cb["state"], "failures": cb["failures"]}
+
+@app.post("/api/circuit-breaker/reset")
+def reset_circuit_breaker(data: dict):
+    agent = data.get("agent", "")
+    if agent not in ["opencode", "hermes", "gemini"]:
+        raise HTTPException(400, "Invalid agent")
+    state = _get_circuit_state()
+    state["agents"][agent] = {"state": "closed", "failures": 0, "opened_at": None}
+    _save_circuit_state(state)
+    return {"agent": agent, "state": "closed"}
 
 # ─── Routes: Standards ────────────────────────────────────────────
 
@@ -1322,6 +1517,65 @@ def favicon():
 @app.get("/favicon.svg")
 def favicon_svg():
     return Response(content=FAVICON_SVG, media_type="image/svg+xml")
+
+# ─── Scheduler Auto-Start (v0.3.0) ─────────────────────────────────
+
+_scheduler_instance = None
+
+@app.on_event("startup")
+def start_scheduler():
+    global _scheduler_instance
+    try:
+        from scheduler.scheduler import CronScheduler
+        _scheduler_instance = CronScheduler()
+        _scheduler_instance.start()
+        print("Event-driven scheduler started")
+    except Exception as e:
+        print(f"Scheduler not available: {e}")
+
+@app.on_event("shutdown")
+def stop_scheduler():
+    global _scheduler_instance
+    if _scheduler_instance:
+        try:
+            _scheduler_instance.stop()
+        except Exception:
+            pass
+
+# ─── PWA Support (v0.3.0) ──────────────────────────────────────────
+
+MANIFEST_JSON = {
+    "name": "Agentic OS",
+    "short_name": "AgenticOS",
+    "description": "Multi-agent orchestration platform",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0f0f23",
+    "theme_color": "#6c5ce7",
+    "icons": [
+        {"src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"},
+    ],
+}
+
+@app.get("/manifest.json")
+def manifest():
+    return JSONResponse(content=MANIFEST_JSON)
+
+SERVICE_WORKER_JS = """
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(clients.claim());
+});
+self.addEventListener('fetch', (e) => {
+  e.respondWith(fetch(e.request).catch(() => new Response('Offline', {status: 503})));
+});
+"""
+
+@app.get("/sw.js")
+def service_worker():
+    return Response(content=SERVICE_WORKER_JS, media_type="application/javascript")
 
 # ─── Main ─────────────────────────────────────────────────────────
 

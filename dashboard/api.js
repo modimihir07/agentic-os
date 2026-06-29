@@ -89,4 +89,18 @@ const api = {
   // Session Replay
   listSessions: () => api.get('/api/sessions/list'),
   getSessionReplay: (id) => api.get(`/api/sessions/${encodeURIComponent(id)}/replay`),
+  // v0.3.0: Scheduler Events
+  getSchedulerEvents: (limit) => api.get(`/api/scheduler/events?limit=${limit || 50}`),
+  triggerJob: (id) => api.post(`/api/scheduler/trigger/${encodeURIComponent(id)}`, {}),
+  sendWebhook: (data) => api.post('/api/webhook', data),
+  // v0.3.0: Error Tracking
+  getErrors: (limit, category) => api.get(`/api/errors?limit=${limit || 50}${category ? `&category=${encodeURIComponent(category)}` : ''}`),
+  reportError: (data) => api.post('/api/errors/report', data),
+  clearErrors: () => api.del('/api/errors'),
+  // v0.3.0: Circuit Breaker
+  getCircuitBreaker: () => api.get('/api/circuit-breaker'),
+  tripCircuitBreaker: (agent) => api.post('/api/circuit-breaker/trip', { agent }),
+  resetCircuitBreaker: (agent) => api.post('/api/circuit-breaker/reset', { agent }),
+  // v0.3.0: PWA
+  getManifest: () => api.get('/manifest.json'),
 };
