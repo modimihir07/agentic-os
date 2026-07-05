@@ -1251,7 +1251,7 @@ if dashboard_dir.exists():
 def index():
     html_file = BASE_DIR / "dashboard" / "index.html"
     if html_file.exists():
-        content = html_file.read_text()
+        content = html_file.read_text(encoding="utf-8")
         content = content.replace('href="styles.css"', 'href="/dashboard/styles.css"')
         content = content.replace('src="utils.js"', 'src="/dashboard/utils.js"')
         content = content.replace('src="api.js"', 'src="/dashboard/api.js"')
