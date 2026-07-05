@@ -99,6 +99,9 @@ class ChatRequest(BaseModel):
     agent: str
     message: str
 
+class TerminalRunRequest(BaseModel):
+    command: str
+
 # ─── Helper Functions ─────────────────────────────────────────────
 
 def read_file(path: Path):
@@ -661,6 +664,40 @@ def chat(req: ChatRequest):
 @app.get("/api/chat/history")
 def get_chat_history():
     return load_chat_history()
+
+# ─── Routes: Terminal ─────────────────────────────────────────────
+
+_terminal_cwd = str(BASE_DIR)
+
+@app.get("/api/terminal/session")
+def get_terminal_session():
+    return {"cwd": _terminal_cwd}
+
+@app.post("/api/terminal/run")
+def run_terminal_command(req: TerminalRunRequest):
+    global _terminal_cwd
+    command = req.command.strip()
+    if not command:
+        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
+
+    if command == "cd" or command.startswith("cd "):
+        target = command[2:].strip() or str(Path.home())
+        new_dir = (Path(_terminal_cwd) / target).resolve() if not Path(target).is_absolute() else Path(target).resolve()
+        if not new_dir.is_dir():
+            return {"cwd": _terminal_cwd, "stdout": "", "stderr": f"cd: no such directory: {target}", "returncode": 1, "timed_out": False}
+        _terminal_cwd = str(new_dir)
+        append_audit({"action": "terminal_command", "command": "cd", "cwd": _terminal_cwd})
+        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
+
+    try:
+        r = subprocess.run(
+            command, shell=True, cwd=_terminal_cwd,
+            capture_output=True, text=True, timeout=60,
+        )
+        append_audit({"action": "terminal_command", "command": command[:200], "cwd": _terminal_cwd})
+        return {"cwd": _terminal_cwd, "stdout": r.stdout, "stderr": r.stderr, "returncode": r.returncode, "timed_out": False}
+    except subprocess.TimeoutExpired:
+        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "Command timed out after 60s.", "returncode": -1, "timed_out": True}
 
 # ═══════════════════════════════════════════════════════════════════
 # v0.2.0 — New Feature Endpoints

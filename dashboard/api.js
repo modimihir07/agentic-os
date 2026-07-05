@@ -52,6 +52,9 @@ const api = {
   discoverStandards: () => api.post('/api/standards/discover'),
   chat: (agent, message, controller) => api.post('/api/chat', { agent, message }, controller),
   getChatHistory: () => api.get('/api/chat/history'),
+  // Terminal
+  getTerminalSession: () => api.get('/api/terminal/session'),
+  runTerminalCommand: (command) => api.post('/api/terminal/run', { command }),
   // Kanban
   getKanbanBoard: (status) => api.get(status ? `/api/kanban/board?status=${encodeURIComponent(status)}` : '/api/kanban/board'),
   getKanbanTask: (id) => api.get(`/api/kanban/tasks/${encodeURIComponent(id)}`),
