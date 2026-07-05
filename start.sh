@@ -28,13 +28,20 @@ CONFIGURED_PORT=$($PYTHON -c "import json; f=open('data/settings.json'); d=json.
 
 # Find a free port starting at CONFIGURED_PORT (in case it's already taken by another app)
 PORT="$CONFIGURED_PORT"
+FOUND=0
 for _ in $(seq 1 20); do
     if ! (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null; then
+        FOUND=1
         break
     fi
     exec 3>&- 2>/dev/null || true
     PORT=$((PORT + 1))
 done
+
+if [ "$FOUND" -eq 0 ]; then
+    echo "ERROR: Could not find a free port after 20 attempts starting at ${CONFIGURED_PORT}."
+    exit 1
+fi
 
 if [ "$PORT" != "$CONFIGURED_PORT" ]; then
     echo "WARNING: Port ${CONFIGURED_PORT} is already in use - using ${PORT} instead."

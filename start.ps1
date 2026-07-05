@@ -36,7 +36,7 @@ $pythonArgs = @($python.Args)
 
 & $pythonCommand @pythonArgs -m pip install -r requirements.txt --quiet
 
-$configuredPort = & $pythonCommand @pythonArgs -c "import json; f=open('data/settings.json'); d=json.load(f); print(d.get('dashboard',{}).get('port',8080)); f.close()" 2>$null
+$configuredPort = & $pythonCommand @pythonArgs -c "import json; f=open('data/settings.json'); d=json.load(f); print(int(d.get('dashboard',{}).get('port',8080))); f.close()" 2>$null
 if (-not $configuredPort) { $configuredPort = "8080" }
 $configuredPort = [int]$configuredPort
 

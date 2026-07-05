@@ -78,14 +78,18 @@ if (-not (Test-Path .git)) {
 $launcher = Join-Path $PSScriptRoot "Launch-Dashboard.bat"
 $desktop = [Environment]::GetFolderPath("Desktop")
 if ((Test-Path $launcher) -and (Test-Path $desktop)) {
-    $shortcutPath = Join-Path $desktop "Agentic OS Dashboard.lnk"
-    $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut($shortcutPath)
-    $shortcut.TargetPath = $launcher
-    $shortcut.WorkingDirectory = $PSScriptRoot
-    $shortcut.Description = "Launch the Agentic OS dashboard"
-    $shortcut.Save()
-    Write-Host "Desktop shortcut created: $shortcutPath"
+    try {
+        $shortcutPath = Join-Path $desktop "Agentic OS Dashboard.lnk"
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $launcher
+        $shortcut.WorkingDirectory = $PSScriptRoot
+        $shortcut.Description = "Launch the Agentic OS dashboard"
+        $shortcut.Save()
+        Write-Host "Desktop shortcut created: $shortcutPath"
+    } catch {
+        Write-Warning "Could not create Desktop shortcut: $_"
+    }
 }
 
 Write-Host ""
