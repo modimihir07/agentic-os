@@ -6,6 +6,7 @@ Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import tarfile
@@ -773,15 +774,23 @@ def load_kanban_tasks():
         tasks.append(json.loads(f.read_text()))
     return tasks
 
+KANBAN_ID_RE = re.compile(r"^[0-9a-f]{6,16}$")
+
+def kanban_task_path(task_id: str) -> Path:
+    """Resolve a task id to its file path, rejecting anything that isn't a plain generated id."""
+    if not KANBAN_ID_RE.fullmatch(task_id or ""):
+        raise HTTPException(400, "Invalid task id")
+    return KANBAN_DIR / f"{task_id}.json"
+
 def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
-    (KANBAN_DIR / f"{task['id']}.json").write_text(json.dumps(task, indent=2))
+    kanban_task_path(task["id"]).write_text(json.dumps(task, indent=2))
 
 KANBAN_AGENTS = {"opencode", "hermes", "gemini"}
 
 def dispatch_kanban_task(task_id: str):
     """Move a task to in_progress and hand it to its assignee agent in the background."""
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         return
     task = json.loads(path.read_text())
@@ -796,7 +805,7 @@ def dispatch_kanban_task(task_id: str):
     threading.Thread(target=_run_kanban_agent, args=(task_id,), daemon=True).start()
 
 def _run_kanban_agent(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         return
     task = json.loads(path.read_text())
@@ -851,7 +860,7 @@ def kanban_board(status: Optional[str] = None):
 
 @app.get("/api/kanban/tasks/{task_id}")
 def kanban_get_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     return json.loads(path.read_text())
@@ -875,14 +884,14 @@ def kanban_create_task(data: KanbanTaskCreate):
         append_audit({"action": "kanban_task_created", "title": data.title})
         if task["assignee"] in KANBAN_AGENTS:
             dispatch_kanban_task(task["id"])
-            task = json.loads((KANBAN_DIR / f"{task['id']}.json").read_text())
+            task = json.loads(kanban_task_path(task["id"]).read_text())
         return task
     except Exception as e:
         raise HTTPException(500, str(e))
 
 @app.patch("/api/kanban/tasks/{task_id}")
 def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -901,7 +910,7 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
 
 @app.post("/api/kanban/tasks/{task_id}/dispatch")
 def kanban_dispatch_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -912,7 +921,7 @@ def kanban_dispatch_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/complete")
 def kanban_complete_task(task_id: str, data: KanbanComplete):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -926,7 +935,7 @@ def kanban_complete_task(task_id: str, data: KanbanComplete):
 
 @app.post("/api/kanban/tasks/{task_id}/block")
 def kanban_block_task(task_id: str, data: KanbanBlock):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -939,7 +948,7 @@ def kanban_block_task(task_id: str, data: KanbanBlock):
 
 @app.post("/api/kanban/tasks/{task_id}/unblock")
 def kanban_unblock_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -952,7 +961,7 @@ def kanban_unblock_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/comments")
 def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -969,7 +978,7 @@ def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
 @app.post("/api/kanban/links")
 def kanban_add_link(data: KanbanLinkCreate):
     for tid in [data.parent_id, data.child_id]:
-        path = KANBAN_DIR / f"{tid}.json"
+        path = kanban_task_path(tid)
         if not path.exists():
             raise HTTPException(404, f"Task {tid} not found")
         t = json.loads(path.read_text())
@@ -985,7 +994,7 @@ def kanban_add_link(data: KanbanLinkCreate):
 @app.delete("/api/kanban/links")
 def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
     for tid in [parent_id, child_id]:
-        path = KANBAN_DIR / f"{tid}.json"
+        path = kanban_task_path(tid)
         if path.exists():
             t = json.loads(path.read_text())
             t.setdefault("links", [])
@@ -1006,7 +1015,7 @@ def kanban_dispatch():
 
 @app.post("/api/kanban/tasks/{task_id}/specify")
 def kanban_specify_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -1018,7 +1027,7 @@ def kanban_specify_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/decompose")
 def kanban_decompose_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
