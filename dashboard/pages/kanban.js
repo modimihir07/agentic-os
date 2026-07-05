@@ -1,5 +1,9 @@
 let kanbanData = null;
 
+function getAllKanbanTasks() {
+  return Object.values(kanbanData?.columns || {}).flat();
+}
+
 async function renderKanban() {
   const content = document.getElementById('pageContent');
   content.innerHTML = `
@@ -53,7 +57,7 @@ function renderKanbanBoard() {
   if (!board || !kanbanData) return;
   const columnsObj = kanbanData.columns || {};
   const columns = Object.keys(columnsObj);
-  const allTasks = kanbanData.tasks || Object.values(columnsObj).flat();
+  const allTasks = getAllKanbanTasks();
   const filterText = (document.getElementById('kanbanFilterInput')?.value || '').toLowerCase();
   const filterPriority = document.getElementById('kanbanFilterPriority')?.value || 'all';
   const filterCategory = document.getElementById('kanbanFilterCategory')?.value || 'all';
@@ -147,7 +151,12 @@ function showAddKanbanTask() {
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">Assigned To</label>
-              <input class="form-input" id="kanbanAssigned" placeholder="e.g., opencode" style="text-transform:lowercase">
+              <select class="form-select" id="kanbanAssigned">
+                <option value="">Unassigned</option>
+                <option value="opencode">opencode (auto-run)</option>
+                <option value="hermes">Hermes (auto-run)</option>
+                <option value="gemini">Gemini CLI (auto-run)</option>
+              </select>
             </div>
             <div class="form-group">
               <label class="form-label">Target Date</label>
@@ -206,31 +215,68 @@ async function onKanbanDrop(e, status) {
   }
 }
 
-function showKanbanDetail(id) {
-  const task = kanbanData?.tasks?.find(t => t.id === id);
+const KANBAN_AGENTS = ['opencode', 'hermes', 'gemini'];
+
+function closeKanbanDetailModal() {
+  if (window._kanbanDetailPoll) { clearInterval(window._kanbanDetailPoll); window._kanbanDetailPoll = null; }
+  closeModal();
+}
+
+async function showKanbanDetail(id) {
+  const task = getAllKanbanTasks().find(t => t.id === id);
   if (!task) return;
+  renderKanbanDetailModal(task);
+
+  if (window._kanbanDetailPoll) clearInterval(window._kanbanDetailPoll);
+  if (task.status === 'in_progress') {
+    window._kanbanDetailPoll = setInterval(async () => {
+      try {
+        const fresh = await api.getKanbanTask(id);
+        if (fresh.status !== 'in_progress') {
+          clearInterval(window._kanbanDetailPoll);
+          window._kanbanDetailPoll = null;
+          renderKanban();
+        }
+        if (document.getElementById('kanbanDetailModal')) renderKanbanDetailModal(fresh);
+      } catch {}
+    }, 3000);
+  }
+}
+
+function renderKanbanDetailModal(task) {
   const modal = document.getElementById('modalContainer');
+  const canDispatch = KANBAN_AGENTS.includes(task.assignee) && task.status !== 'in_progress' && task.status !== 'done';
+  const comments = task.comments || [];
   modal.innerHTML = `
-    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
-      <div class="modal" style="max-width:560px">
+    <div class="modal-overlay" onclick="if(event.target===this)closeKanbanDetailModal()">
+      <div class="modal" id="kanbanDetailModal" style="max-width:560px">
         <div class="modal-header">
           <div class="modal-title">${escapeHtml(task.title)}</div>
-          <button class="modal-close" onclick="closeModal()">✕</button>
+          <button class="modal-close" onclick="closeKanbanDetailModal()">✕</button>
         </div>
         <div class="modal-body">
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
             <span class="badge badge-${task.status === 'done' ? 'success' : task.status === 'in_progress' ? 'info' : 'warning'}">${task.status}</span>
             <span class="kanban-priority priority-${task.priority || 'medium'}">${task.priority}</span>
             ${task.status === 'blocked' ? `<span class="badge badge-danger">🚫 Blocked</span>` : ''}
+            ${task.status === 'in_progress' ? `<span class="badge badge-info">🔄 Agent running…</span>` : ''}
           </div>
           ${task.body ? `<div style="margin-bottom:12px;color:var(--text-secondary);font-size:13px">${escapeHtml(task.body)}</div>` : ''}
           <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px;font-size:12px">
-            ${task.assignee ? `<span>👤 <strong>${escapeHtml(task.assignee)}</strong></span>` : ''}
+            ${task.assignee ? `<span>👤 <strong>${escapeHtml(task.assignee)}</strong>${KANBAN_AGENTS.includes(task.assignee) ? ' 🤖' : ''}</span>` : ''}
             <span>📅 <strong>${task.created || 'N/A'}</strong></span>
             ${task.completed_at ? `<span>✅ <strong>${task.completed_at}</strong></span>` : ''}
           </div>
+          ${task.block_reason ? `<div style="margin-bottom:12px;font-size:12px;color:var(--red)">🚫 ${escapeHtml(task.block_reason)}</div>` : ''}
+          ${comments.length ? `
+            <div style="margin-bottom:12px">
+              <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px">Activity</div>
+              ${comments.map(c => `<div style="padding:8px 10px;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;white-space:pre-wrap;margin-bottom:6px">${escapeHtml(c.message)}</div>`).join('')}
+            </div>
+          ` : ''}
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            ${task.status !== 'done' ? `<button class="btn btn-sm btn-primary" onclick="completeKanbanTask('${task.id}')">✅ Mark Done</button>` : ''}
+            ${canDispatch ? `<button class="btn btn-sm btn-primary" onclick="dispatchKanbanTask('${task.id}')">🤖 Dispatch to ${escapeHtml(task.assignee)}</button>` : ''}
+            ${task.status !== 'done' ? `<button class="btn btn-sm btn-ghost" onclick="completeKanbanTask('${task.id}')">✅ Mark Done</button>` : ''}
             ${task.status !== 'blocked' ? `<button class="btn btn-sm btn-ghost" onclick="blockKanbanTask('${task.id}')">🚫 Block</button>` : `<button class="btn btn-sm btn-ghost" onclick="unblockKanbanTask('${task.id}')">🔓 Unblock</button>`}
             <button class="btn btn-sm btn-ghost" onclick="deleteKanbanTask('${task.id}')" style="color:var(--red)">🗑 Delete</button>
           </div>
@@ -238,6 +284,18 @@ function showKanbanDetail(id) {
       </div>
     </div>
   `;
+}
+
+async function dispatchKanbanTask(id) {
+  try {
+    await api.dispatchKanbanTask(id);
+    showToast('Task dispatched to agent 🤖', 'success');
+    await loadKanbanData();
+    const fresh = getAllKanbanTasks().find(t => t.id === id);
+    if (fresh) showKanbanDetail(id);
+  } catch (err) {
+    showToast('Failed to dispatch: ' + err.message, 'error');
+  }
 }
 
 async function completeKanbanTask(id) {

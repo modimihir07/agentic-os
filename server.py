@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import tarfile
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -776,6 +777,53 @@ def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
     (KANBAN_DIR / f"{task['id']}.json").write_text(json.dumps(task, indent=2))
 
+KANBAN_AGENTS = {"opencode", "hermes", "gemini"}
+
+def dispatch_kanban_task(task_id: str):
+    """Move a task to in_progress and hand it to its assignee agent in the background."""
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        return
+    task = json.loads(path.read_text())
+    if task.get("status") in ("in_progress", "done"):
+        return
+    if task.get("assignee") not in KANBAN_AGENTS:
+        return
+    task["status"] = "in_progress"
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    append_audit({"action": "kanban_task_dispatched", "task_id": task_id, "agent": task["assignee"]})
+    threading.Thread(target=_run_kanban_agent, args=(task_id,), daemon=True).start()
+
+def _run_kanban_agent(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        return
+    task = json.loads(path.read_text())
+    agent = task.get("assignee")
+    prompt = task["title"] if not task.get("body") else f"{task['title']}\n\n{task['body']}"
+
+    response = execute_agent(agent, prompt)
+    failed = response.startswith(("⏱", "⚠", "Unknown agent"))
+
+    task = json.loads(path.read_text())  # reload in case it changed while the agent ran
+    task.setdefault("comments", []).append({
+        "id": str(uuid.uuid4())[:8],
+        "message": f"🤖 **{agent}**\n\n{response}",
+        "timestamp": get_timestamp(),
+    })
+    if failed:
+        task["status"] = "blocked"
+        task["block_reason"] = response[:300]
+        append_audit({"action": "kanban_task_dispatch_failed", "task_id": task_id, "agent": agent})
+    else:
+        task["status"] = "done"
+        task["summary"] = response[:300]
+        task["completed_at"] = get_timestamp()
+        append_audit({"action": "kanban_task_dispatch_completed", "task_id": task_id, "agent": agent})
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+
 def load_goals():
     if GOALS_FILE.exists():
         return json.loads(GOALS_FILE.read_text())
@@ -825,6 +873,9 @@ def kanban_create_task(data: KanbanTaskCreate):
         }
         save_kanban_task(task)
         append_audit({"action": "kanban_task_created", "title": data.title})
+        if task["assignee"] in KANBAN_AGENTS:
+            dispatch_kanban_task(task["id"])
+            task = json.loads((KANBAN_DIR / f"{task['id']}.json").read_text())
         return task
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -835,6 +886,7 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
+    assignee_changed = data.assignee is not None and data.assignee != task.get("assignee")
     for field in ["title", "body", "status", "priority", "assignee"]:
         val = getattr(data, field, None)
         if val is not None:
@@ -842,7 +894,21 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
     task["updated"] = get_timestamp()
     save_kanban_task(task)
     append_audit({"action": "kanban_task_updated", "task_id": task_id})
+    if assignee_changed and task["assignee"] in KANBAN_AGENTS:
+        dispatch_kanban_task(task_id)
+        task = json.loads(path.read_text())
     return task
+
+@app.post("/api/kanban/tasks/{task_id}/dispatch")
+def kanban_dispatch_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    if task.get("assignee") not in KANBAN_AGENTS:
+        raise HTTPException(400, "Task must be assigned to opencode, hermes, or gemini to dispatch")
+    dispatch_kanban_task(task_id)
+    return {"status": "dispatched", "task_id": task_id}
 
 @app.post("/api/kanban/tasks/{task_id}/complete")
 def kanban_complete_task(task_id: str, data: KanbanComplete):
@@ -930,8 +996,13 @@ def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
 
 @app.post("/api/kanban/dispatch")
 def kanban_dispatch():
-    append_audit({"action": "kanban_dispatch_triggered"})
-    return {"status": "dispatch_triggered", "message": "Dispatcher notified"}
+    dispatched = []
+    for task in load_kanban_tasks():
+        if task.get("status") in ("todo", "ready") and task.get("assignee") in KANBAN_AGENTS:
+            dispatch_kanban_task(task["id"])
+            dispatched.append(task["id"])
+    append_audit({"action": "kanban_dispatch_triggered", "task_ids": dispatched})
+    return {"status": "dispatch_triggered", "dispatched": dispatched, "message": f"Dispatched {len(dispatched)} task(s)"}
 
 @app.post("/api/kanban/tasks/{task_id}/specify")
 def kanban_specify_task(task_id: str):

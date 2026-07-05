@@ -67,6 +67,7 @@ const api = {
   linkKanbanTasks: (parentId, childId) => api.post('/api/kanban/links', { parent_id: parentId, child_id: childId }),
   unlinkKanbanTasks: (parentId, childId) => api.del(`/api/kanban/links?parent_id=${encodeURIComponent(parentId)}&child_id=${encodeURIComponent(childId)}`),
   dispatchKanban: () => api.post('/api/kanban/dispatch', {}),
+  dispatchKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/dispatch`, {}),
   specifyKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/specify`, {}),
   decomposeKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/decompose`, {}),
   // Goals
