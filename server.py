@@ -780,7 +780,11 @@ def kanban_task_path(task_id: str) -> Path:
     """Resolve a task id to its file path, rejecting anything that isn't a plain generated id."""
     if not KANBAN_ID_RE.fullmatch(task_id or ""):
         raise HTTPException(400, "Invalid task id")
-    return KANBAN_DIR / f"{task_id}.json"
+    base = KANBAN_DIR.resolve()
+    candidate = (base / f"{task_id}.json").resolve()
+    if candidate.parent != base:
+        raise HTTPException(400, "Invalid task id")
+    return candidate
 
 def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
