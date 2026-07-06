@@ -692,10 +692,16 @@ def run_terminal_command(req: TerminalRunRequest):
         return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
 
     try:
-        r = subprocess.run(
-            command, shell=True, cwd=_terminal_cwd,
-            capture_output=True, text=True, timeout=60,
-        )
+        if os.name == "nt":
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
+                cwd=_terminal_cwd, capture_output=True, text=True, timeout=60,
+            )
+        else:
+            r = subprocess.run(
+                command, shell=True, cwd=_terminal_cwd,
+                capture_output=True, text=True, timeout=60,
+            )
         append_audit({"action": "terminal_command", "command": command[:200], "cwd": _terminal_cwd})
         return {"cwd": _terminal_cwd, "stdout": r.stdout, "stderr": r.stderr, "returncode": r.returncode, "timed_out": False}
     except subprocess.TimeoutExpired:
