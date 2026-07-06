@@ -947,6 +947,15 @@ def kanban_get_task(task_id: str):
         raise HTTPException(404, "Task not found")
     return json.loads(path.read_text())
 
+@app.delete("/api/kanban/tasks/{task_id}")
+def kanban_delete_task(task_id: str):
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    path.unlink()
+    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
+    return {"status": "deleted", "task_id": task_id}
+
 @app.post("/api/kanban/tasks")
 def kanban_create_task(data: KanbanTaskCreate):
     try:
