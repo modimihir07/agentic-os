@@ -75,10 +75,28 @@ if (-not (Test-Path .git)) {
     }
 }
 
+$launcher = Join-Path $PSScriptRoot "Launch-Dashboard.bat"
+$desktop = [Environment]::GetFolderPath("Desktop")
+if ((Test-Path $launcher) -and (Test-Path $desktop)) {
+    try {
+        $shortcutPath = Join-Path $desktop "Agentic OS Dashboard.lnk"
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $launcher
+        $shortcut.WorkingDirectory = $PSScriptRoot
+        $shortcut.Description = "Launch the Agentic OS dashboard"
+        $shortcut.Save()
+        Write-Host "Desktop shortcut created: $shortcutPath"
+    } catch {
+        Write-Warning "Could not create Desktop shortcut: $_"
+    }
+}
+
 Write-Host ""
 Write-Host "=== Installation complete! ==="
 Write-Host ""
 Write-Host "Next steps:"
 Write-Host "  1. Edit data/settings.json with your API keys"
-Write-Host "  2. Run .\start.ps1 to launch the dashboard"
-Write-Host "  3. Open http://127.0.0.1:8080 in your browser"
+Write-Host "  2. Double-click the 'Agentic OS Dashboard' shortcut on your Desktop"
+Write-Host "     (or run .\start.ps1 / .\Launch-Dashboard.bat manually)"
+Write-Host "  3. Your browser will open automatically once the server is ready"
