@@ -4,10 +4,12 @@ Agentic OS — FastAPI Backend
 Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 """
 import argparse
+import asyncio
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import tarfile
 import threading
@@ -17,7 +19,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -100,9 +102,6 @@ class BackupRestoreRequest(BaseModel):
 class ChatRequest(BaseModel):
     agent: str
     message: str
-
-class TerminalRunRequest(BaseModel):
-    command: str
 
 # ─── Helper Functions ─────────────────────────────────────────────
 
@@ -667,45 +666,118 @@ def chat(req: ChatRequest):
 def get_chat_history():
     return load_chat_history()
 
-# ─── Routes: Terminal ─────────────────────────────────────────────
+# ─── Routes: Terminal (real interactive PTY over WebSocket) ──────
 
-_terminal_cwd = str(BASE_DIR)
+class PtySession:
+    """Wraps a real pseudo-terminal shell process, POSIX (stdlib pty) or Windows (pywinpty)."""
 
-@app.get("/api/terminal/session")
-def get_terminal_session():
-    return {"cwd": _terminal_cwd}
+    def __init__(self):
+        self.master_fd = None
+        self.pid = None
+        self.winpty_process = None
 
-@app.post("/api/terminal/run")
-def run_terminal_command(req: TerminalRunRequest):
-    global _terminal_cwd
-    command = req.command.strip()
-    if not command:
-        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
+    def start(self, cwd: str):
+        if os.name == "nt":
+            import winpty
+            shell = shutil.which("powershell.exe") or "powershell.exe"
+            self.winpty_process = winpty.PtyProcess.spawn([shell, "-NoLogo"], cwd=cwd)
+        else:
+            import pty
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.chdir(cwd)
+                shell = os.environ.get("SHELL", "/bin/bash")
+                os.execvp(shell, [shell])
+            else:
+                self.master_fd = fd
+                self.pid = pid
 
-    if command == "cd" or command.startswith("cd "):
-        target = command[2:].strip() or str(Path.home())
-        new_dir = (Path(_terminal_cwd) / target).resolve() if not Path(target).is_absolute() else Path(target).resolve()
-        if not new_dir.is_dir():
-            return {"cwd": _terminal_cwd, "stdout": "", "stderr": f"cd: no such directory: {target}", "returncode": 1, "timed_out": False}
-        _terminal_cwd = str(new_dir)
-        append_audit({"action": "terminal_command", "command": "cd", "cwd": _terminal_cwd})
-        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
+    def read(self, size: int = 4096):
+        if self.winpty_process is not None:
+            return self.winpty_process.read(size)
+        return os.read(self.master_fd, size)
+
+    def write(self, data: str):
+        if self.winpty_process is not None:
+            self.winpty_process.write(data)
+        else:
+            os.write(self.master_fd, data.encode())
+
+    def resize(self, cols: int, rows: int):
+        if self.winpty_process is not None:
+            self.winpty_process.setwinsize(rows, cols)
+        else:
+            import fcntl
+            import struct
+            import termios
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+    def close(self):
+        if self.winpty_process is not None:
+            try:
+                self.winpty_process.close(force=True)
+            except Exception:
+                pass
+        else:
+            try:
+                os.close(self.master_fd)
+            except OSError:
+                pass
+            if self.pid:
+                # Interactive shells commonly ignore SIGTERM; SIGKILL can't be blocked/ignored.
+                try:
+                    os.kill(self.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+
+@app.websocket("/ws/terminal")
+async def ws_terminal(websocket: WebSocket):
+    await websocket.accept()
+    session = PtySession()
+    try:
+        session.start(str(BASE_DIR))
+    except Exception as e:
+        await websocket.send_json({"type": "output", "data": f"Failed to start terminal: {e}\r\n"})
+        await websocket.close()
+        return
+
+    append_audit({"action": "terminal_session_started"})
+    loop = asyncio.get_event_loop()
+    stop = False
+
+    def reader():
+        while not stop:
+            try:
+                data = session.read(4096)
+            except (OSError, EOFError):
+                break
+            if not data:
+                break
+            text = data.decode(errors="replace") if isinstance(data, bytes) else data
+            fut = asyncio.run_coroutine_threadsafe(websocket.send_json({"type": "output", "data": text}), loop)
+            try:
+                fut.result(timeout=5)
+            except Exception:
+                break
+        asyncio.run_coroutine_threadsafe(websocket.close(), loop)
+
+    threading.Thread(target=reader, daemon=True).start()
 
     try:
-        if os.name == "nt":
-            r = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-Command", command],
-                cwd=_terminal_cwd, capture_output=True, text=True, timeout=60,
-            )
-        else:
-            r = subprocess.run(
-                command, shell=True, cwd=_terminal_cwd,
-                capture_output=True, text=True, timeout=60,
-            )
-        append_audit({"action": "terminal_command", "command": command[:200], "cwd": _terminal_cwd})
-        return {"cwd": _terminal_cwd, "stdout": r.stdout, "stderr": r.stderr, "returncode": r.returncode, "timed_out": False}
-    except subprocess.TimeoutExpired:
-        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "Command timed out after 60s.", "returncode": -1, "timed_out": True}
+        while True:
+            msg = await websocket.receive_json()
+            if msg.get("type") == "input":
+                session.write(msg.get("data", ""))
+            elif msg.get("type") == "resize":
+                session.resize(int(msg.get("cols", 80)), int(msg.get("rows", 24)))
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        stop = True
+        session.close()
+        append_audit({"action": "terminal_session_ended"})
 
 # ═══════════════════════════════════════════════════════════════════
 # v0.2.0 — New Feature Endpoints
