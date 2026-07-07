@@ -8,6 +8,7 @@ import asyncio
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -131,14 +132,32 @@ def append_audit(entry: dict):
 
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
+def hermes_cli_args(*args: str) -> list:
+    """Build the command to invoke Hermes, bridging through WSL if it's only installed there.
+
+    The dashboard commonly runs as a native Windows process while Hermes (whose official
+    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it.
+    """
+    if shutil.which("hermes") is not None or shutil.which("wsl") is None:
+        return ["hermes", *args]
+    quoted = " ".join(shlex.quote(a) for a in args)
+    return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
+
+def hermes_available() -> bool:
+    try:
+        r = subprocess.run(hermes_cli_args("--version"), capture_output=True, text=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
 def check_agent(name: str) -> dict:
-    """Instant filesystem-based check. No subprocess needed."""
+    """Filesystem-based check for opencode/gemini; hermes needs a real subprocess since it may live inside WSL."""
     try:
         if name == "opencode":
             exists = shutil.which("opencode") is not None
             status = "online" if exists else "offline"
         elif name == "hermes":
-            exists = shutil.which("hermes") is not None
+            exists = hermes_available()
             status = "online" if exists else "offline"
         elif name == "gemini":
             # Gemini has valid OAuth tokens logged in
@@ -588,7 +607,7 @@ def execute_agent(agent: str, message: str) -> str:
 
         elif agent == "hermes":
             try:
-                code, out, err = run_cli(["hermes", "chat", "-q", message], timeout=180)
+                code, out, err = run_cli(hermes_cli_args("chat", "-q", message), timeout=180)
             except subprocess.TimeoutExpired:
                 return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
             if code == 0:
