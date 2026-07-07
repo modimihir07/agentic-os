@@ -88,6 +88,16 @@ class SkillRunRequest(BaseModel):
     input: Optional[str] = ""
     agent: Optional[str] = "auto"
 
+class SkillCreate(BaseModel):
+    name: str
+    skill_md: str = ""
+
+class SkillUpdate(BaseModel):
+    skill_md: str
+
+class SkillContextFileWrite(BaseModel):
+    content: str = ""
+
 class ScheduleJobRequest(BaseModel):
     name: str
     skill: str
@@ -212,6 +222,27 @@ def update_brain_file(file_name: str, data: BrainUpdate):
 
 # ─── Routes: Skills ───────────────────────────────────────────────
 
+SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+SKILL_CONTEXT_FILENAME_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$")
+
+def skill_dir_path(name: str) -> Path:
+    if not SKILL_NAME_RE.fullmatch(name or ""):
+        raise HTTPException(400, "Invalid skill name")
+    base = (BASE_DIR / "skills").resolve()
+    candidate = (base / name).resolve()
+    if candidate.parent != base:
+        raise HTTPException(400, "Invalid skill name")
+    return candidate
+
+def skill_context_file_path(name: str, filename: str) -> Path:
+    if not SKILL_CONTEXT_FILENAME_RE.fullmatch(filename or ""):
+        raise HTTPException(400, "Invalid file name")
+    context_dir = (skill_dir_path(name) / "context").resolve()
+    candidate = (context_dir / filename).resolve()
+    if candidate.parent != context_dir:
+        raise HTTPException(400, "Invalid file name")
+    return candidate
+
 @app.get("/api/skills")
 def list_skills():
     skills = []
@@ -238,7 +269,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = BASE_DIR / "skills" / name
+    path = skill_dir_path(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
@@ -250,9 +281,55 @@ def get_skill(name: str):
         "context": [f.name for f in (path / "context").iterdir()] if (path / "context").exists() else [],
     }
 
+@app.post("/api/skills")
+def create_skill(data: SkillCreate):
+    path = skill_dir_path(data.name)
+    if path.exists():
+        raise HTTPException(409, "Skill already exists")
+    path.mkdir(parents=True)
+    (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    append_audit({"action": "skill_created", "skill": data.name})
+    return {"name": data.name}
+
+@app.put("/api/skills/{name}")
+def update_skill(name: str, data: SkillUpdate):
+    path = skill_dir_path(name)
+    if not path.exists():
+        raise HTTPException(404, "Skill not found")
+    (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    append_audit({"action": "skill_updated", "skill": name})
+    return {"status": "ok"}
+
+@app.get("/api/skills/{name}/context/{filename}")
+def get_skill_context_file(name: str, filename: str):
+    path = skill_context_file_path(name, filename)
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    return {"filename": filename, "content": read_file(path)}
+
+@app.put("/api/skills/{name}/context/{filename}")
+def put_skill_context_file(name: str, filename: str, data: SkillContextFileWrite):
+    skill_path = skill_dir_path(name)
+    if not skill_path.exists():
+        raise HTTPException(404, "Skill not found")
+    path = skill_context_file_path(name, filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(data.content, encoding="utf-8")
+    append_audit({"action": "skill_context_updated", "skill": name, "file": filename})
+    return {"status": "ok"}
+
+@app.delete("/api/skills/{name}/context/{filename}")
+def delete_skill_context_file(name: str, filename: str):
+    path = skill_context_file_path(name, filename)
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    path.unlink()
+    append_audit({"action": "skill_context_deleted", "skill": name, "file": filename})
+    return {"status": "deleted"}
+
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = BASE_DIR / "skills" / name
+    path = skill_dir_path(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
@@ -335,7 +412,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    path = BASE_DIR / "skills" / name / "score-history.json"
+    path = skill_dir_path(name) / "score-history.json"
     if not path.exists():
         return {"scores": []}
     return {"scores": json.loads(path.read_text())}
