@@ -123,16 +123,6 @@ def list_dir(path: Path):
         return []
     return sorted([p.name for p in path.iterdir() if not p.name.startswith(".")])
 
-def safe_child(base: Path, name: str) -> Path:
-    """Resolve name inside base, rejecting empty names and path traversal."""
-    if not name or name in (".", ".."):
-        raise HTTPException(400, "Invalid name")
-    base = base.resolve()
-    candidate = (base / name).resolve()
-    if candidate != base and base not in candidate.parents:
-        raise HTTPException(400, "Invalid name")
-    return candidate
-
 def read_json(path: Path, default=None):
     """Load JSON from path, returning default when the file is missing."""
     if not path.exists():
@@ -248,21 +238,21 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = safe_child(BASE_DIR / "skills", name)
+    path = BASE_DIR / "skills" / name
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
         "name": name,
         "skill": read_file(path / "SKILL.md"),
         "learnings": read_file(path / "learnings.md"),
-        "eval": read_json(path / "eval.json", {}),
-        "score_history": read_json(path / "score-history.json", []),
+        "eval": json.loads((path / "eval.json").read_text()) if (path / "eval.json").exists() else {},
+        "score_history": json.loads((path / "score-history.json").read_text()) if (path / "score-history.json").exists() else [],
         "context": [f.name for f in (path / "context").iterdir()] if (path / "context").exists() else [],
     }
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = safe_child(BASE_DIR / "skills", name)
+    path = BASE_DIR / "skills" / name
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
@@ -345,8 +335,10 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    scores = read_json(safe_child(BASE_DIR / "skills", name) / "score-history.json", [])
-    return {"scores": scores}
+    path = BASE_DIR / "skills" / name / "score-history.json"
+    if not path.exists():
+        return {"scores": []}
+    return {"scores": json.loads(path.read_text())}
 
 # ─── Routes: Scheduler ────────────────────────────────────────────
 
@@ -372,7 +364,9 @@ def create_job(job: ScheduleJobRequest):
         "last_run": None,
         "next_run": None,
     }
-    write_json(safe_child(jobs_dir, f"{job.name.replace(' ', '_')}.json"), job_data)
+    (jobs_dir / f"{job.name.replace(' ', '_')}.json").write_text(
+        json.dumps(job_data, indent=2)
+    )
     append_audit({"action": "job_created", "job": job.name})
     return job_data
 
@@ -803,14 +797,7 @@ def kanban_task_path(task_id: str) -> Path:
 
 def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
-    write_json(kanban_task_path(task["id"]), task)
-
-def load_kanban_task_or_404(task_id: str):
-    """Return (path, task) for a task id, raising 404 when it does not exist."""
-    path = kanban_task_path(task_id)
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    return path, json.loads(path.read_text())
+    kanban_task_path(task["id"]).write_text(json.dumps(task, indent=2))
 
 KANBAN_AGENTS = set(AGENTS)
 
@@ -884,8 +871,10 @@ def kanban_board(status: Optional[str] = None):
 
 @app.get("/api/kanban/tasks/{task_id}")
 def kanban_get_task(task_id: str):
-    _, task = load_kanban_task_or_404(task_id)
-    return task
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    return json.loads(path.read_text())
 
 @app.post("/api/kanban/tasks")
 def kanban_create_task(data: KanbanTaskCreate):
@@ -913,7 +902,10 @@ def kanban_create_task(data: KanbanTaskCreate):
 
 @app.patch("/api/kanban/tasks/{task_id}")
 def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     assignee_changed = data.assignee is not None and data.assignee != task.get("assignee")
     for field in ["title", "body", "status", "priority", "assignee"]:
         val = getattr(data, field, None)
@@ -929,7 +921,10 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
 
 @app.post("/api/kanban/tasks/{task_id}/dispatch")
 def kanban_dispatch_task(task_id: str):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     if task.get("assignee") not in KANBAN_AGENTS:
         raise HTTPException(400, "Task must be assigned to opencode, hermes, or gemini to dispatch")
     dispatch_kanban_task(task_id)
@@ -937,7 +932,10 @@ def kanban_dispatch_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/complete")
 def kanban_complete_task(task_id: str, data: KanbanComplete):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     task["status"] = "done"
     task["summary"] = data.summary
     task["completed_at"] = get_timestamp()
@@ -948,7 +946,10 @@ def kanban_complete_task(task_id: str, data: KanbanComplete):
 
 @app.post("/api/kanban/tasks/{task_id}/block")
 def kanban_block_task(task_id: str, data: KanbanBlock):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     task["status"] = "blocked"
     task["block_reason"] = data.reason
     task["updated"] = get_timestamp()
@@ -958,7 +959,10 @@ def kanban_block_task(task_id: str, data: KanbanBlock):
 
 @app.post("/api/kanban/tasks/{task_id}/unblock")
 def kanban_unblock_task(task_id: str):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     task["status"] = "ready"
     task["block_reason"] = ""
     task["updated"] = get_timestamp()
@@ -968,7 +972,10 @@ def kanban_unblock_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/comments")
 def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     comment = {
         "id": new_id(),
         "message": data.message,
@@ -1019,7 +1026,10 @@ def kanban_dispatch():
 
 @app.post("/api/kanban/tasks/{task_id}/specify")
 def kanban_specify_task(task_id: str):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     if task.get("status") == "triage":
         task["status"] = "todo"
         task["updated"] = get_timestamp()
@@ -1028,7 +1038,10 @@ def kanban_specify_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/decompose")
 def kanban_decompose_task(task_id: str):
-    path, task = load_kanban_task_or_404(task_id)
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
     children = []
     for i, subtask in enumerate(task.get("body", "").split("\n")):
         subtask = subtask.strip().lstrip("-* ")
