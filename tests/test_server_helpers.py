@@ -66,8 +66,8 @@ def test_get_cors_origins_reads_port_from_settings(server_module, monkeypatch):
 def test_get_cors_origins_includes_env_extras(server_module, monkeypatch):
     monkeypatch.setenv("AGENTIC_OS_CORS_ORIGINS", "https://a.example, https://b.example ")
     origins = server_module.get_cors_origins()
-    assert "https://a.example" in origins
-    assert "https://b.example" in origins
+    assert any(o == "https://a.example" for o in origins)
+    assert any(o == "https://b.example" for o in origins)
 
 
 def test_get_cors_origins_bad_settings_falls_back(server_module):
