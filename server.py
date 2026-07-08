@@ -133,7 +133,7 @@ def load_json_file(path: Path, default=_MISSING):
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         raise HTTPException(500, f"Failed to read {path.name}: {e}")
 
-SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 def skill_dir(name: str) -> Path:
     """Resolve a user-supplied skill name to its directory, rejecting path traversal."""
