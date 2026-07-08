@@ -117,12 +117,16 @@ def write_file(path: Path, content: str):
 
 _MISSING = object()
 
-def load_json_file(path: Path, default=_MISSING):
+def load_json_file(path: Path, default=_MISSING, best_effort=False):
     """Read and parse a JSON file.
 
     Raises a descriptive HTTPException instead of leaking an opaque 500 when the
     file is missing or corrupt, so callers propagate a clear error to the client.
     If ``default`` is provided it is returned when the file does not exist.
+
+    Set ``best_effort=True`` (with a ``default``) for aggregate/listing callers
+    that should tolerate one corrupt file rather than aborting the whole view:
+    the corruption is logged and ``default`` is returned instead of raising.
     """
     if not path.exists():
         if default is not _MISSING:
@@ -131,6 +135,9 @@ def load_json_file(path: Path, default=_MISSING):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+        if best_effort and default is not _MISSING:
+            print(f"[load] skipping corrupt {path.name}: {e}")
+            return default
         raise HTTPException(500, f"Failed to read {path.name}: {e}")
 
 def skill_dir(name: str) -> Path:
@@ -241,8 +248,8 @@ def list_skills():
         if d.is_dir() and not d.name.startswith("_"):
             skill_md = read_file(d / "SKILL.md")
             learnings = read_file(d / "learnings.md")
-            eval_data = load_json_file(d / "eval.json", default={})
-            score_history = load_json_file(d / "score-history.json", default=[])
+            eval_data = load_json_file(d / "eval.json", default={}, best_effort=True)
+            score_history = load_json_file(d / "score-history.json", default=[], best_effort=True)
             skills.append({
                 "name": d.name,
                 "description": skill_md[:200] if skill_md else "",
@@ -361,7 +368,9 @@ def list_jobs():
     jobs_dir = BASE_DIR / "scheduler" / "jobs"
     jobs = []
     for f in sorted(jobs_dir.glob("*.json")):
-        jobs.append(load_json_file(f))
+        job = load_json_file(f, default=None, best_effort=True)
+        if job is not None:
+            jobs.append(job)
     return jobs
 
 @app.post("/api/scheduler/jobs")
@@ -388,8 +397,8 @@ def create_job(job: ScheduleJobRequest):
 def delete_job(job_id: str):
     jobs_dir = BASE_DIR / "scheduler" / "jobs"
     for f in jobs_dir.glob("*.json"):
-        data = load_json_file(f)
-        if data.get("id") == job_id:
+        data = load_json_file(f, default=None, best_effort=True)
+        if data and data.get("id") == job_id:
             f.unlink()
             append_audit({"action": "job_deleted", "job_id": job_id})
             return {"status": "deleted"}
@@ -808,7 +817,9 @@ def load_kanban_tasks():
     ensure_dir(KANBAN_DIR)
     tasks = []
     for f in sorted(KANBAN_DIR.glob("*.json")):
-        tasks.append(load_json_file(f))
+        task = load_json_file(f, default=None, best_effort=True)
+        if task is not None:
+            tasks.append(task)
     return tasks
 
 KANBAN_ID_RE = re.compile(r"^[0-9a-f]{6,16}$")
