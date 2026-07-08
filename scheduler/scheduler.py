@@ -24,24 +24,40 @@ def run_skill(skill_name: str):
         "skill": skill_name,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    with open(audit_file, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    try:
+        audit_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(audit_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError as e:
+        print(f"  [audit] failed to record run of {skill_name!r}: {e}")
     print(f"[{datetime.now().isoformat()}] Ran skill: {skill_name}")
 
 def load_jobs(scheduler: BackgroundScheduler):
-    """Load job definitions from jobs/ directory."""
+    """Load job definitions from jobs/ directory.
+
+    A single malformed job file is logged and skipped rather than being allowed
+    to abort loading of every other job.
+    """
     for job_file in JOBS_DIR.glob("*.json"):
-        data = json.loads(job_file.read_text())
+        try:
+            data = json.loads(job_file.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"  Skipping {job_file.name}: could not read job ({e})")
+            continue
         if not data.get("enabled", True):
             continue
-        scheduler.add_job(
-            run_skill,
-            CronTrigger.from_crontab(data["cron"]),
-            args=[data["skill"]],
-            id=data.get("id", data["name"]),
-            name=data["name"],
-            replace_existing=True,
-        )
+        try:
+            scheduler.add_job(
+                run_skill,
+                CronTrigger.from_crontab(data["cron"]),
+                args=[data["skill"]],
+                id=data.get("id", data["name"]),
+                name=data["name"],
+                replace_existing=True,
+            )
+        except (KeyError, ValueError) as e:
+            print(f"  Skipping {job_file.name}: invalid job definition ({e})")
+            continue
         print(f"  Scheduled: {data['name']} ({data['cron']})")
 
 def main():
