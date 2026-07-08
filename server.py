@@ -454,14 +454,18 @@ def create_backup():
     return {"status": "ok", "file": backup_file.name, "size": backup_file.stat().st_size}
 
 def _resolve_backup_file(name: str) -> Path:
-    """Resolve a restore request to a real .tar.gz inside backups/, rejecting traversal."""
+    """Resolve a restore request to a real .tar.gz inside backups/, rejecting traversal.
+
+    The returned path is taken from the directory listing (never built from the raw
+    request value), so a caller can only ever select an existing backup file.
+    """
     if not name or name != Path(name).name or not name.endswith(".tar.gz"):
         raise HTTPException(400, "Invalid backup file name")
     backup_dir = (BASE_DIR / "backups").resolve()
-    candidate = (backup_dir / name).resolve()
-    if candidate.parent != backup_dir:
-        raise HTTPException(400, "Invalid backup file name")
-    return candidate
+    for candidate in backup_dir.glob("*.tar.gz"):
+        if candidate.name == name:
+            return candidate
+    raise HTTPException(404, "Backup file not found")
 
 
 def _safe_extractall(tar: tarfile.TarFile, dest: Path):
