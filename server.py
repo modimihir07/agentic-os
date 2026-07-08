@@ -453,13 +453,38 @@ def create_backup():
     append_audit({"action": "backup_created", "file": backup_file.name})
     return {"status": "ok", "file": backup_file.name, "size": backup_file.stat().st_size}
 
+def _resolve_backup_file(name: str) -> Path:
+    """Resolve a restore request to a real .tar.gz inside backups/, rejecting traversal."""
+    if not name or name != Path(name).name or not name.endswith(".tar.gz"):
+        raise HTTPException(400, "Invalid backup file name")
+    backup_dir = (BASE_DIR / "backups").resolve()
+    candidate = (backup_dir / name).resolve()
+    if candidate.parent != backup_dir:
+        raise HTTPException(400, "Invalid backup file name")
+    return candidate
+
+
+def _safe_extractall(tar: tarfile.TarFile, dest: Path):
+    """Extract a tar archive, refusing members that would escape dest (CVE-2007-4559)."""
+    dest = dest.resolve()
+    for member in tar.getmembers():
+        target = (dest / member.name).resolve()
+        if target != dest and dest not in target.parents:
+            raise HTTPException(400, f"Unsafe path in archive: {member.name}")
+        if member.issym() or member.islnk():
+            link_target = (target.parent / member.linkname).resolve()
+            if link_target != dest and dest not in link_target.parents:
+                raise HTTPException(400, f"Unsafe link in archive: {member.name}")
+    tar.extractall(path=dest, filter="data")
+
+
 @app.post("/api/backup/restore")
 def restore_backup(data: BackupRestoreRequest):
-    backup_file = BASE_DIR / "backups" / data.file
+    backup_file = _resolve_backup_file(data.file)
     if not backup_file.exists():
         raise HTTPException(404, "Backup file not found")
     with tarfile.open(backup_file, "r:gz") as tar:
-        tar.extractall(path=BASE_DIR)
+        _safe_extractall(tar, BASE_DIR)
     append_audit({"action": "backup_restored", "file": data.file})
     return {"status": "restored"}
 
