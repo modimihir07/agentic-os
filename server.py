@@ -133,17 +133,19 @@ def load_json_file(path: Path, default=_MISSING):
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         raise HTTPException(500, f"Failed to read {path.name}: {e}")
 
-SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-
 def skill_dir(name: str) -> Path:
-    """Resolve a user-supplied skill name to its directory, rejecting path traversal."""
-    if not SKILL_NAME_RE.fullmatch(name or ""):
-        raise HTTPException(404, "Skill not found")
-    base = (BASE_DIR / "skills").resolve()
-    candidate = (base / name).resolve()
-    if candidate.parent != base:
-        raise HTTPException(404, "Skill not found")
-    return candidate
+    """Resolve a user-supplied skill name to its directory.
+
+    The name is matched against the actual directory entries rather than used to
+    build a path, so traversal input (``..``, ``/``) can never escape the skills
+    directory.
+    """
+    base = BASE_DIR / "skills"
+    if base.exists():
+        for entry in base.iterdir():
+            if entry.is_dir() and entry.name == name:
+                return entry
+    raise HTTPException(404, "Skill not found")
 
 def list_dir(path: Path):
     if not path.exists():
