@@ -133,6 +133,18 @@ def load_json_file(path: Path, default=_MISSING):
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
         raise HTTPException(500, f"Failed to read {path.name}: {e}")
 
+SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+def skill_dir(name: str) -> Path:
+    """Resolve a user-supplied skill name to its directory, rejecting path traversal."""
+    if not SKILL_NAME_RE.fullmatch(name or ""):
+        raise HTTPException(404, "Skill not found")
+    base = (BASE_DIR / "skills").resolve()
+    candidate = (base / name).resolve()
+    if candidate.parent != base:
+        raise HTTPException(404, "Skill not found")
+    return candidate
+
 def list_dir(path: Path):
     if not path.exists():
         return []
@@ -240,7 +252,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = BASE_DIR / "skills" / name
+    path = skill_dir(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
@@ -254,7 +266,7 @@ def get_skill(name: str):
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = BASE_DIR / "skills" / name
+    path = skill_dir(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
@@ -337,7 +349,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    path = BASE_DIR / "skills" / name / "score-history.json"
+    path = skill_dir(name) / "score-history.json"
     return {"scores": load_json_file(path, default=[])}
 
 # ─── Routes: Scheduler ────────────────────────────────────────────
