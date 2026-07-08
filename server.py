@@ -262,8 +262,6 @@ def list_skills():
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
     path = skill_dir(name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
     return {
         "name": name,
         "skill": read_file(path / "SKILL.md"),
@@ -276,8 +274,6 @@ def get_skill(name: str):
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
     path = skill_dir(name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
 
     agent_choice = req.agent if req else "auto"
     skill_input = req.input if req else ""
@@ -860,10 +856,10 @@ def _run_kanban_agent(task_id: str):
     # Runs in a daemon thread: any unhandled exception would be lost and leave
     # the task stuck in "in_progress" forever, so catch failures and surface
     # them by marking the task blocked with the error.
-    path = kanban_task_path(task_id)
-    if not path.exists():
-        return
     try:
+        path = kanban_task_path(task_id)
+        if not path.exists():
+            return
         task = json.loads(path.read_text())
         agent = task.get("assignee")
         prompt = task["title"] if not task.get("body") else f"{task['title']}\n\n{task['body']}"
