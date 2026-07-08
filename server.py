@@ -123,6 +123,16 @@ def list_dir(path: Path):
         return []
     return sorted([p.name for p in path.iterdir() if not p.name.startswith(".")])
 
+def safe_child(base: Path, name: str) -> Path:
+    """Resolve name inside base, rejecting empty names and path traversal."""
+    if not name or name in (".", ".."):
+        raise HTTPException(400, "Invalid name")
+    base = base.resolve()
+    candidate = (base / name).resolve()
+    if candidate != base and base not in candidate.parents:
+        raise HTTPException(400, "Invalid name")
+    return candidate
+
 def read_json(path: Path, default=None):
     """Load JSON from path, returning default when the file is missing."""
     if not path.exists():
@@ -238,7 +248,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = BASE_DIR / "skills" / name
+    path = safe_child(BASE_DIR / "skills", name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
@@ -252,7 +262,7 @@ def get_skill(name: str):
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = BASE_DIR / "skills" / name
+    path = safe_child(BASE_DIR / "skills", name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
@@ -335,7 +345,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    scores = read_json(BASE_DIR / "skills" / name / "score-history.json", [])
+    scores = read_json(safe_child(BASE_DIR / "skills", name) / "score-history.json", [])
     return {"scores": scores}
 
 # ─── Routes: Scheduler ────────────────────────────────────────────
@@ -362,7 +372,7 @@ def create_job(job: ScheduleJobRequest):
         "last_run": None,
         "next_run": None,
     }
-    write_json(jobs_dir / f"{job.name.replace(' ', '_')}.json", job_data)
+    write_json(safe_child(jobs_dir, f"{job.name.replace(' ', '_')}.json"), job_data)
     append_audit({"action": "job_created", "job": job.name})
     return job_data
 
