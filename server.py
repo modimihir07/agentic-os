@@ -142,16 +142,29 @@ def append_audit(entry: dict):
 
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
+def _cli_has_subcommand(base_args: list, subcommand: str) -> bool:
+    try:
+        r = subprocess.run([*base_args, "--help"], capture_output=True, text=True, timeout=10)
+        return subcommand in ((r.stdout or "") + (r.stderr or ""))
+    except Exception:
+        return False
+
 def hermes_cli_args(*args: str) -> list:
-    """Build the command to invoke Hermes, bridging through WSL if it's only installed there.
+    """Build the command to invoke Hermes, bridging through WSL if the real agent only lives there.
 
     The dashboard commonly runs as a native Windows process while Hermes (whose official
-    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it.
+    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it
+    there. Windows machines can also have an unrelated tool also named 'hermes' on PATH (e.g. the
+    academic softwarepub/HERMES metadata-publishing project, which coincidentally shares the name),
+    so don't just trust that a native 'hermes' is the right one - confirm it exposes the
+    NousResearch agent's `chat` subcommand before using it, falling back to WSL otherwise.
     """
-    if shutil.which("hermes") is not None or shutil.which("wsl") is None:
+    if shutil.which("hermes") is not None and _cli_has_subcommand(["hermes"], "chat"):
         return ["hermes", *args]
-    quoted = " ".join(shlex.quote(a) for a in args)
-    return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
+    if shutil.which("wsl") is not None:
+        quoted = " ".join(shlex.quote(a) for a in args)
+        return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
+    return ["hermes", *args]
 
 def hermes_available() -> bool:
     try:
