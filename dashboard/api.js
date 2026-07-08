@@ -1,31 +1,20 @@
 const api = {
-  async get(path) {
-    const r = await fetch(path);
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
-    return r.json();
-  },
-  async post(path, body = {}, controller) {
-    const opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  async request(path, { method = 'GET', body, controller } = {}) {
+    const opts = { method };
+    if (body !== undefined) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
     if (controller) opts.signal = controller.signal;
     const r = await fetch(path, opts);
     if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
     return r.json();
   },
-  async put(path, body = {}) {
-    const r = await fetch(path, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
-    return r.json();
-  },
-  async patch(path, body = {}) {
-    const r = await fetch(path, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
-    return r.json();
-  },
-  async del(path) {
-    const r = await fetch(path, { method: 'DELETE' });
-    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || `Request failed: ${r.status}`); }
-    return r.json();
-  },
+  get(path) { return api.request(path); },
+  post(path, body = {}, controller) { return api.request(path, { method: 'POST', body, controller }); },
+  put(path, body = {}) { return api.request(path, { method: 'PUT', body }); },
+  patch(path, body = {}) { return api.request(path, { method: 'PATCH', body }); },
+  del(path) { return api.request(path, { method: 'DELETE' }); },
   getStatus: () => api.get('/api/status'),
   getBrain: () => api.get('/api/brain'),
   getBrainFile: (name) => api.get(`/api/brain/${encodeURIComponent(name)}`),
