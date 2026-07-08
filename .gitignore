@@ -1,6 +1,10 @@
 __pycache__/
 *.pyc
 .env
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
 *.egg-info/
 dist/
 node_modules/
