@@ -6,7 +6,7 @@ async function renderSkills() {
         <h1 class="page-title">Skills Hub</h1>
         <p class="page-subtitle">Browse, run, and monitor skill performance</p>
       </div>
-      <div class="btn-group">
+      <div class="btn-group" id="skillActions">
         <input id="skillFilter" class="form-input" style="width:200px" placeholder="Filter skills..." oninput="filterSkills()">
         <button class="btn btn-primary" onclick="showAddSkill()">+ New Skill</button>
       </div>
@@ -83,7 +83,7 @@ function filterSkills() {
 async function showSkillDetail(name) {
   document.getElementById('skillsContainer').style.display = 'none';
   document.getElementById('skillTabs').style.display = 'none';
-  document.getElementById('skillFilter').style.display = 'none';
+  document.getElementById('skillActions').style.display = 'none';
   const detail = document.getElementById('skillDetail');
   detail.style.display = 'block';
   detail.innerHTML = `<div class="loading"><div class="loading-spinner"></div></div>`;
@@ -152,7 +152,7 @@ async function showSkillDetail(name) {
 function backToSkills() {
   document.getElementById('skillsContainer').style.display = '';
   document.getElementById('skillTabs').style.display = '';
-  document.getElementById('skillFilter').style.display = '';
+  document.getElementById('skillActions').style.display = '';
   document.getElementById('skillDetail').style.display = 'none';
 }
 
