@@ -34,6 +34,11 @@ const api = {
   getSkill: (name) => api.get(`/api/skills/${encodeURIComponent(name)}`),
   runSkill: (name, input = '', agent = 'auto') => api.post(`/api/skills/${encodeURIComponent(name)}/run`, { input, agent }),
   getSkillEval: (name) => api.get(`/api/skills/${encodeURIComponent(name)}/eval`),
+  createSkill: (name, skillMd) => api.post('/api/skills', { name, skill_md: skillMd }),
+  updateSkill: (name, skillMd) => api.put(`/api/skills/${encodeURIComponent(name)}`, { skill_md: skillMd }),
+  getSkillContextFile: (name, filename) => api.get(`/api/skills/${encodeURIComponent(name)}/context/${encodeURIComponent(filename)}`),
+  putSkillContextFile: (name, filename, content) => api.put(`/api/skills/${encodeURIComponent(name)}/context/${encodeURIComponent(filename)}`, { content }),
+  deleteSkillContextFile: (name, filename) => api.del(`/api/skills/${encodeURIComponent(name)}/context/${encodeURIComponent(filename)}`),
   getJobs: () => api.get('/api/scheduler/jobs'),
   createJob: (job) => api.post('/api/scheduler/jobs', job),
   deleteJob: (id) => api.del(`/api/scheduler/jobs/${encodeURIComponent(id)}`),
@@ -55,6 +60,7 @@ const api = {
   // Kanban
   getKanbanBoard: (status) => api.get(status ? `/api/kanban/board?status=${encodeURIComponent(status)}` : '/api/kanban/board'),
   getKanbanTask: (id) => api.get(`/api/kanban/tasks/${encodeURIComponent(id)}`),
+  deleteKanbanTask: (id) => api.del(`/api/kanban/tasks/${encodeURIComponent(id)}`),
   createKanbanTask: (data) => api.post('/api/kanban/tasks', data),
   updateKanbanTask: (id, data) => api.patch(`/api/kanban/tasks/${encodeURIComponent(id)}`, data),
   completeKanbanTask: (id, summary) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/complete`, { summary }),
@@ -64,6 +70,7 @@ const api = {
   linkKanbanTasks: (parentId, childId) => api.post('/api/kanban/links', { parent_id: parentId, child_id: childId }),
   unlinkKanbanTasks: (parentId, childId) => api.del(`/api/kanban/links?parent_id=${encodeURIComponent(parentId)}&child_id=${encodeURIComponent(childId)}`),
   dispatchKanban: () => api.post('/api/kanban/dispatch', {}),
+  dispatchKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/dispatch`, {}),
   specifyKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/specify`, {}),
   decomposeKanbanTask: (id) => api.post(`/api/kanban/tasks/${encodeURIComponent(id)}/decompose`, {}),
   // Goals

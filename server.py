@@ -4,18 +4,23 @@ Agentic OS — FastAPI Backend
 Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 """
 import argparse
+import asyncio
 import json
 import os
+import re
+import shlex
 import shutil
+import signal
 import subprocess
 import tarfile
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -83,6 +88,16 @@ class SkillRunRequest(BaseModel):
     input: Optional[str] = ""
     agent: Optional[str] = "auto"
 
+class SkillCreate(BaseModel):
+    name: str
+    skill_md: str = ""
+
+class SkillUpdate(BaseModel):
+    skill_md: str
+
+class SkillContextFileWrite(BaseModel):
+    content: str = ""
+
 class ScheduleJobRequest(BaseModel):
     name: str
     skill: str
@@ -127,14 +142,45 @@ def append_audit(entry: dict):
 
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
+def _cli_has_subcommand(base_args: list, subcommand: str) -> bool:
+    try:
+        r = subprocess.run([*base_args, "--help"], capture_output=True, text=True, timeout=10)
+        return subcommand in ((r.stdout or "") + (r.stderr or ""))
+    except Exception:
+        return False
+
+def hermes_cli_args(*args: str) -> list:
+    """Build the command to invoke Hermes, bridging through WSL if the real agent only lives there.
+
+    The dashboard commonly runs as a native Windows process while Hermes (whose official
+    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it
+    there. Windows machines can also have an unrelated tool also named 'hermes' on PATH (e.g. the
+    academic softwarepub/HERMES metadata-publishing project, which coincidentally shares the name),
+    so don't just trust that a native 'hermes' is the right one - confirm it exposes the
+    NousResearch agent's `chat` subcommand before using it, falling back to WSL otherwise.
+    """
+    if shutil.which("hermes") is not None and _cli_has_subcommand(["hermes"], "chat"):
+        return ["hermes", *args]
+    if shutil.which("wsl") is not None:
+        quoted = " ".join(shlex.quote(a) for a in args)
+        return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
+    return ["hermes", *args]
+
+def hermes_available() -> bool:
+    try:
+        r = subprocess.run(hermes_cli_args("--version"), capture_output=True, text=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
 def check_agent(name: str) -> dict:
-    """Instant filesystem-based check. No subprocess needed."""
+    """Filesystem-based check for opencode/gemini; hermes needs a real subprocess since it may live inside WSL."""
     try:
         if name == "opencode":
             exists = shutil.which("opencode") is not None
             status = "online" if exists else "offline"
         elif name == "hermes":
-            exists = shutil.which("hermes") is not None
+            exists = hermes_available()
             status = "online" if exists else "offline"
         elif name == "gemini":
             # Gemini has valid OAuth tokens logged in
@@ -189,6 +235,27 @@ def update_brain_file(file_name: str, data: BrainUpdate):
 
 # ─── Routes: Skills ───────────────────────────────────────────────
 
+SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+SKILL_CONTEXT_FILENAME_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$")
+
+def skill_dir_path(name: str) -> Path:
+    if not SKILL_NAME_RE.fullmatch(name or ""):
+        raise HTTPException(400, "Invalid skill name")
+    base = (BASE_DIR / "skills").resolve()
+    candidate = (base / name).resolve()
+    if candidate.parent != base:
+        raise HTTPException(400, "Invalid skill name")
+    return candidate
+
+def skill_context_file_path(name: str, filename: str) -> Path:
+    if not SKILL_CONTEXT_FILENAME_RE.fullmatch(filename or ""):
+        raise HTTPException(400, "Invalid file name")
+    context_dir = (skill_dir_path(name) / "context").resolve()
+    candidate = (context_dir / filename).resolve()
+    if candidate.parent != context_dir:
+        raise HTTPException(400, "Invalid file name")
+    return candidate
+
 @app.get("/api/skills")
 def list_skills():
     skills = []
@@ -215,7 +282,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = BASE_DIR / "skills" / name
+    path = skill_dir_path(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
@@ -227,9 +294,55 @@ def get_skill(name: str):
         "context": [f.name for f in (path / "context").iterdir()] if (path / "context").exists() else [],
     }
 
+@app.post("/api/skills")
+def create_skill(data: SkillCreate):
+    path = skill_dir_path(data.name)
+    if path.exists():
+        raise HTTPException(409, "Skill already exists")
+    path.mkdir(parents=True)
+    (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    append_audit({"action": "skill_created", "skill": data.name})
+    return {"name": data.name}
+
+@app.put("/api/skills/{name}")
+def update_skill(name: str, data: SkillUpdate):
+    path = skill_dir_path(name)
+    if not path.exists():
+        raise HTTPException(404, "Skill not found")
+    (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    append_audit({"action": "skill_updated", "skill": name})
+    return {"status": "ok"}
+
+@app.get("/api/skills/{name}/context/{filename}")
+def get_skill_context_file(name: str, filename: str):
+    path = skill_context_file_path(name, filename)
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    return {"filename": filename, "content": read_file(path)}
+
+@app.put("/api/skills/{name}/context/{filename}")
+def put_skill_context_file(name: str, filename: str, data: SkillContextFileWrite):
+    skill_path = skill_dir_path(name)
+    if not skill_path.exists():
+        raise HTTPException(404, "Skill not found")
+    path = skill_context_file_path(name, filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(data.content, encoding="utf-8")
+    append_audit({"action": "skill_context_updated", "skill": name, "file": filename})
+    return {"status": "ok"}
+
+@app.delete("/api/skills/{name}/context/{filename}")
+def delete_skill_context_file(name: str, filename: str):
+    path = skill_context_file_path(name, filename)
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    path.unlink()
+    append_audit({"action": "skill_context_deleted", "skill": name, "file": filename})
+    return {"status": "deleted"}
+
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = BASE_DIR / "skills" / name
+    path = skill_dir_path(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
@@ -312,7 +425,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    path = BASE_DIR / "skills" / name / "score-history.json"
+    path = skill_dir_path(name) / "score-history.json"
     if not path.exists():
         return {"scores": []}
     return {"scores": json.loads(path.read_text())}
@@ -584,7 +697,7 @@ def execute_agent(agent: str, message: str) -> str:
 
         elif agent == "hermes":
             try:
-                code, out, err = run_cli(["hermes", "chat", "-q", message], timeout=180)
+                code, out, err = run_cli(hermes_cli_args("chat", "-q", message), timeout=180)
             except subprocess.TimeoutExpired:
                 return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
             if code == 0:
@@ -662,6 +775,119 @@ def chat(req: ChatRequest):
 def get_chat_history():
     return load_chat_history()
 
+# ─── Routes: Terminal (real interactive PTY over WebSocket) ──────
+
+class PtySession:
+    """Wraps a real pseudo-terminal shell process, POSIX (stdlib pty) or Windows (pywinpty)."""
+
+    def __init__(self):
+        self.master_fd = None
+        self.pid = None
+        self.winpty_process = None
+
+    def start(self, cwd: str):
+        if os.name == "nt":
+            import winpty
+            shell = shutil.which("powershell.exe") or "powershell.exe"
+            self.winpty_process = winpty.PtyProcess.spawn([shell, "-NoLogo"], cwd=cwd)
+        else:
+            import pty
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.chdir(cwd)
+                shell = os.environ.get("SHELL", "/bin/bash")
+                os.execvp(shell, [shell])
+            else:
+                self.master_fd = fd
+                self.pid = pid
+
+    def read(self, size: int = 4096):
+        if self.winpty_process is not None:
+            return self.winpty_process.read(size)
+        return os.read(self.master_fd, size)
+
+    def write(self, data: str):
+        if self.winpty_process is not None:
+            self.winpty_process.write(data)
+        else:
+            os.write(self.master_fd, data.encode())
+
+    def resize(self, cols: int, rows: int):
+        if self.winpty_process is not None:
+            self.winpty_process.setwinsize(rows, cols)
+        else:
+            import fcntl
+            import struct
+            import termios
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+    def close(self):
+        if self.winpty_process is not None:
+            try:
+                self.winpty_process.close(force=True)
+            except Exception:
+                pass
+        else:
+            try:
+                os.close(self.master_fd)
+            except OSError:
+                pass
+            if self.pid:
+                # Interactive shells commonly ignore SIGTERM; SIGKILL can't be blocked/ignored.
+                try:
+                    os.kill(self.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+
+@app.websocket("/ws/terminal")
+async def ws_terminal(websocket: WebSocket):
+    await websocket.accept()
+    session = PtySession()
+    try:
+        session.start(str(BASE_DIR))
+    except Exception as e:
+        await websocket.send_json({"type": "output", "data": f"Failed to start terminal: {e}\r\n"})
+        await websocket.close()
+        return
+
+    append_audit({"action": "terminal_session_started"})
+    loop = asyncio.get_event_loop()
+    stop = False
+
+    def reader():
+        while not stop:
+            try:
+                data = session.read(4096)
+            except (OSError, EOFError):
+                break
+            if not data:
+                break
+            text = data.decode(errors="replace") if isinstance(data, bytes) else data
+            fut = asyncio.run_coroutine_threadsafe(websocket.send_json({"type": "output", "data": text}), loop)
+            try:
+                fut.result(timeout=5)
+            except Exception:
+                break
+        asyncio.run_coroutine_threadsafe(websocket.close(), loop)
+
+    threading.Thread(target=reader, daemon=True).start()
+
+    try:
+        while True:
+            msg = await websocket.receive_json()
+            if msg.get("type") == "input":
+                session.write(msg.get("data", ""))
+            elif msg.get("type") == "resize":
+                session.resize(int(msg.get("cols", 80)), int(msg.get("rows", 24)))
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        stop = True
+        session.close()
+        append_audit({"action": "terminal_session_ended"})
+
 # ═══════════════════════════════════════════════════════════════════
 # v0.2.0 — New Feature Endpoints
 # ═══════════════════════════════════════════════════════════════════
@@ -735,9 +961,68 @@ def load_kanban_tasks():
         tasks.append(json.loads(f.read_text()))
     return tasks
 
+KANBAN_ID_RE = re.compile(r"^[0-9a-f]{6,16}$")
+
+def kanban_task_path(task_id: str) -> Path:
+    """Resolve a task id to its file path, rejecting anything that isn't a plain generated id."""
+    if not KANBAN_ID_RE.fullmatch(task_id or ""):
+        raise HTTPException(400, "Invalid task id")
+    base = KANBAN_DIR.resolve()
+    candidate = (base / f"{task_id}.json").resolve()
+    if candidate.parent != base:
+        raise HTTPException(400, "Invalid task id")
+    return candidate
+
 def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
-    (KANBAN_DIR / f"{task['id']}.json").write_text(json.dumps(task, indent=2))
+    kanban_task_path(task["id"]).write_text(json.dumps(task, indent=2))
+
+KANBAN_AGENTS = {"opencode", "hermes", "gemini"}
+
+def dispatch_kanban_task(task_id: str):
+    """Move a task to in_progress and hand it to its assignee agent in the background."""
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        return
+    task = json.loads(path.read_text())
+    if task.get("status") in ("in_progress", "done"):
+        return
+    if task.get("assignee") not in KANBAN_AGENTS:
+        return
+    task["status"] = "in_progress"
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
+    append_audit({"action": "kanban_task_dispatched", "task_id": task_id, "agent": task["assignee"]})
+    threading.Thread(target=_run_kanban_agent, args=(task_id,), daemon=True).start()
+
+def _run_kanban_agent(task_id: str):
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        return
+    task = json.loads(path.read_text())
+    agent = task.get("assignee")
+    prompt = task["title"] if not task.get("body") else f"{task['title']}\n\n{task['body']}"
+
+    response = execute_agent(agent, prompt)
+    failed = response.startswith(("⏱", "⚠", "Unknown agent"))
+
+    task = json.loads(path.read_text())  # reload in case it changed while the agent ran
+    task.setdefault("comments", []).append({
+        "id": str(uuid.uuid4())[:8],
+        "message": f"🤖 **{agent}**\n\n{response}",
+        "timestamp": get_timestamp(),
+    })
+    if failed:
+        task["status"] = "blocked"
+        task["block_reason"] = response[:300]
+        append_audit({"action": "kanban_task_dispatch_failed", "task_id": task_id, "agent": agent})
+    else:
+        task["status"] = "done"
+        task["summary"] = response[:300]
+        task["completed_at"] = get_timestamp()
+        append_audit({"action": "kanban_task_dispatch_completed", "task_id": task_id, "agent": agent})
+    task["updated"] = get_timestamp()
+    save_kanban_task(task)
 
 def load_goals():
     if GOALS_FILE.exists():
@@ -766,10 +1051,19 @@ def kanban_board(status: Optional[str] = None):
 
 @app.get("/api/kanban/tasks/{task_id}")
 def kanban_get_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     return json.loads(path.read_text())
+
+@app.delete("/api/kanban/tasks/{task_id}")
+def kanban_delete_task(task_id: str):
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    path.unlink()
+    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
+    return {"status": "deleted", "task_id": task_id}
 
 @app.post("/api/kanban/tasks")
 def kanban_create_task(data: KanbanTaskCreate):
@@ -788,16 +1082,20 @@ def kanban_create_task(data: KanbanTaskCreate):
         }
         save_kanban_task(task)
         append_audit({"action": "kanban_task_created", "title": data.title})
+        if task["assignee"] in KANBAN_AGENTS:
+            dispatch_kanban_task(task["id"])
+            task = json.loads(kanban_task_path(task["id"]).read_text())
         return task
     except Exception as e:
         raise HTTPException(500, str(e))
 
 @app.patch("/api/kanban/tasks/{task_id}")
 def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
+    assignee_changed = data.assignee is not None and data.assignee != task.get("assignee")
     for field in ["title", "body", "status", "priority", "assignee"]:
         val = getattr(data, field, None)
         if val is not None:
@@ -805,11 +1103,25 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
     task["updated"] = get_timestamp()
     save_kanban_task(task)
     append_audit({"action": "kanban_task_updated", "task_id": task_id})
+    if assignee_changed and task["assignee"] in KANBAN_AGENTS:
+        dispatch_kanban_task(task_id)
+        task = json.loads(path.read_text())
     return task
+
+@app.post("/api/kanban/tasks/{task_id}/dispatch")
+def kanban_dispatch_task(task_id: str):
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    task = json.loads(path.read_text())
+    if task.get("assignee") not in KANBAN_AGENTS:
+        raise HTTPException(400, "Task must be assigned to opencode, hermes, or gemini to dispatch")
+    dispatch_kanban_task(task_id)
+    return {"status": "dispatched", "task_id": task_id}
 
 @app.post("/api/kanban/tasks/{task_id}/complete")
 def kanban_complete_task(task_id: str, data: KanbanComplete):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -823,7 +1135,7 @@ def kanban_complete_task(task_id: str, data: KanbanComplete):
 
 @app.post("/api/kanban/tasks/{task_id}/block")
 def kanban_block_task(task_id: str, data: KanbanBlock):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -836,7 +1148,7 @@ def kanban_block_task(task_id: str, data: KanbanBlock):
 
 @app.post("/api/kanban/tasks/{task_id}/unblock")
 def kanban_unblock_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -849,7 +1161,7 @@ def kanban_unblock_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/comments")
 def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -866,7 +1178,7 @@ def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
 @app.post("/api/kanban/links")
 def kanban_add_link(data: KanbanLinkCreate):
     for tid in [data.parent_id, data.child_id]:
-        path = KANBAN_DIR / f"{tid}.json"
+        path = kanban_task_path(tid)
         if not path.exists():
             raise HTTPException(404, f"Task {tid} not found")
         t = json.loads(path.read_text())
@@ -882,7 +1194,7 @@ def kanban_add_link(data: KanbanLinkCreate):
 @app.delete("/api/kanban/links")
 def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
     for tid in [parent_id, child_id]:
-        path = KANBAN_DIR / f"{tid}.json"
+        path = kanban_task_path(tid)
         if path.exists():
             t = json.loads(path.read_text())
             t.setdefault("links", [])
@@ -893,12 +1205,17 @@ def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
 
 @app.post("/api/kanban/dispatch")
 def kanban_dispatch():
-    append_audit({"action": "kanban_dispatch_triggered"})
-    return {"status": "dispatch_triggered", "message": "Dispatcher notified"}
+    dispatched = []
+    for task in load_kanban_tasks():
+        if task.get("status") in ("todo", "ready") and task.get("assignee") in KANBAN_AGENTS:
+            dispatch_kanban_task(task["id"])
+            dispatched.append(task["id"])
+    append_audit({"action": "kanban_dispatch_triggered", "task_ids": dispatched})
+    return {"status": "dispatch_triggered", "dispatched": dispatched, "message": f"Dispatched {len(dispatched)} task(s)"}
 
 @app.post("/api/kanban/tasks/{task_id}/specify")
 def kanban_specify_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -910,7 +1227,7 @@ def kanban_specify_task(task_id: str):
 
 @app.post("/api/kanban/tasks/{task_id}/decompose")
 def kanban_decompose_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
+    path = kanban_task_path(task_id)
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
@@ -1251,7 +1568,7 @@ if dashboard_dir.exists():
 def index():
     html_file = BASE_DIR / "dashboard" / "index.html"
     if html_file.exists():
-        content = html_file.read_text()
+        content = html_file.read_text(encoding="utf-8")
         content = content.replace('href="styles.css"', 'href="/dashboard/styles.css"')
         content = content.replace('src="utils.js"', 'src="/dashboard/utils.js"')
         content = content.replace('src="api.js"', 'src="/dashboard/api.js"')
