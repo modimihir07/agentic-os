@@ -1,114 +1,120 @@
+let _termInstance = null;
+let _termSocket = null;
+
+function loadXterm() {
+  if (window.Terminal && window.FitAddon) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    if (!document.querySelector('link[data-xterm-css]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css';
+      link.setAttribute('data-xterm-css', '1');
+      document.head.appendChild(link);
+    }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
+    script.onload = () => {
+      const fitScript = document.createElement('script');
+      fitScript.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
+      fitScript.onload = () => resolve();
+      fitScript.onerror = () => reject(new Error('Failed to load xterm-addon-fit'));
+      document.body.appendChild(fitScript);
+    };
+    script.onerror = () => reject(new Error('Failed to load xterm.js'));
+    document.body.appendChild(script);
+  });
+}
+
+function setTerminalStatus(kind, text) {
+  const el = document.getElementById('terminalStatus');
+  if (!el) return;
+  el.textContent = text;
+  el.className = `badge badge-${kind === 'online' ? 'success' : kind === 'offline' ? 'danger' : 'warning'}`;
+}
+
+function closeTerminalSession() {
+  if (window._terminalResizeHandler) {
+    window.removeEventListener('resize', window._terminalResizeHandler);
+    window._terminalResizeHandler = null;
+  }
+  if (_termSocket) {
+    try { _termSocket.close(); } catch {}
+    _termSocket = null;
+  }
+  if (_termInstance) {
+    try { _termInstance.dispose(); } catch {}
+    _termInstance = null;
+  }
+}
+
 async function renderTerminal() {
   const content = document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
         <h1 class="page-title">Terminal</h1>
-        <p class="page-subtitle">Run shell commands directly on this machine</p>
+        <p class="page-subtitle">A real, interactive shell running on this machine</p>
       </div>
       <div class="btn-group">
-        <button class="btn" onclick="clearTerminal()">🗑 Clear</button>
+        <span id="terminalStatus" class="badge badge-warning">Connecting…</span>
       </div>
     </div>
-    <div class="terminal-panel" onclick="focusTerminalInput()">
-      <div id="terminalOutput" class="terminal-output"></div>
-      <div class="terminal-input-row">
-        <span class="terminal-prompt" id="terminalPrompt">$</span>
-        <input id="terminalInput" class="terminal-input" type="text" autocomplete="off" spellcheck="false" onkeydown="handleTerminalKey(event)">
-      </div>
+    <div class="terminal-panel">
+      <div id="xtermContainer" class="terminal-xterm-container"></div>
     </div>
   `;
 
-  window._terminalHistory = window._terminalHistory || [];
-  window._terminalHistoryIndex = window._terminalHistory.length;
-  window._terminalBusy = false;
+  closeTerminalSession();
 
   try {
-    const session = await api.getTerminalSession();
-    updateTerminalPrompt(session.cwd);
-  } catch {
-    appendTerminalLine('Could not reach the terminal backend.', 'stderr');
-  }
-
-  document.getElementById('terminalInput').focus();
-}
-
-function focusTerminalInput() {
-  const input = document.getElementById('terminalInput');
-  if (input) input.focus();
-}
-
-function updateTerminalPrompt(cwd) {
-  const prompt = document.getElementById('terminalPrompt');
-  if (prompt) prompt.textContent = `${cwd} $`;
-}
-
-function appendTerminalLine(text, kind = '') {
-  const output = document.getElementById('terminalOutput');
-  if (!output || !text) return;
-  const line = document.createElement('div');
-  if (kind) line.className = `terminal-line-${kind}`;
-  line.textContent = text;
-  output.appendChild(line);
-  output.scrollTop = output.scrollHeight;
-}
-
-function clearTerminal() {
-  const output = document.getElementById('terminalOutput');
-  if (output) output.innerHTML = '';
-}
-
-async function handleTerminalKey(e) {
-  const input = e.target;
-
-  if (e.key === 'ArrowUp') {
-    e.preventDefault();
-    if (window._terminalHistoryIndex > 0) {
-      window._terminalHistoryIndex--;
-      input.value = window._terminalHistory[window._terminalHistoryIndex] || '';
-    }
-    return;
-  }
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    if (window._terminalHistoryIndex < window._terminalHistory.length - 1) {
-      window._terminalHistoryIndex++;
-      input.value = window._terminalHistory[window._terminalHistoryIndex] || '';
-    } else {
-      window._terminalHistoryIndex = window._terminalHistory.length;
-      input.value = '';
-    }
-    return;
-  }
-  if (e.key !== 'Enter' || window._terminalBusy) return;
-
-  const command = input.value.trim();
-  input.value = '';
-  if (!command) return;
-
-  window._terminalHistory.push(command);
-  window._terminalHistoryIndex = window._terminalHistory.length;
-
-  appendTerminalLine(command, 'cmd');
-
-  if (command === 'clear' || command === 'cls') {
-    clearTerminal();
-    return;
-  }
-
-  window._terminalBusy = true;
-  input.disabled = true;
-  try {
-    const r = await api.runTerminalCommand(command);
-    if (r.stdout) appendTerminalLine(r.stdout.replace(/\n$/, ''));
-    if (r.stderr) appendTerminalLine(r.stderr.replace(/\n$/, ''), 'stderr');
-    if (r.timed_out) appendTerminalLine('Command timed out after 60s.', 'info');
-    updateTerminalPrompt(r.cwd);
+    await loadXterm();
   } catch (err) {
-    appendTerminalLine(`Error: ${err.message}`, 'stderr');
-  } finally {
-    window._terminalBusy = false;
-    input.disabled = false;
-    input.focus();
+    document.getElementById('xtermContainer').innerHTML =
+      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load terminal library</div><div class="empty-state-desc">${escapeHtml(err.message || String(err))}</div></div>`;
+    return;
   }
+
+  const term = new window.Terminal({
+    cursorBlink: true,
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
+    fontSize: 13,
+    theme: { background: '#0a0e14', foreground: '#c9d1d9' },
+  });
+  const fitAddon = new window.FitAddon.FitAddon();
+  term.loadAddon(fitAddon);
+  term.open(document.getElementById('xtermContainer'));
+  fitAddon.fit();
+  _termInstance = term;
+
+  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const socket = new WebSocket(`${proto}//${window.location.host}/ws/terminal`);
+  _termSocket = socket;
+
+  socket.onopen = () => {
+    setTerminalStatus('online', 'Connected');
+    fitAddon.fit();
+    socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+    term.focus();
+  };
+  socket.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === 'output') term.write(msg.data);
+    } catch {}
+  };
+  socket.onclose = () => setTerminalStatus('offline', 'Disconnected');
+  socket.onerror = () => setTerminalStatus('offline', 'Connection error');
+
+  term.onData((data) => {
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }));
+  });
+
+  const resizeHandler = () => {
+    fitAddon.fit();
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+  };
+  window.addEventListener('resize', resizeHandler);
+  window._terminalResizeHandler = resizeHandler;
+
+  window.addEventListener('hashchange', closeTerminalSession, { once: true });
 }
