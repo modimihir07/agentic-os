@@ -210,12 +210,22 @@ def hermes_cli_args(*args: str) -> list:
         return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
     return ["hermes", *args]
 
+_hermes_available_cache = {"checked_at": 0.0, "result": False}
+HERMES_AVAILABLE_CACHE_TTL = 60
+
 def hermes_available() -> bool:
+    """Cached: this spawns a subprocess (possibly via WSL), and /api/status is polled every 15s."""
+    now = time.time()
+    if now - _hermes_available_cache["checked_at"] < HERMES_AVAILABLE_CACHE_TTL:
+        return _hermes_available_cache["result"]
     try:
         r = subprocess.run(hermes_cli_args("--version"), capture_output=True, text=True, timeout=10)
-        return r.returncode == 0
+        result = r.returncode == 0
     except Exception:
-        return False
+        result = False
+    _hermes_available_cache["checked_at"] = now
+    _hermes_available_cache["result"] = result
+    return result
 
 def check_agent(name: str) -> dict:
     """Filesystem-based check for opencode/gemini; hermes needs a real subprocess since it may live inside WSL."""
@@ -352,7 +362,9 @@ def create_skill(data: SkillCreate):
     if path.exists():
         raise HTTPException(409, "Skill already exists")
     path.mkdir(parents=True)
+    (path / "context").mkdir()
     (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    (path / "learnings.md").write_text("", encoding="utf-8")
     append_audit({"action": "skill_created", "skill": data.name})
     return {"name": data.name}
 
@@ -916,9 +928,20 @@ class PtySession:
                     os.kill(self.pid, signal.SIGKILL)
                 except OSError:
                     pass
+                try:
+                    os.waitpid(self.pid, 0)  # reap the killed child so it doesn't stay a zombie
+                except ChildProcessError:
+                    pass
 
 @app.websocket("/ws/terminal")
 async def ws_terminal(websocket: WebSocket):
+    # CORSMiddleware does not protect WebSocket handshakes, so this endpoint - which spawns a
+    # full interactive shell - must check the Origin header itself, or any webpage could open
+    # this socket and get command execution on the machine running the dashboard.
+    origin = websocket.headers.get("origin")
+    if origin not in get_cors_origins():
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     session = PtySession()
     try:
