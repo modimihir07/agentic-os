@@ -4,10 +4,13 @@ Agentic OS — FastAPI Backend
 Multi-agent orchestration server for opencode, Hermes, Gemini CLI
 """
 import argparse
+import asyncio
 import json
 import os
 import re
+import shlex
 import shutil
+import signal
 import subprocess
 import tarfile
 import threading
@@ -17,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -85,6 +88,16 @@ class SkillRunRequest(BaseModel):
     input: Optional[str] = ""
     agent: Optional[str] = "auto"
 
+class SkillCreate(BaseModel):
+    name: str
+    skill_md: str = ""
+
+class SkillUpdate(BaseModel):
+    skill_md: str
+
+class SkillContextFileWrite(BaseModel):
+    content: str = ""
+
 class ScheduleJobRequest(BaseModel):
     name: str
     skill: str
@@ -100,9 +113,6 @@ class BackupRestoreRequest(BaseModel):
 class ChatRequest(BaseModel):
     agent: str
     message: str
-
-class TerminalRunRequest(BaseModel):
-    command: str
 
 # ─── Helper Functions ─────────────────────────────────────────────
 
@@ -140,20 +150,6 @@ def load_json_file(path: Path, default=_MISSING, best_effort=False):
             return default
         raise HTTPException(500, f"Failed to read {path.name}: {e}")
 
-def skill_dir(name: str) -> Path:
-    """Resolve a user-supplied skill name to its directory.
-
-    The name is matched against the actual directory entries rather than used to
-    build a path, so traversal input (``..``, ``/``) can never escape the skills
-    directory.
-    """
-    base = BASE_DIR / "skills"
-    if base.exists():
-        for entry in base.iterdir():
-            if entry.is_dir() and entry.name == name:
-                return entry
-    raise HTTPException(404, "Skill not found")
-
 def list_dir(path: Path):
     if not path.exists():
         return []
@@ -177,12 +173,43 @@ def append_audit(entry: dict):
 
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
+def _cli_has_subcommand(base_args: list, subcommand: str) -> bool:
+    try:
+        r = subprocess.run([*base_args, "--help"], capture_output=True, text=True, timeout=10)
+        return subcommand in ((r.stdout or "") + (r.stderr or ""))
+    except Exception:
+        return False
+
+def hermes_cli_args(*args: str) -> list:
+    """Build the command to invoke Hermes, bridging through WSL if the real agent only lives there.
+
+    The dashboard commonly runs as a native Windows process while Hermes (whose official
+    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it
+    there. Windows machines can also have an unrelated tool also named 'hermes' on PATH (e.g. the
+    academic softwarepub/HERMES metadata-publishing project, which coincidentally shares the name),
+    so don't just trust that a native 'hermes' is the right one - confirm it exposes the
+    NousResearch agent's `chat` subcommand before using it, falling back to WSL otherwise.
+    """
+    if shutil.which("hermes") is not None and _cli_has_subcommand(["hermes"], "chat"):
+        return ["hermes", *args]
+    if shutil.which("wsl") is not None:
+        quoted = " ".join(shlex.quote(a) for a in args)
+        return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
+    return ["hermes", *args]
+
+def hermes_available() -> bool:
+    try:
+        r = subprocess.run(hermes_cli_args("--version"), capture_output=True, text=True, timeout=10)
+        return r.returncode == 0
+    except Exception:
+        return False
+
 def check_agent(name: str) -> dict:
-    """Instant filesystem-based check. No subprocess needed."""
+    """Filesystem-based check for opencode/gemini; hermes needs a real subprocess since it may live inside WSL."""
     if name == "opencode":
         status = "online" if shutil.which("opencode") is not None else "offline"
     elif name == "hermes":
-        status = "online" if shutil.which("hermes") is not None else "offline"
+        status = "online" if hermes_available() else "offline"
     elif name == "gemini":
         exists = shutil.which("gemini") is not None
         # Gemini needs a valid OAuth token on disk to be usable.
@@ -241,6 +268,27 @@ def update_brain_file(file_name: str, data: BrainUpdate):
 
 # ─── Routes: Skills ───────────────────────────────────────────────
 
+SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+SKILL_CONTEXT_FILENAME_RE = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$")
+
+def skill_dir_path(name: str) -> Path:
+    if not SKILL_NAME_RE.fullmatch(name or ""):
+        raise HTTPException(400, "Invalid skill name")
+    base = (BASE_DIR / "skills").resolve()
+    candidate = (base / name).resolve()
+    if candidate.parent != base:
+        raise HTTPException(400, "Invalid skill name")
+    return candidate
+
+def skill_context_file_path(name: str, filename: str) -> Path:
+    if not SKILL_CONTEXT_FILENAME_RE.fullmatch(filename or ""):
+        raise HTTPException(400, "Invalid file name")
+    context_dir = (skill_dir_path(name) / "context").resolve()
+    candidate = (context_dir / filename).resolve()
+    if candidate.parent != context_dir:
+        raise HTTPException(400, "Invalid file name")
+    return candidate
+
 @app.get("/api/skills")
 def list_skills():
     skills = []
@@ -261,7 +309,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = skill_dir(name)
+    path = skill_dir_path(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
     return {
@@ -273,9 +321,55 @@ def get_skill(name: str):
         "context": [f.name for f in (path / "context").iterdir()] if (path / "context").exists() else [],
     }
 
+@app.post("/api/skills")
+def create_skill(data: SkillCreate):
+    path = skill_dir_path(data.name)
+    if path.exists():
+        raise HTTPException(409, "Skill already exists")
+    path.mkdir(parents=True)
+    (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    append_audit({"action": "skill_created", "skill": data.name})
+    return {"name": data.name}
+
+@app.put("/api/skills/{name}")
+def update_skill(name: str, data: SkillUpdate):
+    path = skill_dir_path(name)
+    if not path.exists():
+        raise HTTPException(404, "Skill not found")
+    (path / "SKILL.md").write_text(data.skill_md, encoding="utf-8")
+    append_audit({"action": "skill_updated", "skill": name})
+    return {"status": "ok"}
+
+@app.get("/api/skills/{name}/context/{filename}")
+def get_skill_context_file(name: str, filename: str):
+    path = skill_context_file_path(name, filename)
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    return {"filename": filename, "content": read_file(path)}
+
+@app.put("/api/skills/{name}/context/{filename}")
+def put_skill_context_file(name: str, filename: str, data: SkillContextFileWrite):
+    skill_path = skill_dir_path(name)
+    if not skill_path.exists():
+        raise HTTPException(404, "Skill not found")
+    path = skill_context_file_path(name, filename)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(data.content, encoding="utf-8")
+    append_audit({"action": "skill_context_updated", "skill": name, "file": filename})
+    return {"status": "ok"}
+
+@app.delete("/api/skills/{name}/context/{filename}")
+def delete_skill_context_file(name: str, filename: str):
+    path = skill_context_file_path(name, filename)
+    if not path.exists():
+        raise HTTPException(404, "File not found")
+    path.unlink()
+    append_audit({"action": "skill_context_deleted", "skill": name, "file": filename})
+    return {"status": "deleted"}
+
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = skill_dir(name)
+    path = skill_dir_path(name)
     if not path.exists():
         raise HTTPException(404, "Skill not found")
 
@@ -358,7 +452,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    path = skill_dir(name) / "score-history.json"
+    path = skill_dir_path(name) / "score-history.json"
     return {"scores": load_json_file(path, default=[])}
 
 # ─── Routes: Scheduler ────────────────────────────────────────────
@@ -635,7 +729,7 @@ def execute_agent(agent: str, message: str) -> str:
 
         elif agent == "hermes":
             try:
-                code, out, err = run_cli(["hermes", "chat", "-q", message], timeout=180)
+                code, out, err = run_cli(hermes_cli_args("chat", "-q", message), timeout=180)
             except subprocess.TimeoutExpired:
                 return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
             if code == 0:
@@ -713,39 +807,118 @@ def chat(req: ChatRequest):
 def get_chat_history():
     return load_chat_history()
 
-# ─── Routes: Terminal ─────────────────────────────────────────────
+# ─── Routes: Terminal (real interactive PTY over WebSocket) ──────
 
-_terminal_cwd = str(BASE_DIR)
+class PtySession:
+    """Wraps a real pseudo-terminal shell process, POSIX (stdlib pty) or Windows (pywinpty)."""
 
-@app.get("/api/terminal/session")
-def get_terminal_session():
-    return {"cwd": _terminal_cwd}
+    def __init__(self):
+        self.master_fd = None
+        self.pid = None
+        self.winpty_process = None
 
-@app.post("/api/terminal/run")
-def run_terminal_command(req: TerminalRunRequest):
-    global _terminal_cwd
-    command = req.command.strip()
-    if not command:
-        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
+    def start(self, cwd: str):
+        if os.name == "nt":
+            import winpty
+            shell = shutil.which("powershell.exe") or "powershell.exe"
+            self.winpty_process = winpty.PtyProcess.spawn([shell, "-NoLogo"], cwd=cwd)
+        else:
+            import pty
+            pid, fd = pty.fork()
+            if pid == 0:
+                os.chdir(cwd)
+                shell = os.environ.get("SHELL", "/bin/bash")
+                os.execvp(shell, [shell])
+            else:
+                self.master_fd = fd
+                self.pid = pid
 
-    if command == "cd" or command.startswith("cd "):
-        target = command[2:].strip() or str(Path.home())
-        new_dir = (Path(_terminal_cwd) / target).resolve() if not Path(target).is_absolute() else Path(target).resolve()
-        if not new_dir.is_dir():
-            return {"cwd": _terminal_cwd, "stdout": "", "stderr": f"cd: no such directory: {target}", "returncode": 1, "timed_out": False}
-        _terminal_cwd = str(new_dir)
-        append_audit({"action": "terminal_command", "command": "cd", "cwd": _terminal_cwd})
-        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "", "returncode": 0, "timed_out": False}
+    def read(self, size: int = 4096):
+        if self.winpty_process is not None:
+            return self.winpty_process.read(size)
+        return os.read(self.master_fd, size)
+
+    def write(self, data: str):
+        if self.winpty_process is not None:
+            self.winpty_process.write(data)
+        else:
+            os.write(self.master_fd, data.encode())
+
+    def resize(self, cols: int, rows: int):
+        if self.winpty_process is not None:
+            self.winpty_process.setwinsize(rows, cols)
+        else:
+            import fcntl
+            import struct
+            import termios
+            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
+
+    def close(self):
+        if self.winpty_process is not None:
+            try:
+                self.winpty_process.close(force=True)
+            except Exception:
+                pass
+        else:
+            try:
+                os.close(self.master_fd)
+            except OSError:
+                pass
+            if self.pid:
+                # Interactive shells commonly ignore SIGTERM; SIGKILL can't be blocked/ignored.
+                try:
+                    os.kill(self.pid, signal.SIGKILL)
+                except OSError:
+                    pass
+
+@app.websocket("/ws/terminal")
+async def ws_terminal(websocket: WebSocket):
+    await websocket.accept()
+    session = PtySession()
+    try:
+        session.start(str(BASE_DIR))
+    except Exception as e:
+        await websocket.send_json({"type": "output", "data": f"Failed to start terminal: {e}\r\n"})
+        await websocket.close()
+        return
+
+    append_audit({"action": "terminal_session_started"})
+    loop = asyncio.get_event_loop()
+    stop = False
+
+    def reader():
+        while not stop:
+            try:
+                data = session.read(4096)
+            except (OSError, EOFError):
+                break
+            if not data:
+                break
+            text = data.decode(errors="replace") if isinstance(data, bytes) else data
+            fut = asyncio.run_coroutine_threadsafe(websocket.send_json({"type": "output", "data": text}), loop)
+            try:
+                fut.result(timeout=5)
+            except Exception:
+                break
+        asyncio.run_coroutine_threadsafe(websocket.close(), loop)
+
+    threading.Thread(target=reader, daemon=True).start()
 
     try:
-        r = subprocess.run(
-            command, shell=True, cwd=_terminal_cwd,
-            capture_output=True, text=True, timeout=60,
-        )
-        append_audit({"action": "terminal_command", "command": command[:200], "cwd": _terminal_cwd})
-        return {"cwd": _terminal_cwd, "stdout": r.stdout, "stderr": r.stderr, "returncode": r.returncode, "timed_out": False}
-    except subprocess.TimeoutExpired:
-        return {"cwd": _terminal_cwd, "stdout": "", "stderr": "Command timed out after 60s.", "returncode": -1, "timed_out": True}
+        while True:
+            msg = await websocket.receive_json()
+            if msg.get("type") == "input":
+                session.write(msg.get("data", ""))
+            elif msg.get("type") == "resize":
+                session.resize(int(msg.get("cols", 80)), int(msg.get("rows", 24)))
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        stop = True
+        session.close()
+        append_audit({"action": "terminal_session_ended"})
 
 # ═══════════════════════════════════════════════════════════════════
 # v0.2.0 — New Feature Endpoints
@@ -929,6 +1102,15 @@ def kanban_get_task(task_id: str):
     if not path.exists():
         raise HTTPException(404, "Task not found")
     return json.loads(path.read_text())
+
+@app.delete("/api/kanban/tasks/{task_id}")
+def kanban_delete_task(task_id: str):
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    path.unlink()
+    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
+    return {"status": "deleted", "task_id": task_id}
 
 @app.post("/api/kanban/tasks")
 def kanban_create_task(data: KanbanTaskCreate):

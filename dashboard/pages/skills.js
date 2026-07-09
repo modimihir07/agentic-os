@@ -8,6 +8,7 @@ async function renderSkills() {
       </div>
       <div class="btn-group">
         <input id="skillFilter" class="form-input" style="width:200px" placeholder="Filter skills..." oninput="filterSkills()">
+        <button class="btn btn-primary" onclick="showAddSkill()">+ New Skill</button>
       </div>
     </div>
     <div class="tabs" id="skillTabs">
@@ -93,6 +94,8 @@ async function showSkillDetail(name) {
     const lastScore = scores.length > 0 ? scores[scores.length - 1] : null;
     const avg = lastScore && lastScore.criteria_scores ? (lastScore.criteria_scores.reduce((a, b) => a + b, 0) / lastScore.criteria_scores.length) : null;
 
+    window._currentSkillName = name;
+
     detail.innerHTML = `
       <div style="margin-bottom:16px">
         <button class="btn btn-ghost" onclick="backToSkills()">← Back to Skills</button>
@@ -100,8 +103,11 @@ async function showSkillDetail(name) {
       </div>
       <div class="grid grid-2">
         <div class="card">
-          <div class="card-header"><span class="card-title">📄 SKILL.md</span></div>
-          <pre style="max-height:400px;overflow:auto;font-size:12px">${escapeHtml(skill.skill || 'No SKILL.md')}</pre>
+          <div class="card-header">
+            <span class="card-title">📄 SKILL.md</span>
+            <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="editSkillMd('${name}')">✎ Edit</button>
+          </div>
+          <pre id="skillMdView" style="max-height:400px;overflow:auto;font-size:12px">${escapeHtml(skill.skill || 'No SKILL.md')}</pre>
         </div>
         <div class="card">
           <div class="card-header"><span class="card-title">📖 Learnings</span></div>
@@ -120,10 +126,20 @@ async function showSkillDetail(name) {
           ` : '<div style="color:var(--text-muted);font-size:13px">No evaluation scores yet</div>'}
         </div>
         <div class="card">
-          <div class="card-header"><span class="card-title">📁 Context Files</span></div>
-          ${skill.context && skill.context.length > 0
-            ? `<div style="display:flex;flex-wrap:wrap;gap:6px">${skill.context.map(f => `<span class="badge badge-info">${f}</span>`).join('')}</div>`
-            : '<div style="color:var(--text-muted);font-size:13px">No context files</div>'}
+          <div class="card-header">
+            <span class="card-title">📁 Context Files</span>
+            <button class="btn btn-sm btn-ghost" style="margin-left:auto" onclick="addSkillContextFile('${name}')">+ Add File</button>
+          </div>
+          <div id="skillContextList">
+            ${skill.context && skill.context.length > 0
+              ? skill.context.map(f => `
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+                  <span style="flex:1">${escapeHtml(f)}</span>
+                  <button class="btn btn-sm btn-ghost" onclick="editSkillContextFile('${name}','${escapeHtml(f)}')">✎</button>
+                  <button class="btn btn-sm btn-ghost" style="color:var(--red)" onclick="deleteSkillContextFile('${name}','${escapeHtml(f)}')">🗑</button>
+                </div>`).join('')
+              : '<div style="color:var(--text-muted);font-size:13px">No context files</div>'}
+          </div>
           ${skill.eval && skill.eval.criteria ? `<div style="margin-top:12px"><strong style="font-size:12px">Eval Criteria:</strong><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${skill.eval.criteria.map(c => `<span class="badge badge-accent">${c}</span>`).join('')}</div></div>` : ''}
         </div>
       </div>
@@ -193,5 +209,127 @@ async function executeSkillRun(name) {
       resultArea.innerHTML = `<div class="empty-state" style="padding:20px"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div>`;
     }
     if (runBtn) { runBtn.textContent = '▶ Run'; runBtn.disabled = false; }
+  }
+}
+
+function showAddSkill() {
+  showModal('New Skill', `
+    <div class="form-group">
+      <label class="form-label">Name</label>
+      <input id="newSkillName" class="form-input" placeholder="e.g., my-custom-skill">
+      <div class="form-hint">Letters, numbers, dashes and underscores only.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">SKILL.md</label>
+      <textarea id="newSkillMd" class="form-textarea" rows="12" placeholder="# My Custom Skill&#10;&#10;Describe what this skill does and how an agent should perform it..."></textarea>
+    </div>
+  `, `
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="submitNewSkill()">Create Skill</button>
+  `);
+}
+
+async function submitNewSkill() {
+  const name = document.getElementById('newSkillName').value.trim();
+  const skillMd = document.getElementById('newSkillMd').value;
+  if (!name) { showToast('Skill name is required', 'error'); return; }
+  try {
+    await api.createSkill(name, skillMd);
+    showToast('Skill created!', 'success');
+    closeModal();
+    await renderSkills();
+    showSkillDetail(name);
+  } catch (err) {
+    showToast('Failed to create skill: ' + err.message, 'error');
+  }
+}
+
+function editSkillMd(name) {
+  const view = document.getElementById('skillMdView');
+  const current = view ? view.textContent : '';
+  view.outerHTML = `
+    <textarea id="skillMdEdit" class="form-textarea" rows="16" style="font-family:var(--font-mono);font-size:12px">${escapeHtml(current)}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-sm btn-primary" onclick="saveSkillMd('${name}')">Save</button>
+      <button class="btn btn-sm btn-ghost" onclick="showSkillDetail('${name}')">Cancel</button>
+    </div>
+  `;
+}
+
+async function saveSkillMd(name) {
+  const content = document.getElementById('skillMdEdit').value;
+  try {
+    await api.updateSkill(name, content);
+    showToast('SKILL.md saved', 'success');
+    showSkillDetail(name);
+  } catch (err) {
+    showToast('Failed to save: ' + err.message, 'error');
+  }
+}
+
+function addSkillContextFile(name) {
+  showModal('Add Context File', `
+    <div class="form-group">
+      <label class="form-label">File Name</label>
+      <input id="newContextFilename" class="form-input" placeholder="e.g., reference.md">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Content</label>
+      <textarea id="newContextContent" class="form-textarea" rows="10"></textarea>
+    </div>
+  `, `
+    <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+    <button class="btn btn-primary" onclick="submitNewContextFile('${name}')">Add File</button>
+  `);
+}
+
+async function submitNewContextFile(name) {
+  const filename = document.getElementById('newContextFilename').value.trim();
+  const content = document.getElementById('newContextContent').value;
+  if (!filename) { showToast('File name is required', 'error'); return; }
+  try {
+    await api.putSkillContextFile(name, filename, content);
+    showToast('Context file added', 'success');
+    closeModal();
+    showSkillDetail(name);
+  } catch (err) {
+    showToast('Failed to add file: ' + err.message, 'error');
+  }
+}
+
+async function editSkillContextFile(name, filename) {
+  try {
+    const file = await api.getSkillContextFile(name, filename);
+    showModal(`Edit: ${filename}`, `
+      <textarea id="editContextContent" class="form-textarea" rows="14">${escapeHtml(file.content)}</textarea>
+    `, `
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSkillContextFile('${name}','${filename}')">Save</button>
+    `);
+  } catch (err) {
+    showToast('Failed to load file: ' + err.message, 'error');
+  }
+}
+
+async function saveSkillContextFile(name, filename) {
+  const content = document.getElementById('editContextContent').value;
+  try {
+    await api.putSkillContextFile(name, filename, content);
+    showToast('File saved', 'success');
+    closeModal();
+    showSkillDetail(name);
+  } catch (err) {
+    showToast('Failed to save: ' + err.message, 'error');
+  }
+}
+
+async function deleteSkillContextFile(name, filename) {
+  if (!confirm(`Delete "${filename}"?`)) return;
+  try {
+    await api.deleteSkillContextFile(name, filename);
+    showToast('File deleted', 'info');
+    showSkillDetail(name);
+  } catch (err) {
+    showToast('Failed to delete: ' + err.message, 'error');
   }
 }
