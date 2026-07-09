@@ -280,6 +280,21 @@ def skill_dir_path(name: str) -> Path:
         raise HTTPException(400, "Invalid skill name")
     return candidate
 
+def resolve_skill_dir(name: str) -> Path:
+    """Return the directory of an existing skill by matching ``name`` against the
+    actual directory entries.
+
+    Using the entry from ``iterdir()`` (rather than a path built from ``name``)
+    means traversal input can never escape the skills directory. Raises 404 if no
+    skill matches.
+    """
+    base = BASE_DIR / "skills"
+    if base.exists():
+        for entry in base.iterdir():
+            if entry.is_dir() and entry.name == name:
+                return entry
+    raise HTTPException(404, "Skill not found")
+
 def skill_context_file_path(name: str, filename: str) -> Path:
     if not SKILL_CONTEXT_FILENAME_RE.fullmatch(filename or ""):
         raise HTTPException(400, "Invalid file name")
@@ -309,9 +324,7 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = skill_dir_path(name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
+    path = resolve_skill_dir(name)
     return {
         "name": name,
         "skill": read_file(path / "SKILL.md"),
@@ -369,9 +382,7 @@ def delete_skill_context_file(name: str, filename: str):
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = skill_dir_path(name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
+    path = resolve_skill_dir(name)
 
     agent_choice = req.agent if req else "auto"
     skill_input = req.input if req else ""
@@ -452,7 +463,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    path = skill_dir_path(name) / "score-history.json"
+    path = resolve_skill_dir(name) / "score-history.json"
     return {"scores": load_json_file(path, default=[])}
 
 # ─── Routes: Scheduler ────────────────────────────────────────────
