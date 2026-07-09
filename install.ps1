@@ -22,7 +22,7 @@ function Resolve-Python {
         }
     }
 
-    throw "Python 3.10+ is required. Install it from https://www.python.org/downloads/ and check 'Add Python to PATH'."
+    throw "Python 3.10+ is required. Install it from https://www.python.org/downloads/ (check 'Add Python to PATH') or run: winget install Python.Python.3.12"
 }
 
 $python = Resolve-Python
@@ -34,11 +34,11 @@ Write-Host "Python: $pythonVersion"
 Write-Host "Installing Python dependencies..."
 & $pythonCommand @pythonArgs -m pip install -r requirements.txt --quiet
 
-# Check Node.js (for opencode)
+# Check Node.js (for opencode and Gemini CLI)
 if (Get-Command node -ErrorAction SilentlyContinue) {
     Write-Host "Node.js: $(node --version)"
 } else {
-    Write-Warning "Node.js not found. opencode requires Node 18+. Install from https://nodejs.org/."
+    Write-Warning "Node.js not found. opencode and Gemini CLI require Node 18+. Install from https://nodejs.org/ or run: winget install OpenJS.NodeJS.LTS"
 }
 
 # Check opencode
@@ -53,7 +53,7 @@ if (Get-Command opencode -ErrorAction SilentlyContinue) {
 if (Get-Command hermes -ErrorAction SilentlyContinue) {
     Write-Host "Hermes: found"
 } else {
-    Write-Warning "Hermes Agent not found. See the Hermes Agent documentation for Windows installation guidance."
+    Write-Warning "Hermes Agent not found. Native Windows support is not confirmed by this project - check the upstream Hermes Agent documentation, and use WSL if no native installer is available."
 }
 
 # Check Gemini CLI
@@ -100,3 +100,8 @@ Write-Host "  1. Edit data/settings.json with your API keys"
 Write-Host "  2. Double-click the 'Agentic OS Dashboard' shortcut on your Desktop"
 Write-Host "     (or run .\start.ps1 / .\Launch-Dashboard.bat manually)"
 Write-Host "  3. Your browser will open automatically once the server is ready"
+Write-Host ""
+Write-Host "Optional agent CLI reminders:"
+Write-Host "  opencode: npm install -g @opencode/cli"
+Write-Host "  Gemini:   npm install -g @google/gemini-cli"
+Write-Host "  Hermes:   Use upstream docs for native Windows support, or WSL if native support is unavailable."

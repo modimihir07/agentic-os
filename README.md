@@ -91,11 +91,23 @@ A locally-hosted operating system for AI agents — an open-source GitHub reposi
 
 ## 🚀 Quick Start
 
+### Linux/macOS
+
 ```bash
 git clone https://github.com/modimihir07/agentic-os.git
 cd agentic-os
 chmod +x install.sh && ./install.sh
 ./start.sh
+# Open http://127.0.0.1:8080
+```
+
+### Windows PowerShell
+
+```powershell
+git clone https://github.com/modimihir07/agentic-os.git
+cd agentic-os
+.\install.ps1
+.\start.ps1
 # Open http://127.0.0.1:8080
 ```
 
@@ -107,11 +119,13 @@ chmod +x install.sh && ./install.sh
 
 | Tool | Required? | Install |
 |------|-----------|---------|
-| Python 3.10+ | ✅ Required | Linux/macOS: install from your package manager or `python.org`. Windows: install from `python.org` and select **Add Python to PATH**. Verify with `python --version` or `py -3 --version`. |
-| Node.js 18+ | ⚠ For opencode | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo bash - && sudo apt install -y nodejs` |
+| Python 3.10+ | ✅ Required | Install from your package manager or [python.org](https://www.python.org/downloads/). Verify with `python3 --version`. |
+| Node.js 18+ | ⚠ For opencode and Gemini CLI | `curl -fsSL https://deb.nodesource.com/setup_20.x \| sudo bash - && sudo apt install -y nodejs` |
 | opencode | ⚠ For code tasks | `npm install -g @opencode/cli` |
-| Hermes Agent | ⚠ For memory/scheduling | `curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh \| bash` |
+| Hermes Agent | ⚠ For memory/scheduling | Follow the upstream Hermes Agent documentation. If native Windows support is unavailable, use WSL for Hermes. |
 | Gemini CLI | ⚠ For Google AI | `npm install -g @google/gemini-cli` |
+
+> ⚠ = Optional — the dashboard starts and core pages work without all agent CLIs installed. Agent-specific chat, routing, health, and skill execution features will show offline or warning status until the relevant CLI is installed and authenticated.
 
 ### Windows
 
@@ -124,16 +138,6 @@ chmod +x install.sh && ./install.sh
 | Hermes Agent | ⚠ For memory/scheduling | Windows support must be verified separately if the upstream installer remains Bash-only. | Check the upstream Hermes Agent install docs before relying on native Windows support. |
 
 > ⚠ = Optional — the dashboard works with any subset of installed agents.
-
-### Windows Quick Start
-
-```powershell
-git clone https://github.com/modimihir07/agentic-os.git
-cd agentic-os
-.\install.ps1
-.\start.ps1
-# Open http://127.0.0.1:8080
-```
 
 The PowerShell launchers resolve Python in this order: `py -3.10`, `py -3`, then `python`. For manual commands, prefer `python -m pip install -r requirements.txt` and `python server.py --port 8080` so the same interpreter runs both dependency installation and the server.
 > **PowerShell execution policy:** if you use PowerShell scripts, allow local scripts for your user with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or run a single installer invocation with `powershell -ExecutionPolicy Bypass -File .\install.ps1`.
@@ -172,7 +176,7 @@ Edit `data/settings.json`:
 agentic-os/
 ├── server.py              # FastAPI backend (REST API)
 ├── requirements.txt       # Python dependencies
-├── install.sh             # One-command installer
+├── install.sh / install.ps1 # Platform installers
 ├── start.sh               # Launch dashboard
 ├── backup.sh / restore.sh # Disaster recovery
 │
@@ -330,7 +334,7 @@ Browse opencode session logs by date and size. Click "Replay" to view all messag
 
 ## 🧪 Tested On
 
-- **OS**: Linux (Ubuntu 22.04+), macOS
+- **OS**: Linux (Ubuntu 22.04+), macOS; Windows dashboard setup supported via PowerShell, with Hermes best used through WSL if native support is unavailable
 - **Python**: 3.10, 3.11, 3.12
 - **Browsers**: Chrome, Firefox, Edge
 - **Agents**: opencode v0.8+, Hermes Agent v1.0+, Gemini CLI v1.0+
