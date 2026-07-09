@@ -1081,6 +1081,7 @@ def _run_kanban_agent(task_id: str):
     except Exception as e:
         print(f"[kanban] dispatch for task {task_id} crashed: {e}")
         try:
+            path = kanban_task_path(task_id)
             task = json.loads(path.read_text())
             task["status"] = "blocked"
             task["block_reason"] = f"Dispatch crashed: {e}"[:300]
