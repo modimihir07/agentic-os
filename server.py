@@ -1074,8 +1074,9 @@ def _run_kanban_agent(task_id: str):
         else:
             task["status"] = "done"
             task["summary"] = response[:300]
-            task["completed_at"] = get_timestamp()
-            append_audit({"action": "kanban_task_dispatch_completed", "task_id": task_id, "agent": agent})
+        try:
+            path = kanban_task_path(task_id)
+            task = json.loads(path.read_text())
         task["updated"] = get_timestamp()
         save_kanban_task(task)
     except Exception as e:
