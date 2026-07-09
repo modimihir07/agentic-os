@@ -28,6 +28,9 @@ from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).parent.resolve()
 
+# Agents supported across chat, routing, health, and kanban dispatch.
+AGENTS = ["opencode", "hermes", "gemini"]
+
 app = FastAPI(title="Agentic OS", version="1.1.0")
 
 # Load OpenRouter API key from Hermes .env
@@ -130,13 +133,35 @@ def list_dir(path: Path):
         return []
     return sorted([p.name for p in path.iterdir() if not p.name.startswith(".")])
 
+def read_json(path: Path, default=None):
+    """Load JSON from path, returning default when the file is missing."""
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+def write_json(path: Path, data, indent: int = 2):
+    """Serialize data as pretty JSON to path."""
+    path.write_text(json.dumps(data, indent=indent), encoding="utf-8")
+
+def iter_skill_dirs():
+    """Yield skill directories, skipping hidden and underscore-prefixed ones."""
+    skills_dir = BASE_DIR / "skills"
+    if not skills_dir.exists():
+        return
+    for d in sorted(skills_dir.iterdir()):
+        if d.is_dir() and not d.name.startswith("_"):
+            yield d
+
+def new_id():
+    return str(uuid.uuid4())[:8]
+
 def get_timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 def append_audit(entry: dict):
     audit_file = BASE_DIR / "audit" / "audit.log"
     entry["timestamp"] = get_timestamp()
-    entry["id"] = str(uuid.uuid4())[:8]
+    entry["id"] = new_id()
     with open(audit_file, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
@@ -198,7 +223,7 @@ def check_agent(name: str) -> dict:
 
 @app.get("/api/status")
 def get_status():
-    agents = [check_agent(a) for a in ["opencode", "hermes", "gemini"]]
+    agents = [check_agent(a) for a in AGENTS]
     skills = list_dir(BASE_DIR / "skills")
     return {
         "status": "healthy",
@@ -259,25 +284,18 @@ def skill_context_file_path(name: str, filename: str) -> Path:
 @app.get("/api/skills")
 def list_skills():
     skills = []
-    for d in sorted((BASE_DIR / "skills").iterdir()):
-        if d.is_dir() and not d.name.startswith("_"):
-            skill_md = read_file(d / "SKILL.md")
-            learnings = read_file(d / "learnings.md")
-            eval_data = {}
-            eval_path = d / "eval.json"
-            if eval_path.exists():
-                eval_data = json.loads(eval_path.read_text())
-            score_history = []
-            score_path = d / "score-history.json"
-            if score_path.exists():
-                score_history = json.loads(score_path.read_text())
-            skills.append({
-                "name": d.name,
-                "description": skill_md[:200] if skill_md else "",
-                "has_learnings": bool(learnings),
-                "eval_criteria": eval_data.get("criteria", []),
-                "scores": score_history,
-            })
+    for d in iter_skill_dirs():
+        skill_md = read_file(d / "SKILL.md")
+        learnings = read_file(d / "learnings.md")
+        eval_data = read_json(d / "eval.json", {})
+        score_history = read_json(d / "score-history.json", [])
+        skills.append({
+            "name": d.name,
+            "description": skill_md[:200] if skill_md else "",
+            "has_learnings": bool(learnings),
+            "eval_criteria": eval_data.get("criteria", []),
+            "scores": score_history,
+        })
     return skills
 
 @app.get("/api/skills/{name}")
@@ -382,7 +400,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
     if skill_input:
         prompt += f"## User Input\n{skill_input}"
 
-    run_id = str(uuid.uuid4())[:8]
+    run_id = new_id()
 
     # Execute via agent
     try:
@@ -445,7 +463,7 @@ def create_job(job: ScheduleJobRequest):
     jobs_dir = BASE_DIR / "scheduler" / "jobs"
     jobs_dir.mkdir(parents=True, exist_ok=True)
     job_data = {
-        "id": str(uuid.uuid4())[:8],
+        "id": new_id(),
         "name": job.name,
         "skill": job.skill,
         "cron": job.cron,
@@ -487,15 +505,12 @@ def get_audit(limit: int = Query(100, le=500)):
 @app.get("/api/cost")
 def get_cost():
     cost_file = BASE_DIR / "data" / "cost-history.json"
-    if not cost_file.exists():
-        return {"entries": [], "daily_totals": {}, "monthly_projection": 0, "free_tier_alerts": []}
-    return json.loads(cost_file.read_text())
+    return read_json(cost_file, {"entries": [], "daily_totals": {}, "monthly_projection": 0, "free_tier_alerts": []})
 
 @app.post("/api/cost/record")
 def record_cost(data: dict):
     cost_file = BASE_DIR / "data" / "cost-history.json"
-    cost_data = json.loads(cost_file.read_text()) if cost_file.exists() else \
-        {"entries": [], "daily_totals": {}, "monthly_projection": 0, "free_tier_alerts": []}
+    cost_data = read_json(cost_file, {"entries": [], "daily_totals": {}, "monthly_projection": 0, "free_tier_alerts": []})
     cost_data["entries"].append({
         "timestamp": get_timestamp(),
         "agent": data.get("agent", "unknown"),
@@ -503,7 +518,7 @@ def record_cost(data: dict):
         "cost": data.get("cost", 0.0),
         "model": data.get("model", "unknown"),
     })
-    cost_file.write_text(json.dumps(cost_data, indent=2))
+    write_json(cost_file, cost_data)
     return {"status": "recorded"}
 
 # ─── Routes: Registry/Plugins ─────────────────────────────────────
@@ -511,9 +526,7 @@ def record_cost(data: dict):
 @app.get("/api/plugins")
 def list_plugins():
     reg_file = BASE_DIR / "registry" / "plugins.json"
-    if not reg_file.exists():
-        return {"plugins": []}
-    return json.loads(reg_file.read_text())
+    return read_json(reg_file, {"plugins": []})
 
 @app.post("/api/plugins/install")
 def install_plugin(data: dict):
@@ -521,7 +534,7 @@ def install_plugin(data: dict):
     if not name:
         raise HTTPException(400, "Plugin name required")
     reg_file = BASE_DIR / "registry" / "plugins.json"
-    reg = json.loads(reg_file.read_text()) if reg_file.exists() else {"plugins": []}
+    reg = read_json(reg_file, {"plugins": []})
     if any(p["name"] == name for p in reg["plugins"]):
         return {"status": "already_installed"}
     reg["plugins"].append({
@@ -529,7 +542,7 @@ def install_plugin(data: dict):
         "installed": get_timestamp(),
         "version": "1.0.0",
     })
-    reg_file.write_text(json.dumps(reg, indent=2))
+    write_json(reg_file, reg)
     append_audit({"action": "plugin_installed", "plugin": name})
     return {"status": "installed", "plugin": name}
 
@@ -586,17 +599,15 @@ def list_prompts():
 @app.get("/api/settings")
 def get_settings():
     sf = BASE_DIR / "data" / "settings.json"
-    if not sf.exists():
-        return {}
-    return json.loads(sf.read_text())
+    return read_json(sf, {})
 
 @app.put("/api/settings")
 def update_settings(data: SettingsUpdate):
     sf = BASE_DIR / "data" / "settings.json"
     # Merge with existing
-    existing = json.loads(sf.read_text()) if sf.exists() else {}
+    existing = read_json(sf, {})
     existing.update(data.settings)
-    sf.write_text(json.dumps(existing, indent=2))
+    write_json(sf, existing)
     append_audit({"action": "settings_updated"})
     return {"status": "ok"}
 
@@ -628,16 +639,14 @@ def discover_standards():
 CHAT_HISTORY_FILE = BASE_DIR / "data" / "chat-history.json"
 
 def load_chat_history():
-    if CHAT_HISTORY_FILE.exists():
-        return json.loads(CHAT_HISTORY_FILE.read_text())
-    return {"messages": []}
+    return read_json(CHAT_HISTORY_FILE, {"messages": []})
 
 def save_chat_message(msg: dict):
     history = load_chat_history()
     history["messages"].append(msg)
     if len(history["messages"]) > 200:
         history["messages"] = history["messages"][-200:]
-    CHAT_HISTORY_FILE.write_text(json.dumps(history, indent=2))
+    write_json(CHAT_HISTORY_FILE, history)
 
 def run_cli(args: list, timeout: int = 30) -> tuple:
     r = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
@@ -744,11 +753,11 @@ def execute_agent(agent: str, message: str) -> str:
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     agent = req.agent.lower().strip()
-    if agent not in ["opencode", "hermes", "gemini"]:
+    if agent not in AGENTS:
         raise HTTPException(400, "Agent must be one of: opencode, hermes, gemini")
 
     user_msg = {
-        "id": str(uuid.uuid4())[:8],
+        "id": new_id(),
         "role": "user",
         "agent": agent,
         "content": req.message,
@@ -759,7 +768,7 @@ def chat(req: ChatRequest):
     response_text = execute_agent(agent, req.message)
 
     agent_msg = {
-        "id": str(uuid.uuid4())[:8],
+        "id": new_id(),
         "role": "assistant",
         "agent": agent,
         "content": response_text,
@@ -977,7 +986,7 @@ def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
     kanban_task_path(task["id"]).write_text(json.dumps(task, indent=2))
 
-KANBAN_AGENTS = {"opencode", "hermes", "gemini"}
+KANBAN_AGENTS = set(AGENTS)
 
 def dispatch_kanban_task(task_id: str):
     """Move a task to in_progress and hand it to its assignee agent in the background."""
@@ -1008,7 +1017,7 @@ def _run_kanban_agent(task_id: str):
 
     task = json.loads(path.read_text())  # reload in case it changed while the agent ran
     task.setdefault("comments", []).append({
-        "id": str(uuid.uuid4())[:8],
+        "id": new_id(),
         "message": f"🤖 **{agent}**\n\n{response}",
         "timestamp": get_timestamp(),
     })
@@ -1025,12 +1034,10 @@ def _run_kanban_agent(task_id: str):
     save_kanban_task(task)
 
 def load_goals():
-    if GOALS_FILE.exists():
-        return json.loads(GOALS_FILE.read_text())
-    return []
+    return read_json(GOALS_FILE, [])
 
 def save_goals(goals: list):
-    GOALS_FILE.write_text(json.dumps(goals, indent=2))
+    write_json(GOALS_FILE, goals)
 
 # ─── Routes: Kanban Board (13 endpoints) ────────────────────────
 
@@ -1069,7 +1076,7 @@ def kanban_delete_task(task_id: str):
 def kanban_create_task(data: KanbanTaskCreate):
     try:
         task = {
-            "id": str(uuid.uuid4())[:8],
+            "id": new_id(),
             "title": data.title,
             "body": data.body,
             "status": data.status,
@@ -1166,7 +1173,7 @@ def kanban_add_comment(task_id: str, data: KanbanCommentCreate):
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
     comment = {
-        "id": str(uuid.uuid4())[:8],
+        "id": new_id(),
         "message": data.message,
         "timestamp": get_timestamp(),
     }
@@ -1236,7 +1243,7 @@ def kanban_decompose_task(task_id: str):
         subtask = subtask.strip().lstrip("-* ")
         if subtask:
             child = {
-                "id": str(uuid.uuid4())[:8],
+                "id": new_id(),
                 "title": subtask[:80],
                 "body": subtask,
                 "status": "todo",
@@ -1266,7 +1273,7 @@ def create_goal(data: GoalCreate):
     try:
         goals = load_goals()
         goal = {
-            "id": str(uuid.uuid4())[:8],
+            "id": new_id(),
             "title": data.title,
             "description": data.description,
             "category": data.category,
@@ -1378,7 +1385,7 @@ def search_journal(q: str = Query("")):
 def get_agent_health():
     try:
         agents = []
-        for name in ["opencode", "hermes", "gemini"]:
+        for name in AGENTS:
             info = check_agent(name)
             info["uptime"] = 0
             info["success_rate"] = 100
@@ -1391,7 +1398,7 @@ def get_agent_health():
 @app.get("/api/agents/{name}/stats")
 def get_agent_stats(name: str):
     try:
-        if name not in ["opencode", "hermes", "gemini"]:
+        if name not in AGENTS:
             raise HTTPException(400, "Invalid agent")
         info = check_agent(name)
         return {
@@ -1412,7 +1419,7 @@ def get_agent_stats(name: str):
 def refresh_agent_health():
     try:
         agents = []
-        for name in ["opencode", "hermes", "gemini"]:
+        for name in AGENTS:
             info = check_agent(name)
             agents.append(info)
         append_audit({"action": "agent_health_refreshed"})
@@ -1450,7 +1457,7 @@ def router_suggest(data: RouterSuggest):
 def router_route(data: RouterRoute):
     try:
         agent = data.agent.lower()
-        if agent not in ["opencode", "hermes", "gemini"]:
+        if agent not in AGENTS:
             return {"status": "error", "message": f"Invalid agent: {agent}"}
         append_audit({"action": "task_routed", "agent": agent, "task_preview": data.task[:50]})
         return {
@@ -1467,22 +1474,17 @@ def router_route(data: RouterRoute):
 @app.get("/api/analytics/skills")
 def get_skill_analytics():
     try:
-        skills_dir = BASE_DIR / "skills"
         analytics = []
-        for d in sorted(skills_dir.iterdir()):
-            if d.is_dir() and not d.name.startswith("_"):
-                eval_path = d / "eval.json"
-                score_path = d / "score-history.json"
-                scores = json.loads(score_path.read_text()) if score_path.exists() else []
-                eval_data = json.loads(eval_path.read_text()) if eval_path.exists() else {}
-                avg_score = sum(s.get("score", 0) for s in scores) / len(scores) if scores else 0
-                analytics.append({
-                    "name": d.name,
-                    "total_runs": len(scores),
-                    "avg_score": round(avg_score, 1),
-                    "last_score": scores[-1].get("score", 0) if scores else 0,
-                    "trend": "up" if len(scores) >= 2 and scores[-1].get("score", 0) > scores[-2].get("score", 0) else "down" if len(scores) >= 2 else "stable",
-                })
+        for d in iter_skill_dirs():
+            scores = read_json(d / "score-history.json", [])
+            avg_score = sum(s.get("score", 0) for s in scores) / len(scores) if scores else 0
+            analytics.append({
+                "name": d.name,
+                "total_runs": len(scores),
+                "avg_score": round(avg_score, 1),
+                "last_score": scores[-1].get("score", 0) if scores else 0,
+                "trend": "up" if len(scores) >= 2 and scores[-1].get("score", 0) > scores[-2].get("score", 0) else "down" if len(scores) >= 2 else "stable",
+            })
         return {"skills": sorted(analytics, key=lambda x: x["total_runs"], reverse=True)}
     except Exception as e:
         return {"skills": [], "error": str(e)}
@@ -1490,18 +1492,15 @@ def get_skill_analytics():
 @app.get("/api/analytics/trends")
 def get_trend_analytics():
     try:
-        skills_dir = BASE_DIR / "skills"
         trends = []
-        for d in sorted(skills_dir.iterdir()):
-            if d.is_dir() and not d.name.startswith("_"):
-                score_path = d / "score-history.json"
-                scores = json.loads(score_path.read_text()) if score_path.exists() else []
-                if scores:
-                    trends.append({
-                        "name": d.name,
-                        "scores": [s.get("score", 0) for s in scores[-10:]],
-                        "labels": [s.get("date", "") for s in scores[-10:]],
-                    })
+        for d in iter_skill_dirs():
+            scores = read_json(d / "score-history.json", [])
+            if scores:
+                trends.append({
+                    "name": d.name,
+                    "scores": [s.get("score", 0) for s in scores[-10:]],
+                    "labels": [s.get("date", "") for s in scores[-10:]],
+                })
         return {"trends": trends}
     except Exception as e:
         return {"trends": [], "error": str(e)}
