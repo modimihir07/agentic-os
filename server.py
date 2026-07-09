@@ -133,11 +133,24 @@ def list_dir(path: Path):
         return []
     return sorted([p.name for p in path.iterdir() if not p.name.startswith(".")])
 
-def read_json(path: Path, default=None):
-    """Load JSON from path, returning default when the file is missing."""
+def read_json(path: Path, default=None, best_effort=False):
+    """Load JSON from path, returning ``default`` when the file is missing.
+
+    On corrupt or unreadable content a descriptive ``HTTPException(500)`` is
+    raised so the error is propagated to the client instead of surfacing as an
+    opaque 500. Aggregate/listing callers can set ``best_effort=True`` to
+    tolerate one bad file: the corruption is logged and ``default`` is returned
+    instead of aborting the whole view.
+    """
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as e:
+        if best_effort:
+            print(f"[load] skipping corrupt {path.name}: {e}")
+            return default
+        raise HTTPException(500, f"Failed to read {path.name}: {e}")
 
 def write_json(path: Path, data, indent: int = 2):
     """Serialize data as pretty JSON to path."""
@@ -162,8 +175,14 @@ def append_audit(entry: dict):
     audit_file = BASE_DIR / "audit" / "audit.log"
     entry["timestamp"] = get_timestamp()
     entry["id"] = new_id()
-    with open(audit_file, "a") as f:
-        f.write(json.dumps(entry) + "\n")
+    try:
+        audit_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(audit_file, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry) + "\n")
+    except OSError as e:
+        # Auditing is best-effort: never let a logging failure abort the
+        # underlying operation, but surface it on the server console.
+        print(f"[audit] failed to write entry {entry.get('action')!r}: {e}")
 
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
@@ -200,22 +219,24 @@ def hermes_available() -> bool:
 
 def check_agent(name: str) -> dict:
     """Filesystem-based check for opencode/gemini; hermes needs a real subprocess since it may live inside WSL."""
-    try:
-        if name == "opencode":
-            exists = shutil.which("opencode") is not None
-            status = "online" if exists else "offline"
-        elif name == "hermes":
-            exists = hermes_available()
-            status = "online" if exists else "offline"
-        elif name == "gemini":
-            # Gemini has valid OAuth tokens logged in
-            oauth = Path.home() / ".gemini" / "oauth_creds.json"
-            exists = shutil.which("gemini") is not None
-            logged_in = oauth.exists() and "ya29" in oauth.read_text()
-            status = "online" if exists and logged_in else "offline" if not exists else "warning"
-        else:
-            status = "offline"
-    except Exception:
+    if name == "opencode":
+        status = "online" if shutil.which("opencode") is not None else "offline"
+    elif name == "hermes":
+        status = "online" if hermes_available() else "offline"
+    elif name == "gemini":
+        exists = shutil.which("gemini") is not None
+        # Gemini needs a valid OAuth token on disk to be usable.
+        logged_in = False
+        oauth = Path.home() / ".gemini" / "oauth_creds.json"
+        if oauth.exists():
+            try:
+                logged_in = "ya29" in oauth.read_text()
+            except OSError as e:
+                # Distinguish an unreadable credential file from "not logged in"
+                # instead of silently reporting the agent as offline.
+                print(f"[agent-health] could not read gemini credentials: {e}")
+        status = "online" if exists and logged_in else "offline" if not exists else "warning"
+    else:
         status = "offline"
     return {"name": name, "status": status}
 
@@ -272,6 +293,21 @@ def skill_dir_path(name: str) -> Path:
         raise HTTPException(400, "Invalid skill name")
     return candidate
 
+def resolve_skill_dir(name: str) -> Path:
+    """Return the directory of an existing skill by matching ``name`` against the
+    actual directory entries.
+
+    Using the entry from ``iterdir()`` (rather than a path built from ``name``)
+    means traversal input can never escape the skills directory. Raises 404 if no
+    skill matches.
+    """
+    base = BASE_DIR / "skills"
+    if base.exists():
+        for entry in base.iterdir():
+            if entry.is_dir() and entry.name == name:
+                return entry
+    raise HTTPException(404, "Skill not found")
+
 def skill_context_file_path(name: str, filename: str) -> Path:
     if not SKILL_CONTEXT_FILENAME_RE.fullmatch(filename or ""):
         raise HTTPException(400, "Invalid file name")
@@ -287,8 +323,8 @@ def list_skills():
     for d in iter_skill_dirs():
         skill_md = read_file(d / "SKILL.md")
         learnings = read_file(d / "learnings.md")
-        eval_data = read_json(d / "eval.json", {})
-        score_history = read_json(d / "score-history.json", [])
+        eval_data = read_json(d / "eval.json", {}, best_effort=True)
+        score_history = read_json(d / "score-history.json", [], best_effort=True)
         skills.append({
             "name": d.name,
             "description": skill_md[:200] if skill_md else "",
@@ -300,15 +336,13 @@ def list_skills():
 
 @app.get("/api/skills/{name}")
 def get_skill(name: str):
-    path = skill_dir_path(name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
+    path = resolve_skill_dir(name)
     return {
         "name": name,
         "skill": read_file(path / "SKILL.md"),
         "learnings": read_file(path / "learnings.md"),
-        "eval": json.loads((path / "eval.json").read_text()) if (path / "eval.json").exists() else {},
-        "score_history": json.loads((path / "score-history.json").read_text()) if (path / "score-history.json").exists() else [],
+        "eval": read_json(path / "eval.json", default={}),
+        "score_history": read_json(path / "score-history.json", default=[]),
         "context": [f.name for f in (path / "context").iterdir()] if (path / "context").exists() else [],
     }
 
@@ -360,9 +394,7 @@ def delete_skill_context_file(name: str, filename: str):
 
 @app.post("/api/skills/{name}/run")
 def run_skill(name: str, req: Optional[SkillRunRequest] = None):
-    path = skill_dir_path(name)
-    if not path.exists():
-        raise HTTPException(404, "Skill not found")
+    path = resolve_skill_dir(name)
 
     agent_choice = req.agent if req else "auto"
     skill_input = req.input if req else ""
@@ -443,10 +475,8 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
-    path = skill_dir_path(name) / "score-history.json"
-    if not path.exists():
-        return {"scores": []}
-    return {"scores": json.loads(path.read_text())}
+    path = resolve_skill_dir(name) / "score-history.json"
+    return {"scores": read_json(path, default=[])}
 
 # ─── Routes: Scheduler ────────────────────────────────────────────
 
@@ -455,7 +485,9 @@ def list_jobs():
     jobs_dir = BASE_DIR / "scheduler" / "jobs"
     jobs = []
     for f in sorted(jobs_dir.glob("*.json")):
-        jobs.append(json.loads(f.read_text()))
+        job = read_json(f, default=None, best_effort=True)
+        if job is not None:
+            jobs.append(job)
     return jobs
 
 @app.post("/api/scheduler/jobs")
@@ -482,8 +514,8 @@ def create_job(job: ScheduleJobRequest):
 def delete_job(job_id: str):
     jobs_dir = BASE_DIR / "scheduler" / "jobs"
     for f in jobs_dir.glob("*.json"):
-        data = json.loads(f.read_text())
-        if data.get("id") == job_id:
+        data = read_json(f, default=None, best_effort=True)
+        if data and data.get("id") == job_id:
             f.unlink()
             append_audit({"action": "job_deleted", "job_id": job_id})
             return {"status": "deleted"}
@@ -497,7 +529,15 @@ def get_audit(limit: int = Query(100, le=500)):
     if not audit_file.exists():
         return {"entries": []}
     lines = audit_file.read_text().strip().split("\n")
-    entries = [json.loads(l) for l in lines if l.strip()]
+    entries = []
+    for l in lines:
+        if not l.strip():
+            continue
+        try:
+            entries.append(json.loads(l))
+        except json.JSONDecodeError:
+            # Skip a corrupt line rather than failing the whole audit view.
+            continue
     return {"entries": entries[-limit:]}
 
 # ─── Routes: Cost Analytics ───────────────────────────────────────
@@ -996,7 +1036,9 @@ def load_kanban_tasks():
     ensure_dir(KANBAN_DIR)
     tasks = []
     for f in sorted(KANBAN_DIR.glob("*.json")):
-        tasks.append(json.loads(f.read_text()))
+        task = read_json(f, default=None, best_effort=True)
+        if task is not None:
+            tasks.append(task)
     return tasks
 
 KANBAN_ID_RE = re.compile(r"^[0-9a-f]{6,16}$")
@@ -1034,33 +1076,49 @@ def dispatch_kanban_task(task_id: str):
     threading.Thread(target=_run_kanban_agent, args=(task_id,), daemon=True).start()
 
 def _run_kanban_agent(task_id: str):
-    path = kanban_task_path(task_id)
-    if not path.exists():
-        return
-    task = json.loads(path.read_text())
-    agent = task.get("assignee")
-    prompt = task["title"] if not task.get("body") else f"{task['title']}\n\n{task['body']}"
+    # Runs in a daemon thread: any unhandled exception would be lost and leave
+    # the task stuck in "in_progress" forever, so catch failures and surface
+    # them by marking the task blocked with the error.
+    try:
+        path = kanban_task_path(task_id)
+        if not path.exists():
+            return
+        task = json.loads(path.read_text())
+        agent = task.get("assignee")
+        prompt = task["title"] if not task.get("body") else f"{task['title']}\n\n{task['body']}"
 
-    response = execute_agent(agent, prompt)
-    failed = response.startswith(("⏱", "⚠", "Unknown agent"))
+        response = execute_agent(agent, prompt)
+        failed = response.startswith(("⏱", "⚠", "Unknown agent"))
 
-    task = json.loads(path.read_text())  # reload in case it changed while the agent ran
-    task.setdefault("comments", []).append({
-        "id": new_id(),
-        "message": f"🤖 **{agent}**\n\n{response}",
-        "timestamp": get_timestamp(),
-    })
-    if failed:
-        task["status"] = "blocked"
-        task["block_reason"] = response[:300]
-        append_audit({"action": "kanban_task_dispatch_failed", "task_id": task_id, "agent": agent})
-    else:
-        task["status"] = "done"
-        task["summary"] = response[:300]
-        task["completed_at"] = get_timestamp()
-        append_audit({"action": "kanban_task_dispatch_completed", "task_id": task_id, "agent": agent})
-    task["updated"] = get_timestamp()
-    save_kanban_task(task)
+        task = json.loads(path.read_text())  # reload in case it changed while the agent ran
+        task.setdefault("comments", []).append({
+            "id": new_id(),
+            "message": f"🤖 **{agent}**\n\n{response}",
+            "timestamp": get_timestamp(),
+        })
+        if failed:
+            task["status"] = "blocked"
+            task["block_reason"] = response[:300]
+            append_audit({"action": "kanban_task_dispatch_failed", "task_id": task_id, "agent": agent})
+        else:
+            task["status"] = "done"
+            task["summary"] = response[:300]
+            task["completed_at"] = get_timestamp()
+            append_audit({"action": "kanban_task_dispatch_completed", "task_id": task_id, "agent": agent})
+        task["updated"] = get_timestamp()
+        save_kanban_task(task)
+    except Exception as e:
+        print(f"[kanban] dispatch for task {task_id} crashed: {e}")
+        try:
+            path = kanban_task_path(task_id)
+            task = json.loads(path.read_text())
+            task["status"] = "blocked"
+            task["block_reason"] = f"Dispatch crashed: {e}"[:300]
+            task["updated"] = get_timestamp()
+            save_kanban_task(task)
+            append_audit({"action": "kanban_task_dispatch_error", "task_id": task_id, "error": str(e)[:200]})
+        except Exception as inner:
+            print(f"[kanban] could not mark task {task_id} as blocked: {inner}")
 
 def load_goals():
     return read_json(GOALS_FILE, [])
