@@ -173,3 +173,27 @@ Run `hermes setup` or check your config.
               {help,version,init,clean,harvest,process,curate,deposit,postprocess}
               ...
 hermes: error: argument subcommand: invalid choice: 'chat' (choose from 'help', 
+
+## 2026-07-19 (Run 0faa0ff0)
+- Agent: hermes
+- Input: (none)
+- Output: **Hermes needs setup**
+
+Run `hermes setup` or check your config.
+
+**Details:** usage: hermes [-h]
+              {help,version,init,clean,harvest,process,curate,deposit,postprocess}
+              ...
+hermes: error: argument subcommand: invalid choice: 'chat' (choose from 'help', 
+
+## 2026-07-19 (Run c63df1b3)
+- Agent: hermes
+- Input: (none)
+- Output: **Hermes needs setup**
+
+Run `hermes setup` or check your config.
+
+**Details:** usage: hermes [-h]
+              {help,version,init,clean,harvest,process,curate,deposit,postprocess}
+              ...
+hermes: error: argument subcommand: invalid choice: 'chat' (choose from 'help', 

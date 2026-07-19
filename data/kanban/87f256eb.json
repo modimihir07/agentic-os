@@ -1,0 +1,21 @@
+{
+  "id": "87f256eb",
+  "title": "Now",
+  "body": "# System Audit Prompt\n\nPerform a comprehensive system audit covering:\n1. **Infrastructure**: GCP resources, Kubernetes clusters, Cloud SQL, CDN\n2. **Security**: IAM roles, service accounts, firewall rules, SSL certs\n3. **CI/CD**: Pipeline status, build times, failure rates\n4. **Cost**: Current spend, projections, optimization opportunities\n5. **Performance**: Latency, error rates, resource utilization\n\nFor each category, provide:\n- Status: PASS / WARN / FAIL\n- Evidence (specific numbers, configs, logs)\n- Recommendation with priority (high/medium/low)",
+  "status": "done",
+  "priority": "high",
+  "assignee": "opencode",
+  "comments": [
+    {
+      "id": "7cf581ea",
+      "message": "\ud83e\udd16 **opencode**\n\n\u23f1 Agent 'opencode' timed out.\n\nOpenCode's model is taking too long. Try running `opencode run \"Now\n\n# System Audit Prompt\n\nPerform a comprehensive system a\"` directly in your terminal.\n\n**Message:** Now\n\n# System Audit Prompt\n\nPerform a comprehensive system audit covering:\n1. **Infrastructure**: GC",
+      "timestamp": "2026-07-19T06:29:09.336269+00:00"
+    }
+  ],
+  "links": [],
+  "created": "2026-07-19T05:50:24.932280+00:00",
+  "updated": "2026-07-19T07:19:26.162294+00:00",
+  "block_reason": "",
+  "summary": "",
+  "completed_at": "2026-07-19T07:19:26.162279+00:00"
+}

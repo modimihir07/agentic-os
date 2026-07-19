@@ -20,5 +20,16 @@
     "progress": 0,
     "created": "2026-07-07T11:02:12.398717+00:00",
     "updated": "2026-07-07T11:02:12.398731+00:00"
+  },
+  {
+    "id": "a0f84134",
+    "title": "AUdit",
+    "description": "Run a dependency audit",
+    "category": "development",
+    "target_date": "2026-07-19",
+    "status": "active",
+    "progress": 0,
+    "created": "2026-07-19T07:52:31.175924+00:00",
+    "updated": "2026-07-19T07:52:31.175940+00:00"
   }
 ]
