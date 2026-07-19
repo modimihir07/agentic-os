@@ -1,0 +1,20 @@
+{
+  "id": "bf187683",
+  "title": "debug",
+  "body": "# Debug Incident Prompt\n\nWalk through the 4-phase debugging process:\n\n## Phase 1: Reproduce\n- What are the exact steps to reproduce?\n- What environment (OS, versions, config)?\n- What is the exact error message/output?\n\n## Phase 2: Investigate\n- What does the stack trace tell us?\n- What changed recently that could have caused this?\n- What logs are relevant?\n- Can we isolate the failing component?\n\n## Phase 3: Fix\n- What is the root cause? (not the symptom)\n- What is the minimal fix?\n- Does this fix address the root cause permanently?\n- Could this fix introduce regressions?\n\n## Phase 4: Verify\n- Does the fix resolve the original issue?\n- Do existing tests still pass?\n- Should we add a regression test?\n\nIf 3 fix attempts fail, trigger architectural review.",
+  "status": "done",
+  "priority": "medium",
+  "assignee": "hermes",
+  "comments": [
+    {
+      "id": "cae356af",
+      "message": "\ud83e\udd16 **hermes**\n\n**Hermes needs setup**\n\nRun `hermes setup` or check your config.\n\n**Details:** usage: hermes [-h]\n              {help,version,init,clean,harvest,process,curate,deposit,postprocess}\n              ...\nhermes: error: argument subcommand: invalid choice: 'chat' (choose from 'help', ",
+      "timestamp": "2026-07-08T20:35:28.102081+00:00"
+    }
+  ],
+  "links": [],
+  "created": "2026-07-08T20:35:24.963562+00:00",
+  "updated": "2026-07-08T20:35:28.102877+00:00",
+  "summary": "**Hermes needs setup**\n\nRun `hermes setup` or check your config.\n\n**Details:** usage: hermes [-h]\n              {help,version,init,clean,harvest,process,curate,deposit,postprocess}\n              ...\nhermes: error: argument subcommand: invalid choice: 'chat' (choose from 'help', ",
+  "completed_at": "2026-07-08T20:35:28.102118+00:00"
+}

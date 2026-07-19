@@ -1,13 +1,24 @@
 [
   {
-    "id": "c1c992ef",
-    "title": "Test goal",
-    "description": "",
+    "id": "215a1f6a",
+    "title": "Waste log",
+    "description": "I have a couple of files that work as an applicate for a catering kitchen waste log. I need it to be local if possible and save local as well. I need it created fully functioning.",
     "category": "development",
-    "target_date": "",
+    "target_date": "2026-07-07",
     "status": "active",
     "progress": 0,
-    "created": "2026-06-05T09:50:30.334519+00:00",
-    "updated": "2026-06-05T09:50:30.334541+00:00"
+    "created": "2026-07-07T10:59:57.991678+00:00",
+    "updated": "2026-07-07T10:59:57.991691+00:00"
+  },
+  {
+    "id": "ac785f05",
+    "title": "Pendleton-comms-live",
+    "description": "I need to finish my pendleton walkie talkie app before whiskey fest so my team can talk. It needs to be an android native application.",
+    "category": "development",
+    "target_date": "2026-07-08",
+    "status": "active",
+    "progress": 0,
+    "created": "2026-07-07T11:02:12.398717+00:00",
+    "updated": "2026-07-07T11:02:12.398731+00:00"
   }
 ]

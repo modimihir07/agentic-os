@@ -1,0 +1,121 @@
+1783378312.072140:          hermes.cli:     DEBUG | Running hermes with the following command line arguments: Namespace(subcommand='clean', path=WindowsPath('.'), config=WindowsPath('hermes.toml'), options=[], command=<hermes.commands.clean.base.HermesCleanCommand object at 0x0000021F567C2A90>)
+1783378312.072140:          hermes.cli:     DEBUG | Loading settings...
+1783378312.072140:          hermes.cli:     DEBUG | Update settings from command line...
+1783378312.072140:          hermes.cli:      INFO | Run subcommand clean
+1783378312.072140:        hermes.clean:      INFO | Removing HERMES caches...
+1783378312.073139:          hermes.cli:     ERROR | An error occurred during execution of clean (Find details in './hermes.log')
+1783378312.080631:          hermes.cli:     DEBUG | Original exception was: [WinError 32] The process cannot access the file because it is being used by another process: '.hermes\\audit.log'
+1783378355.637233:          hermes.cli:     DEBUG | Running hermes with the following command line arguments: Namespace(subcommand='init', path=WindowsPath('.'), config=WindowsPath('hermes.toml'), options=[], template_branch='', command=<hermes.commands.init.base.HermesInitCommand object at 0x00000200CB546E10>)
+1783378355.637233:          hermes.cli:     DEBUG | Loading settings...
+1783378355.637233:          hermes.cli:     DEBUG | Update settings from command line...
+1783378355.637233:          hermes.cli:      INFO | Run subcommand init
+1783378355.641236:         hermes.init:      INFO | Preparing HERMES initialization
+
+1783378355.868221:         hermes.init:      INFO | Git project using GitHub detected.
+
+1783378355.868221:         hermes.init:      INFO | Starting to initialize HERMES in C:\Users\Austin\agentic-os\agentic-os
+
+1783378355.868221:         hermes.init:      INFO | -- Step 1 of 8: Configure HERMES plugins --
+1783378357.022584:         hermes.init:      INFO | The following plugins are already builtin:
+1783378357.027610:         hermes.init:      INFO | [harvest] [1mCITATION.cff Harvester[0m (builtin)
+1783378357.031886:         hermes.init:      INFO | [harvest] [1mcodemeta.json Harvester[0m (builtin)
+1783378357.037987:         hermes.init:      INFO | [harvest] [1m'file_exists' Harvester[0m (builtin)
+1783378357.039993:         hermes.init:      INFO | [process] [1mMerge[0m (builtin)
+1783378357.043098:         hermes.init:      INFO | [curate] [1mCurate[0m (builtin)
+1783378357.047788:         hermes.init:      INFO | [deposit] [1mInvenio Deposit[0m (builtin)
+1783378357.053020:         hermes.init:      INFO | [deposit] [1mInvenio RDM Deposit[0m (builtin)
+1783378357.056359:         hermes.init:      INFO | [deposit] [1mRodare Deposit[0m (builtin)
+1783378357.058868:         hermes.init:      INFO | [postprocess] [1mInvenio Postprocess[0m (builtin)
+1783378357.062191:         hermes.init:      INFO | [postprocess] [1mInvenio RDM Postprocess[0m (builtin)
+1783378357.067616:         hermes.init:      INFO | The following plugins are available for installation:
+1783378357.081348:         hermes.init:      INFO | Do you want to add a plugin?
+1783378372.856680:         hermes.init:      INFO | You selected "Add hermes-plugin-git".
+
+1783378372.864790:         hermes.init:      INFO | The following plugins are going to be installed:
+1783378372.864790:         hermes.init:      INFO | [harvest] [1mhermes-plugin-git[0m (https://github.com/softwarepub/hermes-plugin-git)
+1783378372.867537:         hermes.init:      INFO | The following plugins are available for installation:
+1783378372.874145:         hermes.init:      INFO | Do you want to add a plugin?
+1783378375.707595:         hermes.init:      INFO | You selected "Add hermes-plugin-software-card".
+
+1783378375.709102:         hermes.init:      INFO | The following plugins are going to be installed:
+1783378375.710116:         hermes.init:      INFO | [harvest] [1mhermes-plugin-git[0m (https://github.com/softwarepub/hermes-plugin-git)
+1783378375.710116:         hermes.init:      INFO | [curate] [1mhermes-plugin-software-card[0m (https://github.com/softwarepub/hermes-plugin-software-card)
+1783378375.711141:         hermes.init:      INFO | The following plugins are available for installation:
+1783378375.712148:         hermes.init:      INFO | Do you want to add a plugin?
+1783378377.925376:         hermes.init:     ERROR | Error: invalid input
+1783378381.959078:         hermes.init:      INFO | You selected "Add hermes-plugin-python".
+
+1783378381.961087:         hermes.init:      INFO | The following plugins are going to be installed:
+1783378381.961087:         hermes.init:      INFO | [harvest] [1mhermes-plugin-git[0m (https://github.com/softwarepub/hermes-plugin-git)
+1783378381.961594:         hermes.init:      INFO | [curate] [1mhermes-plugin-software-card[0m (https://github.com/softwarepub/hermes-plugin-software-card)
+1783378381.961594:         hermes.init:      INFO | [harvest] [1mhermes-plugin-python[0m (https://github.com/softwarepub/hermes-plugin-python)
+1783378381.961594:         hermes.init:      INFO | -- Step 2 of 8: Configure deposition platform and setup method --
+1783378381.963386:         hermes.init:      INFO | Where do you want to publish the software?
+1783378395.815349:         hermes.init:      INFO | You selected "Zenodo (Sandbox)".
+
+1783378395.821995:         hermes.init:      INFO | How do you want to connect Zenodo (Sandbox) with your GitHub CI?
+1783378407.881159:         hermes.init:      INFO | You selected "Manually (with instructions)".
+
+1783378407.882999:         hermes.init:      INFO | -- Step 3 of 8: Configure HERMES behaviour --
+1783378407.884005:         hermes.init:      INFO | When should the automated HERMES process start?
+1783378421.817544:         hermes.init:   WARNING | HERMES init was aborted.
+1783378421.819053:         hermes.init:      INFO | Cleaning unused files...
+1783378437.115763:          hermes.cli:     DEBUG | Running hermes with the following command line arguments: Namespace(subcommand='init', path=WindowsPath('.'), config=WindowsPath('hermes.toml'), options=[], template_branch='', command=<hermes.commands.init.base.HermesInitCommand object at 0x0000029933ED6E10>)
+1783378437.115763:          hermes.cli:     DEBUG | Loading settings...
+1783378437.115763:          hermes.cli:     DEBUG | Update settings from command line...
+1783378437.116773:          hermes.cli:      INFO | Run subcommand init
+1783378437.116773:         hermes.init:      INFO | Preparing HERMES initialization
+
+1783378437.312639:         hermes.init:      INFO | Git project using GitHub detected.
+
+1783378437.312639:         hermes.init:      INFO | Starting to initialize HERMES in C:\Users\Austin\agentic-os\agentic-os
+
+1783378437.313504:         hermes.init:      INFO | -- Step 1 of 8: Configure HERMES plugins --
+1783378438.182631:         hermes.init:      INFO | The following plugins are already builtin:
+1783378438.183630:         hermes.init:      INFO | [harvest] [1mCITATION.cff Harvester[0m (builtin)
+1783378438.183630:         hermes.init:      INFO | [harvest] [1mcodemeta.json Harvester[0m (builtin)
+1783378438.184232:         hermes.init:      INFO | [harvest] [1m'file_exists' Harvester[0m (builtin)
+1783378438.184232:         hermes.init:      INFO | [process] [1mMerge[0m (builtin)
+1783378438.184636:         hermes.init:      INFO | [curate] [1mCurate[0m (builtin)
+1783378438.184636:         hermes.init:      INFO | [deposit] [1mInvenio Deposit[0m (builtin)
+1783378438.184636:         hermes.init:      INFO | [deposit] [1mInvenio RDM Deposit[0m (builtin)
+1783378438.184636:         hermes.init:      INFO | [deposit] [1mRodare Deposit[0m (builtin)
+1783378438.184636:         hermes.init:      INFO | [postprocess] [1mInvenio Postprocess[0m (builtin)
+1783378438.185632:         hermes.init:      INFO | [postprocess] [1mInvenio RDM Postprocess[0m (builtin)
+1783378438.185632:         hermes.init:      INFO | The following plugins are available for installation:
+1783378438.189919:         hermes.init:      INFO | Do you want to add a plugin?
+1783378455.532188:         hermes.init:      INFO | You selected "Add hermes-plugin-git".
+
+1783378455.532959:         hermes.init:      INFO | The following plugins are going to be installed:
+1783378455.532959:         hermes.init:      INFO | [harvest] [1mhermes-plugin-git[0m (https://github.com/softwarepub/hermes-plugin-git)
+1783378455.532959:         hermes.init:      INFO | The following plugins are available for installation:
+1783378455.532959:         hermes.init:      INFO | Do you want to add a plugin?
+1783378459.017329:         hermes.init:      INFO | You selected "Add hermes-plugin-python".
+
+1783378459.025114:         hermes.init:      INFO | The following plugins are going to be installed:
+1783378459.029870:         hermes.init:      INFO | [harvest] [1mhermes-plugin-git[0m (https://github.com/softwarepub/hermes-plugin-git)
+1783378459.035447:         hermes.init:      INFO | [harvest] [1mhermes-plugin-python[0m (https://github.com/softwarepub/hermes-plugin-python)
+1783378459.036221:         hermes.init:      INFO | The following plugins are available for installation:
+1783378459.044044:         hermes.init:      INFO | Do you want to add a plugin?
+1783378463.569093:         hermes.init:      INFO | You selected "No further plugins needed".
+
+1783378463.570100:         hermes.init:      INFO | -- Step 2 of 8: Configure deposition platform and setup method --
+1783378463.570100:         hermes.init:      INFO | Where do you want to publish the software?
+1783378474.161817:         hermes.init:      INFO | You selected "Zenodo (Sandbox)".
+
+1783378474.169162:         hermes.init:      INFO | How do you want to connect Zenodo (Sandbox) with your GitHub CI?
+1783378478.504083:         hermes.init:      INFO | You selected "Automatically (using OAuth / Device Flow)".
+
+1783378478.510526:         hermes.init:      INFO | -- Step 3 of 8: Configure HERMES behaviour --
+1783378478.511040:         hermes.init:      INFO | When should the automated HERMES process start?
+1783378482.057386:         hermes.init:      INFO | You selected "When I push a branch".
+
+1783378495.410035:         hermes.init:   WARNING | HERMES init was aborted.
+1783378495.411539:         hermes.init:      INFO | Cleaning unused files...
+1783423555.385660:          hermes.cli:     DEBUG | Running hermes with the following command line arguments: Namespace(subcommand='clean', path=WindowsPath('.'), config=WindowsPath('hermes.toml'), options=[], command=<hermes.commands.clean.base.HermesCleanCommand object at 0x000001F265C42CD0>)
+1783423555.387465:          hermes.cli:     DEBUG | Loading settings...
+1783423555.387465:          hermes.cli:     DEBUG | Update settings from command line...
+1783423555.387465:          hermes.cli:      INFO | Run subcommand clean
+1783423555.388474:        hermes.clean:      INFO | Removing HERMES caches...
+1783423555.388474:          hermes.cli:     ERROR | An error occurred during execution of clean (Find details in './hermes.log')
+1783423555.388474:          hermes.cli:     DEBUG | Original exception was: [WinError 32] The process cannot access the file because it is being used by another process: '.hermes\\audit.log'

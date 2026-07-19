@@ -127,6 +127,11 @@
       "author": "Agentic OS",
       "installed": "2026-05-17T00:00:00Z",
       "type": "built-in"
+    },
+    {
+      "name": "Proactive agent",
+      "installed": "2026-07-07T16:58:17.573786+00:00",
+      "version": "1.0.0"
     }
   ]
 }
