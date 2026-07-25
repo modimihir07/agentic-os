@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head><title>Agentic OS Test</title></head>
+<body>
+<h1>Connection Test</h1>
+<div id="status">Testing...</div>
+<div id="result"></div>
+<script>
+fetch('/api/status')
+  .then(r => r.json())
+  .then(d => {
+    document.getElementById('status').textContent = 'SUCCESS: API reachable';
+    document.getElementById('result').textContent = JSON.stringify(d, null, 2);
+  })
+  .catch(e => {
+    document.getElementById('status').textContent = 'FAILED: ' + e.message;
+  });
+</script>
+</body>
+</html>

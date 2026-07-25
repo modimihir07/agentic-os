@@ -1,0 +1,11 @@
+{
+  "integrations": [
+    {
+      "name": "test-webhook",
+      "url": "https://example.com/hook",
+      "type": "webhook",
+      "added": "2026-06-28T17:18:11.253089+00:00",
+      "status": "active"
+    }
+  ]
+}

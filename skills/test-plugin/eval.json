@@ -1,0 +1,7 @@
+{
+  "criteria": [
+    { "name": "completeness", "weight": 0.4 },
+    { "name": "accuracy", "weight": 0.3 },
+    { "name": "clarity", "weight": 0.3 }
+  ]
+}

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Agentic-OS · Agent Time Monitor</title>
+<style>
+  :root{
+    --bg:#0b0f17; --panel:#121826; --panel2:#0f1420; --line:#1f2a3d;
+    --txt:#e6edf6; --muted:#8a99b3; --accent:#5b8cff; --accent2:#37e0a6;
+    --warn:#ffcf5c; --danger:#ff6b6b;
+    --open:#5b8cff; --hermes:#37e0a6; --gemini:#ffcf5c; --sys:#9b8cff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  header{padding:18px 26px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  header h1{font-size:18px;margin:0;font-weight:650;letter-spacing:.2px}
+  header .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .badge{font-size:11px;color:var(--accent2);border:1px solid #1d3b30;
+    background:#0e1c17;padding:3px 9px;border-radius:20px}
+  main{padding:22px 26px;max-width:1280px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .card .label{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  .card .big{font-size:30px;font-weight:700;margin-top:6px;line-height:1.1}
+  .card .meta{color:var(--muted);font-size:12px;margin-top:6px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0 8px}
+  button{cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+    color:var(--txt);padding:9px 14px;border-radius:10px;font-size:13px;font-weight:600}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .status{font-size:13px;color:var(--muted)}
+  .status.ok{color:var(--accent2)} .status.err{color:var(--danger)}
+  table{width:100%;border-collapse:collapse;margin-top:6px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);font-size:13px}
+  th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:11px;letter-spacing:.5px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .bar{height:9px;border-radius:6px;background:linear-gradient(90deg,var(--accent),var(--accent2));
+    width:0;transition:width 1s ease-out}
+  .barwrap{background:#0c1320;border-radius:6px;overflow:hidden;min-width:90px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+    padding:16px 18px;margin-bottom:22px}
+  section h2{font-size:14px;margin:0 0 4px;font-weight:650}
+  section .hint{color:var(--muted);font-size:12px;margin-bottom:10px}
+  iframe{border:1px solid var(--line);border-radius:12px;width:100%;height:620px;background:#0a0d14}
+  .pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;
+    border:1px solid var(--line);color:var(--muted);margin-right:6px}
+  code{background:#0c1320;padding:1px 6px;border-radius:5px;font-size:12px}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Agentic-OS · Agent Time Monitor</h1>
+    <div class="sub">Total AI-agent time spent on the project · derived from audit &amp; chat logs</div>
+  </div>
+  <div class="badge" id="project-badge">project: agentic-os</div>
+</header>
+
+<main>
+  <section style="background:linear-gradient(135deg,#121826,#0e1626)">
+    <div class="grid">
+      <div class="card">
+        <div class="label">Total Agent Time</div>
+        <div class="big" id="total-time">—</div>
+        <div class="meta" id="total-meta">loading…</div>
+      </div>
+      <div class="card">
+        <div class="label">Agents Active</div>
+        <div class="big" id="agent-count">—</div>
+        <div class="meta" id="agent-meta">distinct agents</div>
+      </div>
+      <div class="card">
+        <div class="label">Logged Events</div>
+        <div class="big" id="event-count">—</div>
+        <div class="meta" id="event-meta">audit + chat + cost</div>
+      </div>
+      <div class="card">
+        <div class="label">Coverage</div>
+        <div class="big" id="coverage">—</div>
+        <div class="meta" id="coverage-meta">first → last activity</div>
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="primary" id="refresh-btn">↻ Recompute</button>
+      <button id="sync-btn">⇪ Sync total to Mnemoverse</button>
+      <span class="status" id="status">Ready. Estimates are session-gap based.</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Time per Agent</h2>
+    <div class="hint">Each bar is the estimated total time an agent was engaged with the project
+      (sessions of activity within a 30-min gap window, plus a 2-min tail).</div>
+    <table>
+      <thead><tr><th>Agent</th><th>Total Time</th><th style="width:34%">Share</th><th class="num">Sessions</th><th class="num">Touches</th></tr></thead>
+      <tbody id="agent-rows"><tr><td colspan="5" class="meta">loading…</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Codebase Knowledge Graph · graphify</h2>
+    <div class="hint">Interactive graphify visualization of the <code>agentic-os</code> codebase
+      (nodes = code symbols/modules, edges = relationships). Rebuild with
+      <code>graphify . --code-only</code> inside the project.</div>
+    <div class="row">
+      <span class="pill" id="g-nodes">nodes: —</span>
+      <span class="pill" id="g-edges">edges: —</span>
+      <span class="pill" id="g-communities">communities: —</span>
+      <a href="/graphify-out/graph.html" target="_blank">↗ open full graph in new tab</a>
+    </div>
+    <iframe src="/graphify-out/graph.html" title="graphify knowledge graph" loading="lazy"></iframe>
+  </section>
+</main>
+
+<script>
+const API = {
+  async get(path){ const r = await fetch(path); return await r.json(); },
+};
+
+function fmtHMS(s){
+  s = Math.floor(s); const h=Math.floor(s/3600), m=Math.floor((s%3600)/60), sec=s%60;
+  return h+"h "+m+"m "+sec+"s";
+}
+function fmtDuration(s){
+  s=Math.floor(s); const h=Math.floor(s/3600), m=Math.floor((s%3600)/60);
+  if(h>0) return h+"h "+m+"m"; return m+"m "+s%60+"s";
+}
+
+async function load(){
+  setStatus("Loading…");
+  try{
+    const data = await API.get("/data/agent-time.json");
+    document.getElementById("total-time").textContent = data.total_human;
+    document.getElementById("total-meta").textContent =
+      "estimated · " + data.method;
+    const agents = data.agents || {};
+    const keys = Object.keys(agents);
+    document.getElementById("agent-count").textContent = keys.length;
+    document.getElementById("event-count").textContent = data.event_count;
+    document.getElementById("coverage").textContent =
+      (data.first_seen||"—").slice(0,10) + " → " + (data.last_seen||"—").slice(0,10);
+
+    // rows
+    const max = Math.max(...keys.map(k=>agents[k].total_seconds), 1);
+    const sorted = keys.sort((a,b)=>agents[b].total_seconds-agents[a].total_seconds);
+    const tb = document.getElementById("agent-rows");
+    tb.innerHTML = "";
+    sorted.forEach((k,i)=>{
+      const a = agents[k];
+      const pct = (a.total_seconds/max*100).toFixed(1);
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td>${k}</td>`+
+        `<td><b>${fmtDuration(a.total_seconds)}</b></td>`+
+        `<td><div class="barwrap"><div class="bar" data-w="${pct}" style="background:${
+          k==='system'?'var(--sys)':k==='hermes'?'var(--hermes)':k==='opencode'?'var(--open)':k==='gemini'?'var(--gemini)':'linear-gradient(90deg,var(--accent),var(--accent2))'
+        }"></div></div></td>`+
+        `<td class="num">${a.sessions}</td>`+
+        `<td class="num">${a.touches}</td>`;
+      tb.appendChild(tr);
+    });
+    // animate bars
+    setTimeout(()=>document.querySelectorAll(".bar").forEach(b=>b.style.width=b.dataset.w+"%"),60);
+
+    // graph meta
+    if(data.graph){
+      document.getElementById("g-nodes").textContent = "nodes: "+(data.graph.nodes||"—");
+      document.getElementById("g-edges").textContent = "edges: "+(data.graph.edges||"—");
+      document.getElementById("g-communities").textContent = "communities: "+(data.graph.communities||"—");
+    }
+    setStatus("✓ Computed at "+(data.generated_at||"").slice(0,19).replace("T"," ")+" UTC", "ok");
+  }catch(e){
+    setStatus("Failed to load agent-time.json: "+e.message, "err");
+  }
+}
+
+async function recompute(){
+  setStatus("Recomputing from logs…");
+  document.getElementById("refresh-btn").disabled = true;
+  try{
+    const r = await fetch("recompute", {method:"POST"});
+    const j = await r.json();
+    if(!j.ok){ throw new Error(j.error||"recompute failed"); }
+    setStatus("✓ Recomputed: "+j.total_human+" across "+j.agents+" agents", "ok");
+    await load();
+  }catch(e){
+    setStatus("Recompute error: "+e.message, "err");
+  }finally{
+    document.getElementById("refresh-btn").disabled = false;
+  }
+}
+
+async function syncMnemoverse(){
+  const btn = document.getElementById("sync-btn");
+  btn.disabled = true; setStatus("Pushing total to Mnemoverse…");
+  try{
+    const r = await fetch("sync-mnemoverse", {method:"POST"});
+    const j = await r.json();
+    if(j.ok){
+      setStatus("✓ Synced to Mnemoverse: "+j.message, "ok");
+    }else{
+      // graceful: show guidance (no key / offline)
+      setStatus("⚠ Mnemoverse: "+(j.error||"not synced")+(j.hint?(" — "+j.hint):""), "err");
+    }
+  }catch(e){
+    setStatus("Mnemoverse sync error: "+e.message, "err");
+  }finally{ btn.disabled=false; }
+}
+
+function setStatus(msg, cls){ const s=document.getElementById("status"); s.textContent=msg; s.className="status"+(cls?(" "+cls):""); }
+
+document.getElementById("refresh-btn").addEventListener("click", recompute);
+document.getElementById("sync-btn").addEventListener("click", syncMnemoverse);
+load();
+</script>
+</body>
+</html>

@@ -1,3 +1,16 @@
+// Per-agent display metadata (icons + role blurb). Built-ins + known custom agents.
+const ROUTER_AGENT_META = {
+  opencode: { icon: '🔧', blurb: 'Code & DevOps' },
+  hermes:   { icon: '⚡', blurb: 'Memory & Scheduling' },
+  gemini:   { icon: '🧠', blurb: 'Research & Analysis' },
+  jarvis:   { icon: '🤖', blurb: 'Local-first AI / Deep Research' },
+  kilocode: { icon: '💻', blurb: 'AI Coding Assistant' },
+  codex:    { icon: '🧩', blurb: 'Code Generation' },
+};
+function routerAgentMeta(name) {
+  return ROUTER_AGENT_META[name] || { icon: '🤖', blurb: 'Custom agent' };
+}
+
 async function renderSmartRouter() {
   const content = document.getElementById('pageContent');
   content.innerHTML = `
@@ -20,9 +33,7 @@ async function renderSmartRouter() {
           <label class="form-label">Route to Agent</label>
           <select class="form-select" id="routerAgentSelect">
             <option value="auto">🤖 Auto (AI suggests)</option>
-            <option value="opencode">🔧 opencode (Code/DevOps)</option>
-            <option value="hermes">⚡ Hermes (Memory/Scheduling)</option>
-            <option value="gemini">🧠 Gemini CLI (Research/Analysis)</option>
+            <!-- agent options injected by loadRouterAgents() -->
           </select>
         </div>
         <button class="btn btn-primary" onclick="suggestRouter()" style="margin-bottom:16px">🤖 Suggest Agent</button>
@@ -32,14 +43,51 @@ async function renderSmartRouter() {
     <div id="routerResult"></div>
     <div class="section-title" style="margin-top:20px">Routing Rules</div>
     <div class="card">
-      <table>
+      <table id="routerRulesTable">
         <tr><th>Agent</th><th>Best For</th><th>Keywords</th></tr>
-        <tr><td><strong>🔧 opencode</strong></td><td>Code, DevOps, infra, git, file operations</td><td class="text-muted text-sm">code, deploy, git, terraform, docker, test, build, script</td></tr>
-        <tr><td><strong>⚡ Hermes</strong></td><td>Memory, scheduling, messaging, skills</td><td class="text-muted text-sm">memory, schedule, cron, reminder, brain, plugin, backup</td></tr>
-        <tr><td><strong>🧠 Gemini CLI</strong></td><td>Research, analysis, study, document, review</td><td class="text-muted text-sm">research, analyze, search, explain, study, learn, report</td></tr>
+        <!-- rows injected by loadRouterAgents() -->
       </table>
     </div>
   `;
+  await loadRouterAgents();
+}
+
+// Pull the live agent list from the server so the dropdown + rules table
+// always reflect every registered agent (built-in AND custom).
+async function loadRouterAgents() {
+  let agents = [];
+  try {
+    const data = await api.getAgents();
+    agents = (data.agents || []).map(a => a.name);
+  } catch (e) {
+    // Fallback to known built-ins if the API is unreachable.
+    agents = ['opencode', 'hermes', 'gemini'];
+  }
+
+  const select = document.getElementById('routerAgentSelect');
+  const table = document.getElementById('routerRulesTable');
+  if (!select || !table) return;
+
+  // Populate dropdown (preserve the Auto option already in the DOM).
+  agents.forEach(name => {
+    const meta = routerAgentMeta(name);
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = `${meta.icon} ${name} (${meta.blurb})`;
+    select.appendChild(opt);
+  });
+
+  // Populate routing-rules table.
+  const rows = agents.map(name => {
+    const meta = routerAgentMeta(name);
+    const kw = (window._routerKeywords && window._routerKeywords[name]) || [];
+    return `<tr>
+      <td><strong>${meta.icon} ${name}</strong></td>
+      <td>${meta.blurb}</td>
+      <td class="text-muted text-sm">${kw.join(', ') || '—'}</td>
+    </tr>`;
+  }).join('');
+  table.innerHTML = `<tr><th>Agent</th><th>Best For</th><th>Keywords</th></tr>${rows}`;
 }
 
 async function suggestRouter() {
@@ -49,8 +97,13 @@ async function suggestRouter() {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Thinking...'; }
   try {
     const data = await api.suggestRouter(task);
+    // Cache keyword map from scores for the rules table refresh.
+    window._routerKeywords = data.scores ? Object.keys(data.scores).reduce((m, a) => m, {}) : {};
     const result = document.getElementById('routerResult');
-    const agentIcons = { opencode: '🔧', hermes: '⚡', gemini: '🧠' };
+    const agentIcons = {
+      opencode: '🔧', hermes: '⚡', gemini: '🧠',
+      jarvis: '🤖', kilocode: '💻', codex: '🧩'
+    };
     const confidenceColors = { high: 'var(--green)', medium: 'var(--yellow)', low: 'var(--text-muted)' };
     result.innerHTML = `
       <div class="card" style="border-color:${confidenceColors[data.confidence] || 'var(--border)'};margin-bottom:12px">

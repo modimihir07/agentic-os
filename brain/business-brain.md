@@ -19,7 +19,7 @@ Agentic OS is a multi-agent orchestration platform that coordinates opencode, He
 ## Key Relationships
 - User: Developer — AI/ML and DevOps enthusiast
 - Tool stack: opencode, Hermes Agent, Gemini CLI, deepseek-v4-flash-free
-- Active projects: CloudMart (GCP DevOps), Agentic OS
+- Active projects: Kitchen-Inventory (on antigravity), Pendleton-comms-live (on Railway)
 
 ## Standing Decisions
 - All memory is stored in markdown for cross-agent compatibility

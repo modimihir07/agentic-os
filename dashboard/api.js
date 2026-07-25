@@ -41,7 +41,10 @@ const api = {
   getCost: () => api.get('/api/cost'),
   recordCost: (data) => api.post('/api/cost/record', data),
   getPlugins: () => api.get('/api/plugins'),
-  installPlugin: (name) => api.post('/api/plugins/install', { name }),
+  installPlugin: (name, repo_url) => api.post('/api/plugins/install', { name, repo_url }),
+  uninstallPlugin: (name) => api.del(`/api/plugins/${encodeURIComponent(name)}`),
+  getIntegrations: () => api.get('/api/integrations'),
+  addIntegration: (name, url, type) => api.post('/api/integrations', { name, url, type }),
   getBackups: () => api.get('/api/backups'),
   createBackup: () => api.post('/api/backup'),
   restoreBackup: (file) => api.post('/api/backup/restore', { file }),
@@ -89,4 +92,11 @@ const api = {
   // Session Replay
   listSessions: () => api.get('/api/sessions/list'),
   getSessionReplay: (id) => api.get(`/api/sessions/${encodeURIComponent(id)}/replay`),
+  // Agent Time Monitor
+  getAgentTime: (recompute = false) => api.get(`/api/agent-time${recompute ? '?recompute=true' : ''}`),
+  recomputeAgentTime: () => api.post('/api/agent-time/recompute', {}),
+  // Agent Registry
+  getAgents: () => api.get('/api/agents'),
+  registerAgent: (data) => api.post('/api/agents/register', data),
+  unregisterAgent: (name) => api.del(`/api/agents/${encodeURIComponent(name)}`),
 };

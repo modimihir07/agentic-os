@@ -317,7 +317,7 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 | Detail | Info |
 |--------|------|
 | **Budget** | Strictly free tiers (GCP Free, GitHub Student Pack, Colab, Kaggle) |
-| **Active Project** | CloudMart — GCP DevOps multi-region e-commerce platform |
+|| **Active Projects** | Kitchen-Inventory (catering kitchen management on antigravity), Pendleton-comms-live (walkie talkie for catering events on Railway) |
 | **CLI Tools Available** | opencode, Hermes Agent, Gemini CLI |
 | **Preferred Model** | Hermes: Owl Alpha (OpenRouter, free), opencode: deepseek-v4-flash-free (opencode-zen), Gemini: gemini-2.5-flash (Google OAuth) |
 

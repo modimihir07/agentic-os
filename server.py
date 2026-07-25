@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 import uuid
@@ -33,11 +34,11 @@ if HERMES_ENV.exists():
             if k == "OPENROUTER_API_KEY":
                 os.environ[k] = v  # last value wins (matches shell sourcing)
 
-# CORS for local dev
+# CORS — allow all origins for local dev (WSL + Windows browser)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -89,40 +90,330 @@ def get_timestamp():
     return datetime.now(timezone.utc).isoformat()
 
 def append_audit(entry: dict):
-    audit_file = BASE_DIR / "audit" / "audit.log"
+    audit_dir = BASE_DIR / "audit"
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    audit_file = audit_dir / "audit.log"
     entry["timestamp"] = get_timestamp()
     entry["id"] = str(uuid.uuid4())[:8]
     with open(audit_file, "a") as f:
         f.write(json.dumps(entry) + "\n")
 
-# ─── Agent Discovery (instant filesystem checks) ────────────────────
+# ─── Agent Stats (real, persisted) ──────────────────────────────
+AGENT_STATS_FILE = BASE_DIR / "data" / "agent-stats.json"
+
+def load_agent_stats() -> dict:
+    if AGENT_STATS_FILE.exists():
+        try:
+            return json.loads(AGENT_STATS_FILE.read_text())
+        except (json.JSONDecodeError, KeyError):
+            return {}
+    return {}
+
+def save_agent_stats(stats: dict):
+    AGENT_STATS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    AGENT_STATS_FILE.write_text(json.dumps(stats, indent=2))
+
+def record_agent_run(agent: str, success: bool, duration: float):
+    """Persist real invocation stats for an agent (consumed by /api/agents/health)."""
+    stats = load_agent_stats()
+    now = get_timestamp()
+    s = stats.get(agent, {
+        "total_runs": 0, "successful_runs": 0, "failed_runs": 0,
+        "first_seen": now, "last_seen": now, "total_time": 0.0,
+    })
+    s["total_runs"] += 1
+    if success:
+        s["successful_runs"] += 1
+    else:
+        s["failed_runs"] += 1
+    s["last_seen"] = now
+    s["total_time"] = s.get("total_time", 0.0) + duration
+    s["avg_response_time"] = round(s["total_time"] / s["total_runs"], 3)
+    stats[agent] = s
+    save_agent_stats(stats)
+
+def is_error_response(text: str) -> bool:
+    """Detect the error/refusal/busy sentinels this server emits on agent failures.
+
+    Must match COMPLETE sentinel phrases, never bare glyphs — the warning
+    sign (⚠) and clock (⏱) can appear inside legitimate agent prose,
+    so matching them alone would false-positive real successes.
+    """
+    t = (text or "").strip()
+    if not t:
+        return True
+    # Full-phrase sentinels only (start-anchored where appropriate).
+    hard = (
+        "timed out",                       # '...timed out.' / 'timed out after'
+        "CLI not installed",               # '⚠ Agent X CLI not installed'
+        "Error communicating",              # '⚠ Error communicating with X'
+        "did not return",                 # 'Gemini CLI did not return a response'
+        "needs setup",                    # '**Hermes needs setup**'
+        "needs re-auth",                  # '**Gemini needs re-auth**'
+        "Error executing skill",           # '⚠ Error executing skill'
+        "not configured",                 # hermes setup markers
+        "no api key", "api_key not",
+        "config file not found", "command not found",
+    )
+    if any(p in t for p in hard):
+        return True
+    # Whole-line / start-of-response sentinels.
+    if t.startswith("Unknown agent"):
+        return True
+    if t.startswith("**Hermes") and "error" in t.lower():
+        return True
+    if t.startswith("**Gemini needs"):
+        return True
+    return False
+
+# ─── Skill Eval Scoring (heuristic self-improvement metric) ───────
+def compute_skill_score(name: str, response_text: str) -> int:
+    """Weighted 0-100 quality score from eval.json criteria + response features."""
+    skill_dir = BASE_DIR / "skills" / name
+    criteria = []
+    eval_path = skill_dir / "eval.json"
+    if eval_path.exists():
+        try:
+            criteria = json.loads(eval_path.read_text()).get("criteria", [])
+        except Exception:
+            criteria = []
+    if not criteria:
+        criteria = [{"name": "completeness", "weight": 0.4},
+                    {"name": "accuracy", "weight": 0.3},
+                    {"name": "clarity", "weight": 0.3}]
+    total_w = sum(c.get("weight", 0) for c in criteria) or 1.0
+
+    text = response_text or ""
+    low = text.lower()
+    is_err = is_error_response(text)
+
+    completeness = 0 if is_err else min(100, int(len(text) / 8))
+    accuracy = 0 if is_err else 60
+    if not is_err:
+        if "```" in text: accuracy += 15
+        if any(m in low for m in ["step", "1.", "first", "example", "because"]): accuracy += 15
+        accuracy = min(100, accuracy)
+    clarity = 10 if is_err else 30
+    if not is_err:
+        if "\n#" in text or "##" in text: clarity += 25
+        if "- " in text or "* " in text: clarity += 20
+        if "```" in text: clarity += 15
+        clarity = min(100, clarity)
+
+    score_map = {"completeness": completeness, "accuracy": accuracy, "clarity": clarity}
+    overall = sum(score_map.get(c["name"], 50) * c.get("weight", 0) for c in criteria) / total_w
+    return max(0, min(100, int(round(overall))))
+
+def record_skill_score(name: str, score: int, agent: str):
+    """Append a run's score to skills/<name>/score-history.json."""
+    skill_dir = BASE_DIR / "skills" / name
+    if not skill_dir.exists():
+        return
+    hist_path = skill_dir / "score-history.json"
+    hist = json.loads(hist_path.read_text()) if hist_path.exists() else []
+    hist.append({
+        "date": get_timestamp()[:10],
+        "timestamp": get_timestamp(),
+        "score": score,
+        "agent": agent,
+    })
+    hist_path.write_text(json.dumps(hist, indent=2))
+
+# ─── Agent Registry (dynamic, user-extensible) ─────────────────────
+
+AGENT_REGISTRY_FILE = BASE_DIR / "data" / "agent-registry.json"
+
+# Built-in agents (always present)
+BUILTIN_AGENTS = {
+    "opencode": {
+        "name": "opencode",
+        "display_name": "OpenCode",
+        "description": "Code generation, DevOps, file operations",
+        "binary": "opencode",
+        "type": "cli",
+        "run_args": ["opencode", "run", "--format", "json", "{message}"],
+        "check_type": "binary",
+        "builtin": True,
+    },
+    "hermes": {
+        "name": "hermes",
+        "display_name": "Hermes Agent",
+        "description": "Memory, scheduling, multi-agent coordination",
+        "binary": "hermes",
+        "type": "cli",
+        "run_args": ["hermes", "chat", "-q", "{message}"],
+        "check_type": "binary",
+        "builtin": True,
+    },
+    "gemini": {
+        "name": "gemini",
+        "display_name": "Gemini CLI",
+        "description": "Research, analysis, multi-modal understanding",
+        "binary": "gemini",
+        "type": "cli",
+        "run_args": ["gemini", "-y", "-m", "gemini-2.5-flash", "{message}"],
+        "check_type": "oauth_file",
+        "oauth_file": ".gemini/gemini-credentials.json",
+        "builtin": True,
+    },
+}
+
+
+def load_agent_registry() -> dict:
+    """Load agent registry from disk, merging with builtins."""
+    registry = dict(BUILTIN_AGENTS)
+    if AGENT_REGISTRY_FILE.exists():
+        try:
+            custom = json.loads(AGENT_REGISTRY_FILE.read_text())
+            for name, agent in custom.items():
+                if name not in BUILTIN_AGENTS:
+                    agent["builtin"] = False
+                    registry[name] = agent
+        except (json.JSONDecodeError, KeyError):
+            pass
+    return registry
+
+
+def save_agent_registry(agents: dict):
+    """Save custom agents to disk (excluding builtins)."""
+    AGENT_REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    custom = {k: v for k, v in agents.items() if not v.get("builtin", False)}
+    AGENT_REGISTRY_FILE.write_text(json.dumps(custom, indent=2))
+
 
 def check_agent(name: str) -> dict:
-    """Instant filesystem-based check. No subprocess needed."""
+    """Dynamic agent check based on registry configuration."""
+    registry = load_agent_registry()
+    agent = registry.get(name)
+    if not agent:
+        return {"name": name, "status": "unknown", "display_name": name}
+
     try:
-        if name == "opencode":
-            exists = shutil.which("opencode") is not None
+        check_type = agent.get("check_type", "binary")
+        binary = agent.get("binary", name)
+        exists = shutil.which(binary) is not None
+
+        if check_type == "binary":
             status = "online" if exists else "offline"
-        elif name == "hermes":
-            exists = shutil.which("hermes") is not None
-            status = "online" if exists else "offline"
-        elif name == "gemini":
-            # Gemini has valid OAuth tokens logged in
-            oauth = Path.home() / ".gemini" / "oauth_creds.json"
-            exists = shutil.which("gemini") is not None
-            logged_in = oauth.exists() and "ya29" in oauth.read_text()
+        elif check_type == "oauth_file":
+            oauth_path = Path.home() / agent.get("oauth_file", "")
+            logged_in = oauth_path.exists()
             status = "online" if exists and logged_in else "offline" if not exists else "warning"
+        elif check_type == "http":
+            # HTTP health check endpoint
+            import urllib.request
+            try:
+                url = agent.get("health_url", "")
+                req = urllib.request.Request(url, method="GET")
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    status = "online" if resp.status == 200 else "warning"
+            except Exception:
+                status = "offline" if not exists else "warning"
+        elif check_type == "custom":
+            # Run a custom check command
+            check_cmd = agent.get("check_command", "")
+            if check_cmd:
+                result = subprocess.run(check_cmd, shell=True, capture_output=True, timeout=10)
+                status = "online" if result.returncode == 0 else "offline"
+            else:
+                status = "online" if exists else "offline"
         else:
-            status = "offline"
+            status = "online" if exists else "offline"
     except Exception:
         status = "offline"
-    return {"name": name, "status": status}
+
+    return {
+        "name": name,
+        "display_name": agent.get("display_name", name),
+        "status": status,
+        "description": agent.get("description", ""),
+        "type": agent.get("type", "cli"),
+        "builtin": agent.get("builtin", False),
+    }
+
+
+def execute_agent_dynamic(agent_name: str, message: str) -> str:
+    """Execute a message on any registered agent."""
+    registry = load_agent_registry()
+    agent = registry.get(agent_name)
+
+    if not agent:
+        return f"Unknown agent: '{agent_name}'"
+
+    agent_type = agent.get("type", "cli")
+
+    if agent_type == "cli":
+        return execute_agent_cli(agent, message)
+    elif agent_type == "http":
+        return execute_agent_http(agent, message)
+    elif agent_type == "mcp":
+        return execute_agent_mcp(agent, message)
+    else:
+        return f"Unsupported agent type: '{agent_type}'"
+
+
+def execute_agent_cli(agent: dict, message: str) -> str:
+    """Execute via CLI binary."""
+    binary = agent.get("binary", agent["name"])
+    run_args_template = agent.get("run_args", [binary, "{message}"])
+
+    # Build command with message substituted
+    cmd = []
+    for arg in run_args_template:
+        if "{message}" in arg:
+            cmd.append(arg.replace("{message}", message))
+        else:
+            cmd.append(arg)
+
+    timeout = agent.get("timeout", 60)
+
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if result.returncode == 0:
+            output = (result.stdout or "").strip()
+            if output:
+                return output
+            return f"**{agent.get('display_name', binary)}**\n\nProcessed your message.\n\n**Message:** {message[:100]}"
+        err = (result.stderr or "").strip()
+        return err or f"{binary} returned exit code {result.returncode}"
+    except subprocess.TimeoutExpired:
+        return f"⏱ Agent '{agent.get('display_name', binary)}' timed out after {timeout}s.\n\n**Message:** {message[:100]}"
+    except FileNotFoundError:
+        return f"⚠ Agent '{agent.get('display_name', binary)}' CLI not installed. Install it and try again."
+    except Exception as e:
+        return f"⚠ Error communicating with {binary}: {str(e)}"
+
+
+def execute_agent_http(agent: dict, message: str) -> str:
+    """Execute via HTTP API endpoint."""
+    import urllib.request
+
+    url = agent.get("api_url", "")
+    method = agent.get("api_method", "POST")
+    headers = agent.get("api_headers", {"Content-Type": "application/json"})
+    timeout = agent.get("timeout", 60)
+
+    body = json.dumps({"message": message}).encode()
+
+    try:
+        req = urllib.request.Request(url, data=body, headers=headers, method=method)
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read())
+            return result.get("response", result.get("output", str(result)))
+    except Exception as e:
+        return f"⚠ HTTP agent error: {str(e)}"
+
+
+def execute_agent_mcp(agent: dict, message: str) -> str:
+    """Execute via MCP server."""
+    return f"⚠ MCP agent type not yet implemented for '{agent.get('display_name', agent['name'])}'"
 
 # ─── Routes: Status ───────────────────────────────────────────────
 
 @app.get("/api/status")
 def get_status():
-    agents = [check_agent(a) for a in ["opencode", "hermes", "gemini"]]
+    registry = load_agent_registry()
+    agents = [check_agent(name) for name in registry]
     skills = list_dir(BASE_DIR / "skills")
     return {
         "status": "healthy",
@@ -139,6 +430,8 @@ def list_brain():
     brain_data = {}
     for f in files:
         path = BASE_DIR / "brain" / f
+        if path.is_dir():
+            continue
         brain_data[f] = read_file(path)
     return brain_data
 
@@ -223,7 +516,7 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
                 line = line.strip()
                 if "Primary:" in line:
                     candidate = line.split(":")[-1].strip().lower()
-                    if candidate in ("opencode", "hermes", "gemini"):
+                    if candidate in load_agent_registry():
                         agent_choice = candidate
                         break
             if agent_choice == "auto":
@@ -240,15 +533,31 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
 
     run_id = str(uuid.uuid4())[:8]
 
-    # Execute via agent
+    # Execute via agent (track real duration for agent-stats)
+    import time as _t
+    _t0 = _t.time()
     try:
         response_text = execute_agent(agent_choice, prompt)
-    except subprocess.TimeoutExpired:
-        response_text = f"⏱ Skill '{name}' timed out on agent '{agent_choice}'."
-    except FileNotFoundError:
-        response_text = f"⚠ Agent '{agent_choice}' CLI not installed. Install it and try again."
-    except Exception as e:
+    except Exception as e:  # last-resort guard (execute_agent usually returns an error string)
         response_text = f"⚠ Error executing skill: {str(e)}"
+    _elapsed = _t.time() - _t0
+
+    _agent_used = agent_choice or "auto"
+    # Record REAL agent stats (consumed by /api/agents/health)
+    success = not is_error_response(response_text)
+    record_agent_run(_agent_used, success, _elapsed)
+
+    # Record REAL skill eval score (consumed by /api/analytics/skills)
+    score = compute_skill_score(name, response_text)
+    record_skill_score(name, score, _agent_used)
+    append_audit({
+        "action": "skill_scored",
+        "skill": name,
+        "agent": agent_choice,
+        "score": score,
+        "duration_s": round(_elapsed, 2),
+        "success": success,
+    })
 
     # Save output to learnings.md
     timestamp = get_timestamp()[:10]
@@ -335,7 +644,15 @@ def get_audit(limit: int = Query(100, le=500)):
     if not audit_file.exists():
         return {"entries": []}
     lines = audit_file.read_text().strip().split("\n")
-    entries = [json.loads(l) for l in lines if l.strip()]
+    entries = []
+    for l in lines:
+        if not l.strip():
+            continue
+        try:
+            entries.append(json.loads(l))
+        except (json.JSONDecodeError, ValueError):
+            # Skip malformed lines in the audit log
+            continue
     return {"entries": entries[-limit:]}
 
 # ─── Routes: Cost Analytics ───────────────────────────────────────
@@ -374,20 +691,111 @@ def list_plugins():
 @app.post("/api/plugins/install")
 def install_plugin(data: dict):
     name = data.get("name", "").strip()
-    if not name:
-        raise HTTPException(400, "Plugin name required")
+    repo_url = data.get("repo_url", "").strip()
+    if not name and not repo_url:
+        raise HTTPException(400, "Plugin name or repo_url required")
+
+    # Derive name from repo_url if not given
+    if not name and repo_url:
+        name = repo_url.rstrip("/").split("/")[-1].replace(".git", "")
+
     reg_file = BASE_DIR / "registry" / "plugins.json"
     reg = json.loads(reg_file.read_text()) if reg_file.exists() else {"plugins": []}
     if any(p["name"] == name for p in reg["plugins"]):
-        return {"status": "already_installed"}
+        return {"status": "already_installed", "plugin": name}
+
+    plugin_dir = BASE_DIR / "skills" / name
+
+    # If repo_url provided, clone it
+    if repo_url:
+        import subprocess
+        if plugin_dir.exists():
+            # Pull latest if already cloned
+            subprocess.run(["git", "pull"], cwd=str(plugin_dir), capture_output=True)
+        else:
+            subprocess.run(["git", "clone", "--depth=1", repo_url, str(plugin_dir)], capture_output=True)
+
+    # If no repo_url, create from template
+    elif not plugin_dir.exists():
+        import shutil
+        template_dir = BASE_DIR / "skills" / "_template"
+        shutil.copytree(template_dir, plugin_dir)
+
+    # Detect metadata from SKILL.md frontmatter
+    skill_md = plugin_dir / "SKILL.md"
+    version = "1.0.0"
+    description = ""
+    plugin_type = "skill"
+    if skill_md.exists():
+        content = skill_md.read_text()
+        import re
+        ver_match = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
+        desc_match = re.search(r'^description:\s*(.+)$', content, re.MULTILINE)
+        type_match = re.search(r'^type:\s*(.+)$', content, re.MULTILINE)
+        if ver_match:
+            version = ver_match.group(1).strip().strip('"').strip("'")
+        if desc_match:
+            description = desc_match.group(1).strip().strip('"').strip("'")
+        if type_match:
+            plugin_type = type_match.group(1).strip()
+
     reg["plugins"].append({
         "name": name,
+        "version": version,
+        "description": description,
         "installed": get_timestamp(),
-        "version": "1.0.0",
+        "type": plugin_type,
+        "source": repo_url or "local",
     })
     reg_file.write_text(json.dumps(reg, indent=2))
-    append_audit({"action": "plugin_installed", "plugin": name})
-    return {"status": "installed", "plugin": name}
+    append_audit({"action": "plugin_installed", "plugin": name, "source": repo_url or "local"})
+    return {"status": "installed", "plugin": name, "path": str(plugin_dir)}
+
+@app.delete("/api/plugins/{plugin_name}")
+def uninstall_plugin(plugin_name: str):
+    reg_file = BASE_DIR / "registry" / "plugins.json"
+    reg = json.loads(reg_file.read_text()) if reg_file.exists() else {"plugins": []}
+    reg["plugins"] = [p for p in reg["plugins"] if p["name"] != plugin_name]
+    reg_file.write_text(json.dumps(reg, indent=2))
+    append_audit({"action": "plugin_uninstalled", "plugin": plugin_name})
+    return {"status": "uninstalled", "plugin": plugin_name}
+
+# ─── Routes: Connected Apps ────────────────────────────────────────
+
+@app.get("/api/integrations")
+def list_integrations():
+    """List connected external apps/integrations."""
+    int_file = BASE_DIR / "data" / "integrations.json"
+    if not int_file.exists():
+        return {"integrations": []}
+    return json.loads(int_file.read_text())
+
+@app.post("/api/integrations")
+def add_integration(data: dict):
+    """Connect an external app via URL/webhook."""
+    name = data.get("name", "").strip()
+    url = data.get("url", "").strip()
+    int_type = data.get("type", "webhook")
+    if not name or not url:
+        raise HTTPException(400, "name and url required")
+
+    int_file = BASE_DIR / "data" / "integrations.json"
+    integrations = []
+    if int_file.exists():
+        integrations = json.loads(int_file.read_text()).get("integrations", [])
+    if any(i["name"] == name for i in integrations):
+        raise HTTPException(409, f"Integration '{name}' already exists")
+
+    integrations.append({
+        "name": name,
+        "url": url,
+        "type": int_type,
+        "added": get_timestamp(),
+        "status": "active",
+    })
+    int_file.write_text(json.dumps({"integrations": integrations}, indent=2))
+    append_audit({"action": "integration_added", "name": name, "url": url})
+    return {"status": "connected", "name": name}
 
 # ─── Routes: Backup ───────────────────────────────────────────────
 
@@ -525,6 +933,9 @@ def clean_hermes_output(raw: str) -> str:
     return '\n'.join(non_meta[-5:]) or raw
 
 def execute_agent(agent: str, message: str) -> str:
+    import time as _t
+    _t0 = _t.time()
+    _ok = True
     try:
         if agent == "opencode":
             try:
@@ -563,9 +974,17 @@ def execute_agent(agent: str, message: str) -> str:
                 # Empty response from model - return useful fallback
                 return f"**Hermes**\n\nReceived your message but the model returned an empty response. Try rephrasing your query.\n\n**Message:** {message}"
             err_msg = (err or "").strip()
-            if "invalid choice" in err_msg or "usage:" in err_msg:
+            # Only flag as "needs setup" when the error clearly indicates Hermes
+            # is genuinely unconfigured (missing key/config). Transient failures
+            # (rate limits, timeouts, empty model output, API hiccups) must NOT
+            # be mislabeled as a setup problem.
+            setup_markers = ("not configured", "no api key", "api_key not", "missing config", "config file not found", "command not found")
+            if code != 0 and any(m in err_msg.lower() for m in setup_markers):
                 return f"**Hermes needs setup**\n\nRun `hermes setup` or check your config.\n\n**Details:** {err_msg[:200]}"
-            return err_msg or f"hermes returned exit code {code}"
+            # Otherwise surface the real error so failures are diagnosable.
+            if err_msg:
+                return f"**Hermes error (exit {code})**\n\n{err_msg[:400]}\n\nIf this looks like a config problem, run `hermes setup`."
+            return f"hermes returned exit code {code}"
 
         elif agent == "gemini":
             for attempt, (args, to) in enumerate([
@@ -600,8 +1019,9 @@ def execute_agent(agent: str, message: str) -> str:
 @app.post("/api/chat")
 def chat(req: ChatRequest):
     agent = req.agent.lower().strip()
-    if agent not in ["opencode", "hermes", "gemini"]:
-        raise HTTPException(400, "Agent must be one of: opencode, hermes, gemini")
+    registry = load_agent_registry()
+    if agent not in registry:
+        raise HTTPException(400, f"Agent must be one of: {', '.join(registry.keys())}")
 
     user_msg = {
         "id": str(uuid.uuid4())[:8],
@@ -613,6 +1033,8 @@ def chat(req: ChatRequest):
     save_chat_message(user_msg)
 
     response_text = execute_agent(agent, req.message)
+    # Record REAL agent stats (consumed by /api/agents/health)
+    record_agent_run(agent, not is_error_response(response_text), 0.0)
 
     agent_msg = {
         "id": str(uuid.uuid4())[:8],
@@ -860,6 +1282,15 @@ def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
             save_kanban_task(t)
     return {"status": "unlinked"}
 
+@app.delete("/api/kanban/tasks/{task_id}")
+def kanban_delete_task(task_id: str):
+    path = KANBAN_DIR / f"{task_id}.json"
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    path.unlink()
+    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
+    return {"status": "deleted"}
+
 @app.post("/api/kanban/dispatch")
 def kanban_dispatch():
     append_audit({"action": "kanban_dispatch_triggered"})
@@ -1029,12 +1460,19 @@ def search_journal(q: str = Query("")):
 @app.get("/api/agents/health")
 def get_agent_health():
     try:
+        stats = load_agent_stats()
         agents = []
-        for name in ["opencode", "hermes", "gemini"]:
+        for name in load_agent_registry():
             info = check_agent(name)
-            info["uptime"] = 0
-            info["success_rate"] = 100
-            info["last_seen"] = get_timestamp()
+            s = stats.get(name, {})
+            total = s.get("total_runs", 0)
+            info["total_runs"] = total
+            info["successful_runs"] = s.get("successful_runs", 0)
+            info["failed_runs"] = s.get("failed_runs", 0)
+            info["success_rate"] = round(100.0 * s.get("successful_runs", 0) / total, 1) if total else 0.0
+            info["avg_response_time"] = s.get("avg_response_time", 0.0)
+            info["uptime"] = 0  # process-level uptime not tracked per-agent
+            info["last_seen"] = s.get("last_seen", "")
             agents.append(info)
         return {"agents": agents, "updated": get_timestamp()}
     except Exception as e:
@@ -1043,17 +1481,21 @@ def get_agent_health():
 @app.get("/api/agents/{name}/stats")
 def get_agent_stats(name: str):
     try:
-        if name not in ["opencode", "hermes", "gemini"]:
+        if name not in load_agent_registry():
             raise HTTPException(400, "Invalid agent")
         info = check_agent(name)
+        stats = load_agent_stats().get(name, {})
+        total = stats.get("total_runs", 0)
         return {
             "name": name,
             "status": info["status"],
-            "total_runs": 0,
-            "successful_runs": 0,
-            "failed_runs": 0,
-            "avg_response_time": 0,
-            "last_seen": get_timestamp(),
+            "total_runs": total,
+            "successful_runs": stats.get("successful_runs", 0),
+            "failed_runs": stats.get("failed_runs", 0),
+            "success_rate": round(100.0 * stats.get("successful_runs", 0) / total, 1) if total else 0.0,
+            "avg_response_time": stats.get("avg_response_time", 0.0),
+            "first_seen": stats.get("first_seen", ""),
+            "last_seen": stats.get("last_seen", ""),
         }
     except HTTPException:
         raise
@@ -1064,13 +1506,121 @@ def get_agent_stats(name: str):
 def refresh_agent_health():
     try:
         agents = []
-        for name in ["opencode", "hermes", "gemini"]:
+        for name in load_agent_registry():
             info = check_agent(name)
             agents.append(info)
         append_audit({"action": "agent_health_refreshed"})
         return {"agents": agents, "updated": get_timestamp()}
     except Exception as e:
         return {"agents": [], "error": str(e)}
+
+# ─── Routes: Agent Registry Management ───────────────────────────
+
+class AgentRegisterRequest(BaseModel):
+    name: str
+    display_name: str = ""
+    description: str = ""
+    binary: str = ""
+    type: str = "cli"  # cli, http, mcp
+    run_args: list = []
+    check_type: str = "binary"  # binary, oauth_file, http, custom
+    oauth_file: str = ""
+    health_url: str = ""
+    api_url: str = ""
+    api_method: str = "POST"
+    check_command: str = ""
+    timeout: int = 60
+    router_keywords: list = []
+
+
+@app.get("/api/agents")
+def list_agents():
+    """List all registered agents (built-in + custom)."""
+    registry = load_agent_registry()
+    agents = []
+    for name, agent in registry.items():
+        info = check_agent(name)
+        agents.append(info)
+    return {"agents": agents}
+
+
+@app.post("/api/agents/register")
+def register_agent(req: AgentRegisterRequest):
+    """Register a new custom agent."""
+    name = req.name.lower().strip().replace(" ", "_").replace("-", "_")
+    if not name:
+        raise HTTPException(400, "Agent name required")
+    if name in BUILTIN_AGENTS:
+        raise HTTPException(409, f"'{name}' is a built-in agent")
+
+    registry = load_agent_registry()
+    if name in registry:
+        raise HTTPException(409, f"Agent '{name}' already exists")
+
+    if not req.display_name:
+        req.display_name = req.name.replace("_", " ").replace("-", " ").title()
+    if not req.binary:
+        req.binary = req.name
+    if not req.run_args:
+        req.run_args = [req.binary, "{message}"]
+
+    agent_config = {
+        "name": name,
+        "display_name": req.display_name,
+        "description": req.description,
+        "binary": req.binary,
+        "type": req.type,
+        "run_args": req.run_args,
+        "check_type": req.check_type,
+        "timeout": req.timeout,
+        "builtin": False,
+    }
+    if req.oauth_file:
+        agent_config["oauth_file"] = req.oauth_file
+    if req.health_url:
+        agent_config["health_url"] = req.health_url
+    if req.api_url:
+        agent_config["api_url"] = req.api_url
+    if req.api_method:
+        agent_config["api_method"] = req.api_method
+    if req.check_command:
+        agent_config["check_command"] = req.check_command
+
+    registry[name] = agent_config
+    save_agent_registry(registry)
+
+    if req.router_keywords:
+        rkf = BASE_DIR / "data" / "router-keywords.json"
+        kw = json.loads(rkf.read_text()) if rkf.exists() else {}
+        kw[name] = req.router_keywords
+        rkf.write_text(json.dumps(kw, indent=2))
+
+    append_audit({"action": "agent_registered", "agent": name})
+    return {"status": "registered", "agent": check_agent(name)}
+
+
+@app.delete("/api/agents/{agent_name}")
+def unregister_agent(agent_name: str):
+    """Remove a custom agent (built-ins cannot be removed)."""
+    if agent_name in BUILTIN_AGENTS:
+        raise HTTPException(403, "Cannot remove built-in agents")
+
+    registry = load_agent_registry()
+    if agent_name not in registry:
+        raise HTTPException(404, "Agent not found")
+
+    del registry[agent_name]
+    save_agent_registry(registry)
+
+    rkf = BASE_DIR / "data" / "router-keywords.json"
+    if rkf.exists():
+        kw = json.loads(rkf.read_text())
+        kw.pop(agent_name, None)
+        rkf.write_text(json.dumps(kw, indent=2))
+
+    append_audit({"action": "agent_unregistered", "agent": agent_name})
+    return {"status": "unregistered", "agent": agent_name}
+
 
 # ─── Routes: Smart Router (2 endpoints) ─────────────────────────
 
@@ -1084,6 +1634,14 @@ ROUTER_RULES = {
 def router_suggest(data: RouterSuggest):
     try:
         task_lower = data.task.lower()
+        # Include custom agent router keywords
+        rkf = BASE_DIR / "data" / "router-keywords.json"
+        if rkf.exists():
+            custom_kw = json.loads(rkf.read_text())
+            for agent, kw in custom_kw.items():
+                if agent not in ROUTER_RULES:
+                    ROUTER_RULES[agent] = kw
+
         scores = {}
         for agent, keywords in ROUTER_RULES.items():
             scores[agent] = sum(1 for k in keywords if k in task_lower)
@@ -1102,7 +1660,7 @@ def router_suggest(data: RouterSuggest):
 def router_route(data: RouterRoute):
     try:
         agent = data.agent.lower()
-        if agent not in ["opencode", "hermes", "gemini"]:
+        if agent not in load_agent_registry():
             return {"status": "error", "message": f"Invalid agent: {agent}"}
         append_audit({"action": "task_routed", "agent": agent, "task_preview": data.task[:50]})
         return {
@@ -1210,11 +1768,160 @@ def get_session_replay(session_id: str):
     except Exception as e:
         return {"session_id": session_id, "messages": [], "error": str(e)}
 
+# ─── WebSocket Terminal ───────────────────────────────────────────
+
+import asyncio
+import websockets
+import pty
+import os
+import select
+import struct
+import fcntl
+import signal
+
+# Store active terminal sessions
+terminal_sessions: dict = {}
+
+
+async def terminal_handler(websocket, path=None):
+    """Handle WebSocket terminal connections with a real PTY shell."""
+    session_id = str(uuid.uuid4())[:8]
+    pid = None
+    fd = None
+
+    try:
+        # Fork a PTY
+        pid, fd = pty.fork()
+
+        if pid == 0:
+            # Child process — exec shell
+            env = os.environ.copy()
+            env["TERM"] = "xterm"
+            env["COLORTERM"] = "truecolor"
+            os.execvpe(os.environ.get("SHELL", "/bin/bash"), ["bash"], env)
+        else:
+            # Parent process — relay between websocket and PTY
+            terminal_sessions[session_id] = {"pid": pid, "fd": fd, "ws": websocket}
+
+            async def read_from_pty():
+                """Read output from PTY and send to websocket."""
+                try:
+                    while True:
+                        try:
+                            r, _, _ = select.select([fd], [], [], 0.1)
+                            if r:
+                                data = os.read(fd, 65536)
+                                if data:
+                                    try:
+                                        await websocket.send(data.decode("utf-8", errors="replace"))
+                                    except websockets.exceptions.ConnectionClosed:
+                                        break
+                                else:
+                                    break
+                        except OSError:
+                            break
+                        await asyncio.sleep(0.01)
+                except Exception:
+                    pass
+
+            async def read_from_ws():
+                """Read input from websocket and write to PTY."""
+                try:
+                    async for message in websocket:
+                        try:
+                            if isinstance(message, str):
+                                data = json.loads(message)
+                                action = data.get("action", "input")
+
+                                if action == "input":
+                                    os.write(fd, data.get("data", "").encode("utf-8"))
+                                elif action == "resize":
+                                    # Resize the PTY
+                                    cols = data.get("cols", 80)
+                                    rows = data.get("rows", 24)
+                                    winsize = struct.pack("HHHH", rows, cols, 0, 0)
+                                    fcntl.ioctl(fd, termios.TIOCSWINSZ, winsize)
+                                    os.kill(pid, signal.SIGWINCH)
+                            else:
+                                os.write(fd, message)
+                        except json.JSONDecodeError:
+                            os.write(fd, message.encode("utf-8") if isinstance(message, str) else message)
+                        except OSError:
+                            break
+                except websockets.exceptions.ConnectionClosed:
+                    pass
+
+            # Run both directions concurrently
+            read_pty_task = asyncio.create_task(read_from_pty())
+            read_ws_task = asyncio.create_task(read_from_ws())
+
+            done, pending = await asyncio.wait(
+                [read_pty_task, read_ws_task],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in pending:
+                task.cancel()
+
+    except Exception as e:
+        try:
+            await websocket.send(f"\r\n[Terminal Error: {str(e)}]\r\n")
+        except Exception:
+            pass
+    finally:
+        terminal_sessions.pop(session_id, None)
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if pid is not None:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+
+
+# Try to import terminal resize constant
+try:
+    import termios
+except ImportError:
+    termios = None  # Windows — won't work there
+
+
+def start_terminal_server(host="0.0.0.0", port=8082):
+    """Start the WebSocket terminal server on a separate port."""
+    async def serve():
+        server = await websockets.serve(
+            terminal_handler,
+            host,
+            port,
+            max_size=10 * 1024 * 1024,
+        )
+        return server
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    server = loop.run_until_complete(serve())
+    loop.run_forever()
+
+
+# Start terminal server in a daemon thread
+import threading
+_terminal_thread = threading.Thread(target=start_terminal_server, daemon=True)
+_terminal_thread.start()
+
+
 # ─── Routes: Dashboard Static Files ──────────────────────────────
 
 dashboard_dir = BASE_DIR / "dashboard"
 if dashboard_dir.exists():
     app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir)), name="dashboard")
+
+# graphify knowledge-graph output (built by `graphify . --code-only`).
+# Served so dashboard pages can link/open the interactive graph.
+graphify_dir = BASE_DIR / "graphify-out"
+if graphify_dir.exists():
+    app.mount("/graphify-out", StaticFiles(directory=str(graphify_dir)), name="graphify-out")
 
 @app.get("/", response_class=HTMLResponse)
 def index():
@@ -1227,7 +1934,81 @@ def index():
         content = content.replace('src="app.js"', 'src="/dashboard/app.js"')
         content = content.replace('pages/', '/dashboard/pages/')
         return HTMLResponse(content=content)
-    return HTMLResponse("<h1>Agentic OS</h1><p>Dashboard not built yet. Run <code>./install.sh</code> first.</p>")
+    return HTMLResponse("<h1>Agentic OS</h1><p>Dashboard not built yet.</p>")
+
+@app.get("/test", response_class=HTMLResponse)
+def test_page():
+    html_file = BASE_DIR / "dashboard" / "test.html"
+    if html_file.exists():
+        return HTMLResponse(html_file.read_text())
+    return HTMLResponse("<h1>Test page not found</h1>")
+
+# ─── Routes: Agent Time Monitor ───────────────────────────────
+# Tracks total time AI agents spent on the project. Time is DERIVED from
+# event logs (audit.log, chat-history.json, cost-history.json) via a
+# session-gap estimator — see scripts/analyze_agent_time.py.
+# NOTE: no recompute happens at startup or import; the report is only
+# regenerated on explicit /api/agent-time/recompute (or if the cache
+# file is missing). This keeps app boot fast and side-effect free.
+
+AGENT_TIME_REPORT = BASE_DIR / "data" / "agent-time.json"
+AGENT_TIME_ANALYZER = BASE_DIR / "scripts" / "analyze_agent_time.py"
+
+def _recompute_agent_time() -> dict:
+    """Run the analyzer to (re)generate data/agent-time.json. Returns report."""
+    import subprocess
+    try:
+        subprocess.run(
+            [sys.executable, str(AGENT_TIME_ANALYZER)],
+            cwd=str(BASE_DIR), capture_output=True, text=True, timeout=120,
+        )
+    except Exception:
+        pass
+    # The analyzer always writes the file (even with 0 events), but guard
+    # in case the script is missing.
+    if AGENT_TIME_REPORT.exists():
+        return json.loads(AGENT_TIME_REPORT.read_text(encoding="utf-8"))
+    return {"project": "agentic-os", "total_seconds": 0, "total_human": "0h 0m 0s",
+            "agents": {}, "event_count": 0, "method": "unavailable"}
+
+@app.get("/api/agent-time")
+def get_agent_time(recompute: bool = False):
+    if recompute or not AGENT_TIME_REPORT.exists():
+        return _recompute_agent_time()
+    try:
+        return json.loads(AGENT_TIME_REPORT.read_text(encoding="utf-8"))
+    except Exception:
+        return _recompute_agent_time()
+
+@app.post("/api/agent-time/recompute")
+def recompute_agent_time():
+    report = _recompute_agent_time()
+    return {"ok": True, "total_human": report.get("total_human"),
+            "agents": len(report.get("agents", {})),
+            "event_count": report.get("event_count", 0)}
+
+# Skin-friendly view for Rainmeter (WebParser). Returns plain text:
+#   Line 1: human total, e.g. "5h 34m 45s"
+#   Line 2: total_seconds + fixed-order per-agent seconds (0 if absent)
+#            system hermes opencode gemini codex jarvis kilocode test_claude test
+# This fixed-width layout lets a single RegExp grab every value reliably.
+_AGENT_ORDER = ["system", "hermes", "opencode", "gemini", "codex",
+                "jarvis", "kilocode", "test_claude", "test"]
+
+@app.get("/api/agent-time/skin")
+def agent_time_skin():
+    if not AGENT_TIME_REPORT.exists():
+        report = _recompute_agent_time()
+    else:
+        try:
+            report = json.loads(AGENT_TIME_REPORT.read_text(encoding="utf-8"))
+        except Exception:
+            report = _recompute_agent_time()
+    agents = report.get("agents", {})
+    total = report.get("total_seconds", 0)
+    per = " ".join(str(agents.get(a, {}).get("total_seconds", 0)) for a in _AGENT_ORDER)
+    body = f"{report.get('total_human', '0h 0m 0s')}\n{total} {per}"
+    return Response(content=body, media_type="text/plain; charset=utf-8")
 
 # ─── Favicon ──────────────────────────────────────────────────────
 
@@ -1247,6 +2028,6 @@ if __name__ == "__main__":
     import uvicorn
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8080)
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--host", type=str, default="0.0.0.0")
     args = parser.parse_args()
     uvicorn.run(app, host=args.host, port=args.port)

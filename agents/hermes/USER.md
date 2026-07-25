@@ -3,7 +3,7 @@
 ## User
 - Name: User
 - Tech Stack: opencode, Hermes Agent, Gemini CLI, deepseek-v4-flash-free
-- Projects: CloudMart (GCP DevOps), Agentic OS
+- Projects: Kitchen-Inventory (catering kitchen management on antigravity), Pendleton-comms-live (walkie talkie on Railway), Agentic OS
 - Budget: Free tiers only
 
 ## Preferences

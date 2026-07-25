@@ -1,0 +1,10 @@
+{
+  "id": "c334edd1",
+  "name": "test-audit-job",
+  "skill": "daily-standup",
+  "cron": "0 9 * * *",
+  "enabled": false,
+  "created": "2026-06-28T21:39:14.908697+00:00",
+  "last_run": null,
+  "next_run": null
+}
