@@ -378,6 +378,40 @@ def _cli_has_subcommand(base_args: list, subcommand: str) -> bool:
         return False
 
 
+def hermes_cli_args(*args: str) -> list:
+    """Build the command to invoke Hermes, bridging through WSL if the real agent only lives there.
+
+    The dashboard commonly runs as a native Windows process while Hermes (whose official
+    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it
+    there. Windows machines can also have an unrelated tool also named 'hermes' on PATH (e.g. the
+    academic softwarepub/HERMES metadata-publishing project, which coincidentally shares the name),
+    so don't just trust that a native 'hermes' is the right one - confirm it exposes the
+    NousResearch agent's `chat` subcommand before using it, falling back to WSL otherwise.
+    """
+    if shutil.which("hermes") is not None and _cli_has_subcommand(["hermes"], "chat"):
+        return ["hermes", *args]
+    if shutil.which("wsl") is not None:
+        quoted = " ".join(shlex.quote(a) for a in args)
+        return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
+    return ["hermes", *args]
+
+_hermes_available_cache = {"checked_at": 0.0, "result": False}
+HERMES_AVAILABLE_CACHE_TTL = 60
+
+def hermes_available() -> bool:
+    """Cached: this spawns a subprocess (possibly via WSL), and /api/status is polled every 15s."""
+    now = time.time()
+    if now - _hermes_available_cache["checked_at"] < HERMES_AVAILABLE_CACHE_TTL:
+        return _hermes_available_cache["result"]
+    try:
+        r = subprocess.run(hermes_cli_args("--version"), capture_output=True, text=True, timeout=10)
+        result = r.returncode == 0
+    except Exception:
+        result = False
+    _hermes_available_cache["checked_at"] = now
+    _hermes_available_cache["result"] = result
+    return result
+
 def check_agent(name: str) -> dict:
     """Dynamic agent check based on registry configuration."""
     registry = load_agent_registry()
@@ -426,71 +460,6 @@ def check_agent(name: str) -> dict:
         else:
             status = "online" if exists else "offline"
     except Exception:
-        status = "offline"
-
-    return {
-        "name": name,
-        "display_name": agent.get("display_name", name),
-        "status": status,
-        "description": agent.get("description", ""),
-        "type": agent.get("type", "cli"),
-        "builtin": agent.get("builtin", False),
-    }
-
-def hermes_cli_args(*args: str) -> list:
-    """Build the command to invoke Hermes, bridging through WSL if the real agent only lives there.
-
-    The dashboard commonly runs as a native Windows process while Hermes (whose official
-    installer is Bash-only) lives inside WSL - a plain PATH lookup on Windows will never find it
-    there. Windows machines can also have an unrelated tool also named 'hermes' on PATH (e.g. the
-    academic softwarepub/HERMES metadata-publishing project, which coincidentally shares the name),
-    so don't just trust that a native 'hermes' is the right one - confirm it exposes the
-    NousResearch agent's `chat` subcommand before using it, falling back to WSL otherwise.
-    """
-    if shutil.which("hermes") is not None and _cli_has_subcommand(["hermes"], "chat"):
-        return ["hermes", *args]
-    if shutil.which("wsl") is not None:
-        quoted = " ".join(shlex.quote(a) for a in args)
-        return ["wsl", "-e", "bash", "-lc", f"hermes {quoted}"]
-    return ["hermes", *args]
-
-_hermes_available_cache = {"checked_at": 0.0, "result": False}
-HERMES_AVAILABLE_CACHE_TTL = 60
-
-def hermes_available() -> bool:
-    """Cached: this spawns a subprocess (possibly via WSL), and /api/status is polled every 15s."""
-    now = time.time()
-    if now - _hermes_available_cache["checked_at"] < HERMES_AVAILABLE_CACHE_TTL:
-        return _hermes_available_cache["result"]
-    try:
-        r = subprocess.run(hermes_cli_args("--version"), capture_output=True, text=True, timeout=10)
-        result = r.returncode == 0
-    except Exception:
-        result = False
-    _hermes_available_cache["checked_at"] = now
-    _hermes_available_cache["result"] = result
-    return result
-
-def check_agent(name: str) -> dict:
-    """Filesystem-based check for opencode/gemini; hermes needs a real subprocess since it may live inside WSL."""
-    if name == "opencode":
-        status = "online" if shutil.which("opencode") is not None else "offline"
-    elif name == "hermes":
-        status = "online" if hermes_available() else "offline"
-    elif name == "gemini":
-        exists = shutil.which("gemini") is not None
-        # Gemini needs a valid OAuth token on disk to be usable.
-        logged_in = False
-        oauth = Path.home() / ".gemini" / "oauth_creds.json"
-        if oauth.exists():
-            try:
-                logged_in = "ya29" in oauth.read_text()
-            except OSError as e:
-                # Distinguish an unreadable credential file from "not logged in"
-                # instead of silently reporting the agent as offline.
-                print(f"[agent-health] could not read gemini credentials: {e}")
-        status = "online" if exists and logged_in else "offline" if not exists else "warning"
-    else:
         status = "offline"
 
     return {
