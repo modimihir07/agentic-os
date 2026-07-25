@@ -1,0 +1,83 @@
+{
+  "project": "agentic-os",
+  "generated_at": "2026-07-25T18:27:15.982570+00:00",
+  "method": "session-gap estimate (GAP=1800s, TAIL=120s)",
+  "graph": {
+    "nodes": 321,
+    "edges": 517,
+    "communities": 41,
+    "file": "graphify-out/graph.json"
+  },
+  "gap_seconds": 1800,
+  "tail_seconds": 120,
+  "total_seconds": 20568,
+  "total_human": "5h 42m 48s",
+  "agents": {
+    "opencode": {
+      "sessions": 8,
+      "touches": 42,
+      "total_seconds": 4566,
+      "first_seen": "2026-06-23T11:17:40.771655+00:00",
+      "last_seen": "2026-07-25T17:40:45.570834+00:00"
+    },
+    "system": {
+      "sessions": 12,
+      "touches": 114,
+      "total_seconds": 7374,
+      "first_seen": "2026-06-25T17:58:22.902546+00:00",
+      "last_seen": "2026-07-25T17:10:23.236024+00:00"
+    },
+    "hermes": {
+      "sessions": 9,
+      "touches": 36,
+      "total_seconds": 6808,
+      "first_seen": "2026-06-26T01:25:01.320339+00:00",
+      "last_seen": "2026-07-25T17:42:17.726478+00:00"
+    },
+    "gemini": {
+      "sessions": 1,
+      "touches": 3,
+      "total_seconds": 220,
+      "first_seen": "2026-06-28T17:26:01.078648+00:00",
+      "last_seen": "2026-06-28T17:27:41.105686+00:00"
+    },
+    "test_claude": {
+      "sessions": 1,
+      "touches": 2,
+      "total_seconds": 129,
+      "first_seen": "2026-06-28T17:47:56.773101+00:00",
+      "last_seen": "2026-06-28T17:48:05.984878+00:00"
+    },
+    "jarvis": {
+      "sessions": 2,
+      "touches": 3,
+      "total_seconds": 240,
+      "first_seen": "2026-06-28T20:44:32.727658+00:00",
+      "last_seen": "2026-07-17T17:30:21.986571+00:00"
+    },
+    "kilocode": {
+      "sessions": 2,
+      "touches": 3,
+      "total_seconds": 240,
+      "first_seen": "2026-06-28T20:44:32.730628+00:00",
+      "last_seen": "2026-07-17T17:30:21.988722+00:00"
+    },
+    "test": {
+      "sessions": 1,
+      "touches": 1,
+      "total_seconds": 120,
+      "first_seen": "2026-06-28T21:39:14.911119+00:00",
+      "last_seen": "2026-06-28T21:39:14.911119+00:00"
+    },
+    "codex": {
+      "sessions": 1,
+      "touches": 3,
+      "total_seconds": 871,
+      "first_seen": "2026-07-17T17:18:53.396385+00:00",
+      "last_seen": "2026-07-17T17:31:24.434628+00:00"
+    }
+  },
+  "event_count": 207,
+  "first_seen": "2026-06-23T11:17:40.771655+00:00",
+  "last_seen": "2026-07-25T17:42:17.726478+00:00"
+}

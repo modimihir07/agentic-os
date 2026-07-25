@@ -111,6 +111,7 @@ function renderSkeleton(count = 3) {
 
 const PAGE_TITLES = {
   dashboard: { title: 'Dashboard', breadcrumb: 'Overview' },
+  terminal: { title: 'Terminal', breadcrumb: 'Browser-based shell' },
   skills: { title: 'Skills Hub', breadcrumb: 'Browse & execute skills' },
   memory: { title: 'Memory', breadcrumb: 'Shared brain context' },
   scheduler: { title: 'Scheduler', breadcrumb: 'Automated workflows' },
@@ -131,4 +132,5 @@ const PAGE_TITLES = {
   'smart-router': { title: 'Smart Router', breadcrumb: 'Task routing intelligence' },
   'learning-analytics': { title: 'Learning Analytics', breadcrumb: 'Skill improvement tracking' },
   'session-replay': { title: 'Session Replay', breadcrumb: 'Conversation history playback' },
+  'agent-time': { title: 'Agent Time', breadcrumb: 'Total agent effort on this project' },
 };

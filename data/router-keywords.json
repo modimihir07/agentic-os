@@ -1,0 +1,29 @@
+{
+  "jarvis": [
+    "jarvis",
+    "research",
+    "deep-research",
+    "knowledge",
+    "memory",
+    "reasoning",
+    "local"
+  ],
+  "kilocode": [
+    "kilo",
+    "kilocode",
+    "code",
+    "coding",
+    "programming",
+    "refactor",
+    "implement"
+  ],
+  "codex": [
+    "codex",
+    "code",
+    "debug",
+    "test",
+    "build",
+    "fix",
+    "implement"
+  ]
+}

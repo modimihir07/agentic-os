@@ -15,3 +15,8 @@ audit/*
 data/settings.json
 data/chat-history.json
 data/cost-history.json
+.agentic-os.pid
+graphify-out/
+brain/graphify-out/
+skills/*/graphify-out/
+*.log

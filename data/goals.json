@@ -1,35 +1,13 @@
 [
   {
-    "id": "215a1f6a",
-    "title": "Waste log",
-    "description": "I have a couple of files that work as an applicate for a catering kitchen waste log. I need it to be local if possible and save local as well. I need it created fully functioning.",
-    "category": "development",
-    "target_date": "2026-07-07",
+    "id": "2c4b22ac",
+    "title": "Push everything in the Kanban board down the line",
+    "description": "It involves different skills to get different things done.",
+    "category": "general",
+    "target_date": "2026-06-28",
     "status": "active",
-    "progress": 0,
-    "created": "2026-07-07T10:59:57.991678+00:00",
-    "updated": "2026-07-07T10:59:57.991691+00:00"
-  },
-  {
-    "id": "ac785f05",
-    "title": "Pendleton-comms-live",
-    "description": "I need to finish my pendleton walkie talkie app before whiskey fest so my team can talk. It needs to be an android native application.",
-    "category": "development",
-    "target_date": "2026-07-08",
-    "status": "active",
-    "progress": 0,
-    "created": "2026-07-07T11:02:12.398717+00:00",
-    "updated": "2026-07-07T11:02:12.398731+00:00"
-  },
-  {
-    "id": "a0f84134",
-    "title": "AUdit",
-    "description": "Run a dependency audit",
-    "category": "development",
-    "target_date": "2026-07-19",
-    "status": "active",
-    "progress": 0,
-    "created": "2026-07-19T07:52:31.175924+00:00",
-    "updated": "2026-07-19T07:52:31.175940+00:00"
+    "progress": 50,
+    "created": "2026-06-28T21:48:06.763421+00:00",
+    "updated": "2026-06-28T21:48:13.383386+00:00"
   }
 ]

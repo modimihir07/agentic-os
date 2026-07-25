@@ -1,120 +1,150 @@
-let _termInstance = null;
-let _termSocket = null;
-
-function loadXterm() {
-  if (window.Terminal && window.FitAddon) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    if (!document.querySelector('link[data-xterm-css]')) {
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css';
-      link.setAttribute('data-xterm-css', '1');
-      document.head.appendChild(link);
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js';
-    script.onload = () => {
-      const fitScript = document.createElement('script');
-      fitScript.src = 'https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js';
-      fitScript.onload = () => resolve();
-      fitScript.onerror = () => reject(new Error('Failed to load xterm-addon-fit'));
-      document.body.appendChild(fitScript);
-    };
-    script.onerror = () => reject(new Error('Failed to load xterm.js'));
-    document.body.appendChild(script);
-  });
-}
-
-function setTerminalStatus(kind, text) {
-  const el = document.getElementById('terminalStatus');
-  if (!el) return;
-  el.textContent = text;
-  el.className = `badge badge-${kind === 'online' ? 'success' : kind === 'offline' ? 'danger' : 'warning'}`;
-}
-
-function closeTerminalSession() {
-  if (window._terminalResizeHandler) {
-    window.removeEventListener('resize', window._terminalResizeHandler);
-    window._terminalResizeHandler = null;
-  }
-  if (_termSocket) {
-    try { _termSocket.close(); } catch {}
-    _termSocket = null;
-  }
-  if (_termInstance) {
-    try { _termInstance.dispose(); } catch {}
-    _termInstance = null;
-  }
-}
-
 async function renderTerminal() {
   const content = document.getElementById('pageContent');
   content.innerHTML = `
     <div class="page-header">
       <div class="page-header-left">
         <h1 class="page-title">Terminal</h1>
-        <p class="page-subtitle">A real, interactive shell running on this machine</p>
+        <p class="page-subtitle">Full bash shell in the browser — WSL environment</p>
       </div>
       <div class="btn-group">
-        <span id="terminalStatus" class="badge badge-warning">Connecting…</span>
+        <button class="btn btn-ghost" onclick="terminalReconnect()">↻ Reconnect</button>
+        <button class="btn btn-ghost" onclick="terminalClear()">✕ Clear</button>
+        <span id="terminalStatus" class="nav-badge" style="background:var(--yellow)">Connecting...</span>
       </div>
     </div>
-    <div class="terminal-panel">
-      <div id="xtermContainer" class="terminal-xterm-container"></div>
+    <div class="terminal-container">
+      <div id="terminal"></div>
     </div>
   `;
 
-  closeTerminalSession();
-
+  // Load xterm.js from CDN (with fallback)
   try {
-    await loadXterm();
+    await loadScript('https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js');
   } catch (err) {
-    document.getElementById('xtermContainer').innerHTML =
-      `<div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Failed to load terminal library</div><div class="empty-state-desc">${escapeHtml(err.message || String(err))}</div></div>`;
-    return;
+    // Fallback to unpkg
+    await loadScript('https://unpkg.com/xterm@5.3.0/lib/xterm.min.js');
+    await loadScript('https://unpkg.com/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js');
   }
 
-  const term = new window.Terminal({
+  // Verify Terminal and FitAddon are available
+  if (typeof Terminal === 'undefined') {
+    throw new Error('xterm.js failed to load from CDN');
+  }
+
+  // Initialize terminal
+  const term = new Terminal({
     cursorBlink: true,
-    fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
-    fontSize: 13,
-    theme: { background: '#0a0e14', foreground: '#c9d1d9' },
+    fontSize: 14,
+    fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace",
+    theme: {
+      background: '#0d1117',
+      foreground: '#c9d1d9',
+      cursor: '#58a6ff',
+      selection: '#264f78',
+      black: '#0d1117',
+      red: '#ff7b72',
+      green: '#3fb950',
+      yellow: '#d29922',
+      blue: '#58a6ff',
+      magenta: '#bc8cff',
+      cyan: '#39d2c0',
+      white: '#c9d1d9',
+    },
+    scrollback: 50000,
+    allowProposedApi: true,
+    convertEol: true,
   });
-  const fitAddon = new window.FitAddon.FitAddon();
+
+  const FitAddonClass = window.FitAddon?.FitAddon || window.FitAddon;
+  if (!FitAddonClass) {
+    throw new Error('xterm FitAddon failed to load');
+  }
+  const fitAddon = new FitAddonClass();
   term.loadAddon(fitAddon);
-  term.open(document.getElementById('xtermContainer'));
+  term.open(document.getElementById('terminal'));
   fitAddon.fit();
-  _termInstance = term;
 
-  const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const socket = new WebSocket(`${proto}//${window.location.host}/ws/terminal`);
-  _termSocket = socket;
+  window._agenticTerm = term;
+  window._agenticFit = fitAddon;
 
-  socket.onopen = () => {
-    setTerminalStatus('online', 'Connected');
-    fitAddon.fit();
-    socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-    term.focus();
-  };
-  socket.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      if (msg.type === 'output') term.write(msg.data);
-    } catch {}
-  };
-  socket.onclose = () => setTerminalStatus('offline', 'Disconnected');
-  socket.onerror = () => setTerminalStatus('offline', 'Connection error');
+  // Connect WebSocket
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsPort = 8082;
+  const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
+  const statusEl = document.getElementById('terminalStatus');
 
-  term.onData((data) => {
-    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'input', data }));
-  });
+  try {
+    const ws = new WebSocket(wsUrl);
+    window._agenticWs = ws;
 
-  const resizeHandler = () => {
-    fitAddon.fit();
-    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
-  };
-  window.addEventListener('resize', resizeHandler);
-  window._terminalResizeHandler = resizeHandler;
+    ws.onopen = () => {
+      statusEl.textContent = 'Connected';
+      statusEl.style.background = 'var(--green)';
+      term.writeln('\x1b[32m✓ Connected to Agentic OS terminal\x1b[0m');
+      term.writeln(`\x1b[90m  WSL • ${navigator.userAgent.includes('Windows') ? 'Windows browser → WSL shell' : 'Linux shell'}\x1b[0m\r\n`);
+      ws.send(JSON.stringify({ action: 'resize', cols: term.cols, rows: term.rows }));
+    };
 
-  window.addEventListener('hashchange', closeTerminalSession, { once: true });
+    ws.onmessage = (event) => {
+      if (typeof event.data === 'string') {
+        term.write(event.data);
+      }
+    };
+
+    ws.onclose = () => {
+      statusEl.textContent = 'Disconnected';
+      statusEl.style.background = 'var(--red)';
+      term.writeln('\r\n\x1b[31m✕ Connection closed\x1b[0m');
+    };
+
+    ws.onerror = () => {
+      statusEl.textContent = 'Error';
+      statusEl.style.background = 'var(--red)';
+    };
+
+    // Send input
+    term.onData((data) => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ action: 'input', data: data }));
+      }
+    });
+
+    // Resize handler with debounce
+    let resizeTimeout;
+    const resizeObserver = new ResizeObserver(() => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        fitAddon.fit();
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ action: 'resize', cols: term.cols, rows: term.rows }));
+        }
+      }, 100);
+    });
+    resizeObserver.observe(document.getElementById('terminal'));
+    window._agenticResize = resizeObserver;
+
+  } catch (err) {
+    statusEl.textContent = 'Failed';
+    statusEl.style.background = 'var(--red)';
+    term.writeln(`\x1b[31mError: ${err.message}\x1b[0m`);
+  }
+
+  term.focus();
+}
+
+function terminalReconnect() {
+  if (window._agenticWs) window._agenticWs.close();
+  if (window._agenticResize) window._agenticResize.disconnect();
+  renderTerminal();
+}
+
+function terminalClear() {
+  if (window._agenticTerm) {
+    window._agenticTerm.clear();
+    // Also send clear escape sequence to PTY
+    if (window._agenticWs && window._agenticWs.readyState === WebSocket.OPEN) {
+      window._agenticWs.send(JSON.stringify({ action: 'input', data: '\x0c' }));
+    }
+  }
 }

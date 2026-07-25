@@ -1,0 +1,47 @@
+{
+  "jarvis": {
+    "name": "jarvis",
+    "display_name": "OpenJarvis",
+    "description": "Local-first personal AI: deep research, knowledge, memory, general reasoning",
+    "binary": "jarvis-ask",
+    "type": "cli",
+    "run_args": [
+      "jarvis-ask",
+      "{message}"
+    ],
+    "check_type": "binary",
+    "timeout": 120,
+    "builtin": false,
+    "api_method": "POST"
+  },
+  "kilocode": {
+    "name": "kilocode",
+    "display_name": "Kilo Code",
+    "description": "AI coding assistant by Kilo (linux binary via wrapper)",
+    "binary": "kilocode",
+    "type": "cli",
+    "run_args": [
+      "kilocode",
+      "{message}"
+    ],
+    "check_type": "binary",
+    "timeout": 120,
+    "builtin": false,
+    "api_method": "POST"
+  },
+  "codex": {
+    "name": "codex",
+    "display_name": "OpenAI Codex",
+    "description": "OpenAI Codex coding/execution agent",
+    "binary": "codex",
+    "type": "cli",
+    "run_args": [
+      "codex",
+      "{message}"
+    ],
+    "check_type": "binary",
+    "timeout": 300,
+    "builtin": false,
+    "api_method": "POST"
+  }
+}

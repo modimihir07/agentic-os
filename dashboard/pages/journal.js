@@ -77,7 +77,8 @@ async function saveJournalEntry() {
     if (wc) wc.textContent = words;
   } catch (err) {
     const status = document.getElementById('journalSaveStatus');
-    if (status) status.textContent = 'Save failed';
+    if (status) status.textContent = 'Save failed: ' + err.message;
+    console.error('Journal save error:', err);
   }
 }
 
