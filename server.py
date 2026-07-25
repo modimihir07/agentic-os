@@ -588,6 +588,82 @@ def update_brain_file(file_name: str, data: BrainUpdate):
     append_audit({"action": "brain_update", "file": file_name})
     return {"status": "ok", "file": file_name}
 
+# ─── Routes: Centralized Brain Index (unified information pipeline) ─
+# Aggregates brain/** notes, skills/*/learnings.md, and chat history into
+# one SQLite+FTS5 index. Agents can write to it (ingest/upsert); you can
+# query it (search/stats).
+
+def _brain_index_module():
+    """Lazy import of brain-core so a missing dir never breaks server boot."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "brain_index", BASE_DIR / "brain-core" / "brain_index.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@app.post("/api/brain-index/ingest")
+def ingest_brain_index():
+    mod = _brain_index_module()
+    conn = mod.get_conn()
+    try:
+        summary = mod.ingest_all(conn)
+        conn.commit()
+        return {"status": "ok", "ingested": summary, "stats": mod.stats(conn)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/brain-index/upsert")
+def upsert_brain_doc(data: dict):
+    """Agents push a single document into the brain. Fields: source,
+    source_path, title, content, agent (optional)."""
+    for field in ("source", "source_path", "title", "content"):
+        if not data.get(field):
+            raise HTTPException(400, f"missing required field: {field}")
+    mod = _brain_index_module()
+    conn = mod.get_conn()
+    try:
+        doc_id = mod.upsert_doc(
+            conn,
+            source=data["source"],
+            source_path=data["source_path"],
+            title=data["title"],
+            content=data["content"],
+            agent=data.get("agent"),
+            updated_at=data.get("updated_at"),
+        )
+        conn.commit()
+        return {"status": "ok", "doc_id": doc_id}
+    finally:
+        conn.close()
+
+
+@app.get("/api/brain-index/search")
+def search_brain_index(q: str = "", limit: int = 20, source: str = None):
+    if not q or not q.strip():
+        raise HTTPException(400, "query parameter 'q' is required")
+    mod = _brain_index_module()
+    conn = mod.get_conn()
+    try:
+        hits = mod.search(conn, q, limit=limit, source=source)
+        return {"query": q, "count": len(hits), "results": hits}
+    finally:
+        conn.close()
+
+
+@app.get("/api/brain-index/stats")
+def stats_brain_index():
+    mod = _brain_index_module()
+    conn = mod.get_conn()
+    try:
+        return mod.stats(conn)
+    finally:
+        conn.close()
+
+
 # ─── Routes: Skills ───────────────────────────────────────────────
 
 SKILL_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
