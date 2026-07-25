@@ -91,6 +91,8 @@ const api = {
   // Agent Time Monitor
   getAgentTime: (recompute = false) => api.get(`/api/agent-time${recompute ? '?recompute=true' : ''}`),
   recomputeAgentTime: () => api.post('/api/agent-time/recompute', {}),
+  // Agent Insights (AI usage analytics)
+  getAgentInsights: (recompute = false) => api.get(`/api/agent-insights${recompute ? '?recompute=true' : ''}`),
   // Agent Registry
   getAgents: () => api.get('/api/agents'),
   registerAgent: (data) => api.post('/api/agents/register', data),

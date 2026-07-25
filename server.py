@@ -2341,6 +2341,174 @@ def agent_time_skin():
     body = f"{report.get('total_human', '0h 0m 0s')}\n{total} {per}"
     return Response(content=body, media_type="text/plain; charset=utf-8")
 
+
+# ─── Routes: Agent Insights (AI usage analytics) ──────────────────
+# Aggregates real usage data across chat history, cost history, derived
+# agent-time, the agent registry, and router keywords to answer:
+#   - which agent do I chat with most
+#   - which agent spends the most time completing tasks
+#   - which agent seems best suited for what
+#   - which models I use most with each agent
+# All source data is read-only; no writes happen on this endpoint.
+
+ROUTER_KEYWORDS_FILE = BASE_DIR / "data" / "router-keywords.json"
+
+# Human-readable role hints keyed by agent name (falls back to registry
+# description / router keywords when unknown).
+AGENT_ROLE_HINTS = {
+    "opencode": "Code generation, file ops, DevOps/infra, git, software engineering",
+    "hermes": "Persistent memory, cron scheduling, messaging channels, skill hub, coordination",
+    "gemini": "Web research, multi-modal/image/PDF analysis, reasoning, data analysis",
+    "jarvis": "Local-first personal AI: deep research, knowledge, memory, general reasoning",
+    "kilocode": "AI coding assistant: implement, refactor, programming tasks",
+    "codex": "OpenAI Codex: coding, debugging, tests, builds",
+}
+
+
+@app.get("/api/agent-insights")
+def get_agent_insights(recompute: bool = False):
+    # Pull the four required datasets from disk.
+    chat = load_chat_history().get("messages", [])
+    cost = read_json(
+        BASE_DIR / "data" / "cost-history.json",
+        {"entries": []},
+    ).get("entries", [])
+    registry = load_agent_registry()
+    router_kw = read_json(ROUTER_KEYWORDS_FILE, {})
+
+    if recompute or not AGENT_TIME_REPORT.exists():
+        time_report = _recompute_agent_time()
+    else:
+        try:
+            time_report = json.loads(AGENT_TIME_REPORT.read_text(encoding="utf-8"))
+        except Exception:
+            time_report = _recompute_agent_time()
+    time_agents = time_report.get("agents", {})
+
+    # 1) Chat volume per agent (count user+assistant messages; pair count
+    #    = number of user turns, which is the most meaningful "chat" metric).
+    chat_counts = {}
+    user_turns = {}
+    first_chat = {}
+    last_chat = {}
+    for m in chat:
+        a = m.get("agent") or "unknown"
+        chat_counts[a] = chat_counts.get(a, 0) + 1
+        if m.get("role") == "user":
+            user_turns[a] = user_turns.get(a, 0) + 1
+        ts = m.get("timestamp")
+        if ts:
+            if a not in first_chat or ts < first_chat[a]:
+                first_chat[a] = ts
+            if a not in last_chat or ts > last_chat[a]:
+                last_chat[a] = ts
+
+    # 2) Time per agent (from derived agent-time report).
+    time_per_agent = {
+        a: {
+            "total_seconds": d.get("total_seconds", 0),
+            "sessions": d.get("sessions", 0),
+            "touches": d.get("touches", 0),
+        }
+        for a, d in time_agents.items()
+    }
+
+    # 3) Models used per agent (from cost history).
+    models_per_agent = {}
+    tokens_per_agent = {}
+    cost_per_agent = {}
+    for e in cost:
+        a = e.get("agent") or "unknown"
+        model = e.get("model") or "unknown"
+        models_per_agent.setdefault(a, {})
+        models_per_agent[a][model] = models_per_agent[a].get(model, 0) + 1
+        tokens_per_agent[a] = tokens_per_agent.get(a, 0) + (e.get("tokens", 0) or 0)
+        cost_per_agent[a] = cost_per_agent.get(a, 0) + (e.get("cost", 0) or 0)
+
+    # 4) Best-suited-for: combine registry description, router keywords,
+    #    and AGENTS.md role hints into a per-agent "suite" summary.
+    suite = {}
+    for name in set(list(registry.keys()) + list(router_kw.keys()) +
+                     list(chat_counts.keys()) + list(time_per_agent.keys())):
+        desc = (registry.get(name, {}) or {}).get("description", "")
+        role = AGENT_ROLE_HINTS.get(name, "")
+        kws = router_kw.get(name, [])
+        suite[name] = {
+            "description": desc or role,
+            "role_hint": role,
+            "keywords": kws,
+        }
+
+    # Build a per-agent consolidated view.
+    all_agents = set(
+        list(chat_counts.keys()) + list(time_per_agent.keys())
+        + list(models_per_agent.keys()) + list(suite.keys())
+    )
+    per_agent = {}
+    for a in all_agents:
+        per_agent[a] = {
+            "agent": a,
+            "display_name": (registry.get(a, {}) or {}).get("display_name", a),
+            "chat_messages": chat_counts.get(a, 0),
+            "user_turns": user_turns.get(a, 0),
+            "time_seconds": time_per_agent.get(a, {}).get("total_seconds", 0),
+            "sessions": time_per_agent.get(a, {}).get("sessions", 0),
+            "touches": time_per_agent.get(a, {}).get("touches", 0),
+            "tokens": tokens_per_agent.get(a, 0),
+            "cost": round(cost_per_agent.get(a, 0), 6),
+            "top_models": sorted(
+                models_per_agent.get(a, {}).items(),
+                key=lambda kv: kv[1], reverse=True,
+            ),
+            "suite": suite.get(a, {}),
+            "first_seen": first_chat.get(a),
+            "last_seen": last_chat.get(a),
+        }
+
+    # Rankings
+    by_chats = sorted(
+        per_agent.values(), key=lambda x: x["user_turns"], reverse=True
+    )
+    by_time = sorted(
+        per_agent.values(), key=lambda x: x["time_seconds"], reverse=True
+    )
+
+    # Most-used model overall per agent already in top_models; also a global
+    # model popularity map.
+    global_models = {}
+    for a, models in models_per_agent.items():
+        for m, c in models.items():
+            global_models[m] = global_models.get(m, 0) + c
+
+    return {
+        "generated_at": get_timestamp(),
+        "totals": {
+            "total_chat_messages": sum(chat_counts.values()),
+            "total_user_turns": sum(user_turns.values()),
+            "total_time_seconds": time_report.get("total_seconds", 0),
+            "total_time_human": time_report.get("total_human", "0h 0m 0s"),
+            "total_tokens": sum(tokens_per_agent.values()),
+            "total_cost": round(sum(cost_per_agent.values()), 6),
+            "agents_observed": len(per_agent),
+        },
+        "most_chatted": [
+            {"agent": x["agent"], "display_name": x["display_name"],
+             "user_turns": x["user_turns"], "chat_messages": x["chat_messages"]}
+            for x in by_chats if x["user_turns"] > 0
+        ],
+        "most_time": [
+            {"agent": x["agent"], "display_name": x["display_name"],
+             "time_seconds": x["time_seconds"], "sessions": x["sessions"],
+             "touches": x["touches"]}
+            for x in by_time if x["time_seconds"] > 0
+        ],
+        "global_models": sorted(
+            global_models.items(), key=lambda kv: kv[1], reverse=True
+        ),
+        "per_agent": per_agent,
+    }
+
+
 # ─── Favicon ──────────────────────────────────────────────────────
 
 FAVICON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#6c5ce7"/><stop offset="100%" stop-color="#fd79a8"/></linearGradient></defs><rect width="32" height="32" rx="8" fill="url(#g)"/><polygon points="16,6 24,11 24,21 16,26 8,21 8,11" fill="none" stroke="white" stroke-width="2" stroke-linejoin="round"/><circle cx="16" cy="16" r="3" fill="white"/></svg>'
