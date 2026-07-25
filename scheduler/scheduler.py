@@ -49,7 +49,7 @@ def log_audit(entry: dict):
 def run_skill_via_api(skill_name: str, agent: str = "auto") -> dict:
     """Invoke a skill through the live server API.
 
-    Returns a dict with at least {'ok': bool, 'reason'/'output': ...}.
+    Returns a dict with at least {'ok': bool, 'reason'/'data': ...}.
     """
     url = f"{SERVER_URL}/api/skills/{skill_name}/run"
     payload = json.dumps({"input": "", "agent": agent}).encode()
@@ -68,32 +68,58 @@ def run_skill_via_api(skill_name: str, agent: str = "auto") -> dict:
         return {"ok": False, "reason": str(e)}
 
 
-def run_job(job: dict):
-    skill = job.get("skill")
-    name = job.get("name", skill)
-    agent = job.get("agent", "auto")
-    print(f"[{datetime.now().isoformat()}] Firing job '{name}' -> skill '{skill}'")
-    log_audit({"action": "scheduler_run", "job": name, "skill": skill, "stage": "start"})
+def run_endpoint_via_api(endpoint: str) -> dict:
+    """POST to an arbitrary server endpoint (e.g. /api/brain-index/ingest)
+    so scheduler jobs can trigger maintenance tasks that aren't skills."""
+    url = f"{SERVER_URL}{endpoint}"
+    req = urllib.request.Request(
+        url, data=b"{}", headers={"Content-Type": "application/json"}, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=RUN_TIMEOUT) as resp:
+            data = json.loads(resp.read())
+            return {"ok": True, "data": data}
+    except urllib.error.HTTPError as e:
+        return {"ok": False, "reason": f"HTTP {e.code}: {e.reason}"}
+    except urllib.error.URLError as e:
+        return {"ok": False, "reason": f"server unreachable: {e.reason}"}
+    except Exception as e:
+        return {"ok": False, "reason": str(e)}
 
-    if not skill:
-        log_audit({"action": "scheduler_run", "job": name, "error": "no skill defined"})
+
+def run_job(job: dict):
+    name = job.get("name", job.get("skill") or job.get("endpoint"))
+    agent = job.get("agent", "auto")
+    endpoint = job.get("endpoint")
+    skill = job.get("skill")
+    print(f"[{datetime.now().isoformat()}] Firing job '{name}' -> "
+          f"{('endpoint ' + endpoint) if endpoint else ('skill ' + str(skill))}")
+    log_audit({"action": "scheduler_run", "job": name,
+               "skill": skill, "endpoint": endpoint, "stage": "start"})
+
+    if endpoint:
+        result = run_endpoint_via_api(endpoint)
+    elif skill:
+        result = run_skill_via_api(skill, agent)
+    else:
+        log_audit({"action": "scheduler_run", "job": name, "error": "no skill or endpoint defined"})
         return
 
-    result = run_skill_via_api(skill, agent)
     if result["ok"]:
-        data = result["data"]
+        data = result.get("data", {})
         log_audit({
             "action": "scheduler_run",
             "job": name,
             "skill": skill,
-            "agent": data.get("agent"),
-            "run_id": data.get("run_id"),
+            "endpoint": endpoint,
+            "result": data,
             "stage": "done",
         })
-        print(f"  -> OK (agent={data.get('agent')}, run_id={data.get('run_id')})")
+        print(f"  -> OK")
     else:
         reason = result["reason"]
-        log_audit({"action": "scheduler_run", "job": name, "skill": skill, "error": reason})
+        log_audit({"action": "scheduler_run", "job": name,
+                   "skill": skill, "endpoint": endpoint, "error": reason})
         print(f"  -> FAILED: {reason}")
 
 
@@ -112,20 +138,22 @@ def load_jobs(scheduler: BackgroundScheduler):
             continue
         cron = data.get("cron")
         skill = data.get("skill")
-        if not cron or not skill:
-            print(f"  Skipping job {data.get('name')}: missing cron or skill")
+        endpoint = data.get("endpoint")
+        if not cron or not (skill or endpoint):
+            print(f"  Skipping job {data.get('name')}: missing cron and (skill or endpoint)")
             continue
         scheduler.add_job(
             run_job,
             CronTrigger.from_crontab(cron),
             args=[data],
             id=data.get("id", data["name"]),
-            name=data.get("name", skill),
+            name=data.get("name", skill or endpoint),
             replace_existing=True,
             max_instances=1,
             coalesce=True,
         )
-        print(f"  Scheduled: {data.get('name')} (skill={skill}, cron={cron})")
+        print(f"  Scheduled: {data.get('name')} "
+              f"({'endpoint=' + endpoint if endpoint else 'skill=' + str(skill)}, cron={cron})")
 
 
 def main():

@@ -118,6 +118,7 @@ const PAGE_TITLES = {
   audit: { title: 'Audit Log', breadcrumb: 'System activity trail' },
   cost: { title: 'Cost Analytics', breadcrumb: 'Usage & spending' },
   'agent-insights': { title: 'Agent Insights', breadcrumb: 'AI usage analytics' },
+  'brain-search': { title: 'Brain Search', breadcrumb: 'Unified knowledge index' },
   plugins: { title: 'Plugin Registry', breadcrumb: 'Manage plugins' },
   backups: { title: 'Backups', breadcrumb: 'Disaster recovery' },
   prompts: { title: 'Prompt Library', breadcrumb: 'Reusable templates' },

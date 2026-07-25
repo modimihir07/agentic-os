@@ -187,6 +187,34 @@ def append_audit(entry: dict):
         # underlying operation, but surface it on the server console.
         print(f"[audit] failed to write entry {entry.get('action')!r}: {e}")
 
+
+def record_brain_learning(source: str, source_path: str, title: str,
+                           content: str, agent: str | None = None,
+                           updated_at: str | None = None) -> bool:
+    """Push a single document into the centralized brain index.
+
+    Best-effort: a brain-index failure must never break the calling
+    operation (e.g. a skill run). Calls the same engine the CLI/HTTP
+    endpoints use, synchronously — no HTTP round-trip.
+    """
+    try:
+        mod = _brain_index_module()
+        conn = mod.get_conn()
+        try:
+            mod.upsert_doc(
+                conn, source=source, source_path=source_path, title=title,
+                content=content, agent=agent, updated_at=updated_at,
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+    except Exception as e:
+        print(f"[brain-index] learning upsert failed ({source}/{source_path}): {e}")
+        return False
+
+
+
 # ─── Agent Stats (real, persisted) ──────────────────────────────
 AGENT_STATS_FILE = BASE_DIR / "data" / "agent-stats.json"
 
@@ -857,6 +885,17 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
         f"- Output: {response_text[:500]}\n"
     )
     write_file(path / "learnings.md", existing + new_entry)
+
+    # Also push this learning into the centralized brain index so it is
+    # immediately searchable alongside brain/ notes and chat history.
+    record_brain_learning(
+        source="skill-learning",
+        source_path=str(path.relative_to(BASE_DIR) / "learnings.md") + f"#{run_id}",
+        title=f"{name} — learning {run_id}",
+        content=f"## {timestamp} (Run {run_id})\n- Agent: {agent_choice}\n- Input: {skill_input or '(none)'}\n- Output: {response_text[:500]}",
+        agent=agent_choice,
+        updated_at=get_timestamp(),
+    )
 
     # Log execution
     append_audit({

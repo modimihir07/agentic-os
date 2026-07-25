@@ -93,6 +93,10 @@ const api = {
   recomputeAgentTime: () => api.post('/api/agent-time/recompute', {}),
   // Agent Insights (AI usage analytics)
   getAgentInsights: (recompute = false) => api.get(`/api/agent-insights${recompute ? '?recompute=true' : ''}`),
+  // Brain Index (centralized knowledge pipeline)
+  getBrainIndexSearch: (q, source = '', limit = 20) => api.get(`/api/brain-index/search?q=${encodeURIComponent(q)}&limit=${limit}${source ? `&source=${encodeURIComponent(source)}` : ''}`),
+  getBrainIndexStats: () => api.get('/api/brain-index/stats'),
+  brainIndexIngest: () => api.post('/api/brain-index/ingest', {}),
   // Agent Registry
   getAgents: () => api.get('/api/agents'),
   registerAgent: (data) => api.post('/api/agents/register', data),

@@ -1,0 +1,10 @@
+{
+  "id": "brain-index-ingest",
+  "name": "Brain Index Auto-Ingest",
+  "endpoint": "/api/brain-index/ingest",
+  "cron": "*/30 * * * *",
+  "enabled": true,
+  "created": "2026-07-25T00:00:00Z",
+  "last_run": null,
+  "next_run": null
+}
