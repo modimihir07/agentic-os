@@ -2271,6 +2271,8 @@ import signal
 # redundant terminal implementations.
 
 
+
+
 # ─── Routes: Dashboard Static Files ──────────────────────────────
 
 dashboard_dir = BASE_DIR / "dashboard"
@@ -2385,6 +2387,7 @@ def favicon_svg():
 # ─── Main ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import argparse
     import socket
 
     import uvicorn

@@ -13,8 +13,13 @@
 - New skills added: firebase-* (10), notion-knowledge-capture, xcode-project-setup, audit-test-plugin, test-plugin.
 - `.gitignore` extended to exclude runtime artifacts (pid, graphify-out, logs).
 - VERIFIED live: server on :8081, all new endpoints return 200; register/unregister persists correctly.
-- CAVEAT (not yet fixed): agent `check_command` runs via `subprocess.run(..., shell=True)` — command-injection risk if a malicious agent config is registered. Local-admin-only exposure; flag for later hardening.
-- CAVEAT: avoid running two `server.py` instances on the same port — registration on one won't show in reads served by the other.
+- CAVEAT (FIXED 2026-07-25): agent `check_command` previously ran via `subprocess.run(..., shell=True)` — command-injection risk. Now uses `shlex.split` + `shell=False`. Verified: malicious `"; touch /tmp/PWNED"` no longer executes.
+- CAVEAT (FIXED 2026-07-25): running two `server.py` on same port caused phantom "register doesn't persist" + 8082 bind crash. Added startup port guard (exits cleanly with message) + terminal websocket now binds gracefully instead of crashing. Verified: 2nd instance bails with exit 1.
+
+## 2026-07-25 — Security & ops hardening (commit pending)
+- Fixed command-injection in `check_agent()` custom check_type: `shell=True` → `shlex.split` + `shell=False`.
+- Added double-launch guard in `main`: probe API port (8081) before `uvicorn.run`; exit 1 with clear message if already bound.
+- Made `start_terminal_server` (8082) fail gracefully — pre-bind probe + try/except, logs warning instead of crashing the process.
 
 ## Archived (older than 30 days)
 
