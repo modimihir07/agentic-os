@@ -310,11 +310,20 @@ def check_agent(name: str) -> dict:
             except Exception:
                 status = "offline" if not exists else "warning"
         elif check_type == "custom":
-            # Run a custom check command
+            # Run a custom check command. IMPORTANT: never use shell=True —
+            # check_command comes from agent-registry config and a malicious
+            # value ("; rm -rf ~") would otherwise execute arbitrary shell.
             check_cmd = agent.get("check_command", "")
             if check_cmd:
-                result = subprocess.run(check_cmd, shell=True, capture_output=True, timeout=10)
-                status = "online" if result.returncode == 0 else "offline"
+                import shlex
+                try:
+                    cmd = shlex.split(check_cmd)
+                    result = subprocess.run(
+                        cmd, shell=False, capture_output=True, timeout=10
+                    )
+                    status = "online" if result.returncode == 0 else "offline"
+                except (ValueError, OSError):
+                    status = "offline"
             else:
                 status = "online" if exists else "offline"
         else:
@@ -1889,7 +1898,25 @@ except ImportError:
 
 
 def start_terminal_server(host="0.0.0.0", port=8082):
-    """Start the WebSocket terminal server on a separate port."""
+    """Start the WebSocket terminal server on a separate port.
+
+    If the port is already in use (e.g. a second server.py instance), fail
+    *gracefully* — log and return instead of crashing the whole process.
+    """
+    import socket
+
+    # Pre-check: is the port already bound by another process?
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((host, port))
+        probe.close()
+    except OSError as e:
+        print(
+            f"[terminal] WARNING: cannot bind {host}:{port} "
+            f"({e}). Terminal websocket disabled; API still running."
+        )
+        return
+
     async def serve():
         server = await websockets.serve(
             terminal_handler,
@@ -1897,12 +1924,16 @@ def start_terminal_server(host="0.0.0.0", port=8082):
             port,
             max_size=10 * 1024 * 1024,
         )
+        print(f"[terminal] WebSocket terminal listening on ws://{host}:{port}")
         return server
 
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    server = loop.run_until_complete(serve())
-    loop.run_forever()
+    try:
+        server = loop.run_until_complete(serve())
+        loop.run_forever()
+    except OSError as e:
+        print(f"[terminal] WARNING: terminal server failed to start: {e}")
 
 
 # Start terminal server in a daemon thread
@@ -2025,9 +2056,30 @@ def favicon_svg():
 # ─── Main ─────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
+    import argparse
+    import socket
+
     import uvicorn
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8080)
     parser.add_argument("--host", type=str, default="0.0.0.0")
     args = parser.parse_args()
+
+    # ── Double-launch guard ───────────────────────────────────────────
+    # Refuse to start if the API port is already bound by another process.
+    # Without this, two server.py instances collide on 8081 (and 8082),
+    # producing phantom "register doesn't persist" bugs and bind crashes.
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind((args.host, args.port))
+        probe.close()
+    except OSError:
+        print(
+            f"ERROR: port {args.port} on {args.host} is already in use. "
+            f"Agentic OS appears to be running already — stop it first "
+            f"(./start.sh --stop) before launching another instance."
+        )
+        raise SystemExit(1)
+
     uvicorn.run(app, host=args.host, port=args.port)
