@@ -2534,6 +2534,12 @@ graphify_dir = BASE_DIR / "graphify-out"
 if graphify_dir.exists():
     app.mount("/graphify-out", StaticFiles(directory=str(graphify_dir)), name="graphify-out")
 
+# Central Agentic-OS brain graph (merged cross-project knowledge graph).
+# Built by brain/graph/build-central.sh; queryable live via brain/graph/serve-brain.sh (MCP :8090).
+central_brain_dir = BASE_DIR / "brain" / "graph"
+if central_brain_dir.exists():
+    app.mount("/brain-graph", StaticFiles(directory=str(central_brain_dir)), name="brain-graph")
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     html_file = BASE_DIR / "dashboard" / "index.html"
