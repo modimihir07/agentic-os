@@ -2,18 +2,22 @@
 
 One central, queryable brain that project graphs roll up into.
 
-## Topology
-- `agentic-os.json` — this project's own code graph (built from `graphify . --code-only`).
-- `projects/<name>.json` — each linked project's graph (registered via `link-project.sh`).
-- `central-graph.json` — the MERGED cross-repo brain (union of all the above). This is the artifact everything queries.
-- `serve-brain.sh` — serves `central-graph.json` over HTTP MCP at `http://127.0.0.1:8090/mcp`.
-- Dashboard: the brain directory is mounted at `http://127.0.0.1:8080/brain-graph/`.
+## Topology (two brains)
+1. **Agentic-OS brain (WSL)** — this folder. `agentic-os.json` + merged `central-graph.json`.
+2. **Windows central brain (device-wide, offline, standalone)** — `C:\Users\Austin\Brains\central\`.
+   Its own Python venv + Graphify, serves `central-graph.json` over HTTP MCP at
+   `http://127.0.0.1:8090/mcp` from Windows. No WSL dependency at query time.
+   WSL's `sync-to-windows.sh` pushes the merged graph into it hourly.
 
-## Commands
+Per-project graphs: `projects/<name>.json` (linked via `link-project.sh`) roll
+up into `central-graph.json` here, which is then synced to Windows.
+
+## Commands (WSL side)
 ```
-bash brain/graph/build-central.sh            # rebuild central brain (code graph + merge linked projects)
+bash brain/graph/build-central.sh            # rebuild WSL central brain (code graph + merge linked projects)
 bash brain/graph/link-project.sh <name> <graph.json>   # register a project's graph into the brain
-bash brain/graph/serve-brain.sh             # serve central brain over HTTP MCP (:8090)
+bash brain/graph/sync-to-windows.sh          # rebuild + push merged graph to Windows central brain
+bash brain/graph/serve-brain.sh             # serve WSL central brain over HTTP MCP (:8090)
 ```
 Set `CENTRAL_BRAIN_PORT` to override the serve port (default 8090).
 
