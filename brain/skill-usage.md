@@ -1,38 +1,34 @@
 # Skill Usage & Effectiveness
 
-> Last updated: 2026-07-25
+> Last updated: 2026-07-26 (brain-guardian)
 
-## Audit Log Summary (164 total entries)
-| Action | Count |
-|--------|-------|
-| kanban_task_updated | 31 |
-| skill_run | 22 |
-| chat_message | 15 |
-| brain_update | 11 |
-| journal_saved | 10 |
-| settings_updated | 9 |
-| kanban_task_created | 8 |
-| agent_registered | 7 |
-| task_routed | 5 |
-| standards_discovery_run | 5 |
+## Most Used Skills (by audit log count)
+| Skill | Runs | Last Run | Notes |
+|-------|------|----------|-------|
+| memory-consolidation | 13 | 2026-07-26 | Latest run FAILED — Hermes timed out (180s) |
+| code-review | 8 | 2026-07-26 | Recent runs failed via opencode (postinstall broken) |
+| daily-standup | 4 | — | |
+| backup-skill | 3 | 2026-07-26 | opencode broken |
+| test-plugin / tdd-cycle / heartbeat / goal-planner / firebase-hosting-basics / firebase-ai-logic-basics | 2 each | — | |
 
-## Recent Skill Runs
-| Skill | Agent | Last Run | Result |
-|-------|-------|----------|--------|
-| memory-consolidation | hermes | 2026-07-17 | 1 completed, 1 timeout |
-| firebase-hosting-basics | opencode | 2026-06-28 | timeout |
-
-## Eval Scores
-- All 18 score-history.json files are empty — no eval data has accumulated yet.
+## Eval Data (score-history.json)
+| Skill | Has Data |
+|-------|----------|
+| code-review | yes (largest history) |
+| heartbeat, firebase-ai-logic-basics, backup-skill, memory-consolidation | yes (1–2 entries) |
+| others | empty |
+Scores are all ~45–50 stub-quality; no meaningful eval trend yet.
 
 ## New Learnings Since 2026-06-28
-- memory-consolidation/learnings.md (updated 2026-07-17)
-- firebase-hosting-basics/learnings.md (updated 2026-07-17)
-- goal-planner, code-review, test-plugin (updated 2026-06-29)
+15 skills have learnings.md updated 2026-07-17 → 2026-07-26 (backup-skill, code-review, devops-audit, memory-consolidation most recent on 2026-07-26).
 
 ## Skills Per Project
 | Project | Skills Used |
 |---------|-------------|
-| Agentic OS | memory-consolidation, brain-guardian (Hermes cron), daily-standup, heartbeat |
-| Kitchen-Inventory | code-review, firebase-hosting-basics |
-| Pendelton-comms-live | (none recorded) |
+| Agentic OS | daily-standup, heartbeat, devops-audit, memory-consolidation, backup-skill |
+| Kitchen-Inventory | code-review, firebase-ai-logic-basics, firebase-hosting-basics, systematic-debug, tdd-cycle |
+
+## ⚠ Alerts
+- **opencode agent broken** (installed with --ignore-scripts; postinstall never ran). All opencode-dispatched skill runs on 2026-07-25/26 returned errors, yet audit still logs success=true with score ~50 — scoring is masking failures.
+- Kanban dispatch to opencode failed (task fffc3981, 2026-07-26).
+- memory-consolidation via hermes timed out on 2026-07-26 17:03 UTC.

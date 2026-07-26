@@ -1,19 +1,23 @@
 # GitHub Activity Log
 
-> Last checked: 2026-07-25 09:44
+> Last checked: 2026-07-26 14:57 (brain-guardian)
 
 ## Project: Agentic OS
-- Repo: ~/agentic-os (github.com/modimihir07/agentic-os)
-- Last commit: d9b1b0d "Update Hermes MEMORY.md with v0.2.0 features" (2026-06-05)
-- Unpushed: 0 commits
-- Recent (48h): none — last commit 50 days ago
-- Uncommitted local changes: AGENTS.md, agents/hermes/USER.md (modified, not committed)
+- Repo: /home/austin/agentic-os (github.com/zumayaaustin-creator/agentic-os)
+- Branch: local-hardening-merged — **17 commits ahead of origin/main (UNPUSHED)**
+- Last commit: 28c1689 feat: redundant WSL brain serve + keepalive (fail-safe) (2026-07-26)
+- Recent (48h): 15+ commits, including:
+  - 28c1689 feat: redundant WSL brain serve + keepalive (fail-safe)
+  - 174a845 feat: two-brain topology — WSL brain + Windows standalone central brain
+  - b70d963 feat: central graphify brain (merged cross-project knowledge graph)
+  - 199ba1d chore: stale-reference cleanup + hourly integrity checker
+  - a399f2f fix: enable opencode agent + wire dashboard Terminal to /ws/terminal
+  - 07367ca fix: unify dashboard port (8080) from settings.json
+- Working tree: dirty (README.md, brain/business-brain.md modified)
 
 ## Project: Kitchen-Inventory
-- Repo: not cloned locally (deployed on antigravity server/host)
-- No git activity data available from this machine
+- Repo not cloned locally (deployed on antigravity host) — no git activity visible from WSL
 
 ## Project: Pendelton-comms-live
 - Repo: https://github.com/Linecheck-store/Pendelton-comms-live (private)
-- Not cloned locally — no git activity data available
-- Last worked on: 2026-02-28 (per active-projects.md)
+- Repo not cloned locally — no git activity visible; last known work 2026-02-28 (stale ~5 months)

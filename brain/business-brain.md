@@ -16,6 +16,12 @@ Agentic OS is a multi-agent orchestration platform that coordinates opencode, He
 - Developer-first — assumes technical competence
 - "Kernel of a system" mentality — everything has a purpose, nothing is decorative
 
+## Visual Style Preferences
+- **Background**: Dark background
+- **Theme**: Cyberpunk / hacker aesthetic
+- **Accent colors**: Neon cyan, neon yellow, neon purple
+- Apply to any UI, dashboards, or visual artifacts produced for the user (e.g. dashboard, diagrams, generated images).
+
 ## Key Relationships
 - User: Developer — AI/ML and DevOps enthusiast
 - Tool stack: opencode, Hermes Agent, Gemini CLI, deepseek-v4-flash-free

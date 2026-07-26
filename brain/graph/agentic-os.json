@@ -9,7 +9,7 @@
       "source_file": ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.swift",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 48,
+      "community": 49,
       "community_name": "Package.swift",
       "norm_label": "package.swift",
       "id": "agents_skills_xcode_project_setup_scripts_xcode_spm_setup_package"
@@ -21,7 +21,7 @@
       "source_file": ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.swift",
       "source_location": "L2",
       "_origin": "ast",
-      "community": 48,
+      "community": 49,
       "community_name": "Package.swift",
       "norm_label": "packagedescription",
       "id": "packagedescription"
@@ -160,7 +160,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 49,
+      "community": 50,
       "community_name": "backup.sh",
       "norm_label": "backup.sh",
       "id": "backup"
@@ -175,7 +175,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 49,
+      "community": 50,
       "community_name": "backup.sh",
       "norm_label": "backup.sh script",
       "id": "backup_sh__entry"
@@ -406,7 +406,7 @@
       "source_file": "dashboard/pages/backups.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 34,
+      "community": 35,
       "community_name": "backups.js",
       "norm_label": "backups.js",
       "id": "dashboard_pages_backups"
@@ -417,7 +417,7 @@
       "source_file": "dashboard/pages/backups.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 34,
+      "community": 35,
       "community_name": "backups.js",
       "norm_label": "renderbackups()",
       "id": "dashboard_pages_backups_renderbackups"
@@ -428,7 +428,7 @@
       "source_file": "dashboard/pages/backups.js",
       "source_location": "L46",
       "_origin": "ast",
-      "community": 34,
+      "community": 35,
       "community_name": "backups.js",
       "norm_label": "createbackup()",
       "id": "dashboard_pages_backups_createbackup"
@@ -439,7 +439,7 @@
       "source_file": "dashboard/pages/backups.js",
       "source_location": "L56",
       "_origin": "ast",
-      "community": 34,
+      "community": 35,
       "community_name": "backups.js",
       "norm_label": "restorebackup()",
       "id": "dashboard_pages_backups_restorebackup"
@@ -450,7 +450,7 @@
       "source_file": "dashboard/pages/backups.js",
       "source_location": "L68",
       "_origin": "ast",
-      "community": 34,
+      "community": 35,
       "community_name": "backups.js",
       "norm_label": "confirmrestore()",
       "id": "dashboard_pages_backups_confirmrestore"
@@ -615,7 +615,7 @@
       "source_file": "dashboard/pages/cost.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 40,
       "community_name": "cost.js",
       "norm_label": "cost.js",
       "id": "dashboard_pages_cost"
@@ -626,7 +626,7 @@
       "source_file": "dashboard/pages/cost.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 39,
+      "community": 40,
       "community_name": "cost.js",
       "norm_label": "rendercost()",
       "id": "dashboard_pages_cost_rendercost"
@@ -637,7 +637,7 @@
       "source_file": "dashboard/pages/cost.js",
       "source_location": "L118",
       "_origin": "ast",
-      "community": 39,
+      "community": 40,
       "community_name": "cost.js",
       "norm_label": "recordtestcost()",
       "id": "dashboard_pages_cost_recordtestcost"
@@ -648,7 +648,7 @@
       "source_file": "dashboard/pages/cost.js",
       "source_location": "L144",
       "_origin": "ast",
-      "community": 39,
+      "community": 40,
       "community_name": "cost.js",
       "norm_label": "submitcostrecord()",
       "id": "dashboard_pages_cost_submitcostrecord"
@@ -659,7 +659,7 @@
       "source_file": "dashboard/pages/dashboard.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 40,
+      "community": 41,
       "community_name": "dashboard.js",
       "norm_label": "dashboard.js",
       "id": "dashboard_pages_dashboard"
@@ -670,7 +670,7 @@
       "source_file": "dashboard/pages/dashboard.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 40,
+      "community": 41,
       "community_name": "dashboard.js",
       "norm_label": "renderdashboard()",
       "id": "dashboard_pages_dashboard_renderdashboard"
@@ -681,7 +681,7 @@
       "source_file": "dashboard/pages/dashboard.js",
       "source_location": "L101",
       "_origin": "ast",
-      "community": 40,
+      "community": 41,
       "community_name": "dashboard.js",
       "norm_label": "runquickskill()",
       "id": "dashboard_pages_dashboard_runquickskill"
@@ -692,7 +692,7 @@
       "source_file": "dashboard/pages/dashboard.js",
       "source_location": "L130",
       "_origin": "ast",
-      "community": 40,
+      "community": 41,
       "community_name": "dashboard.js",
       "norm_label": "executequickrun()",
       "id": "dashboard_pages_dashboard_executequickrun"
@@ -868,7 +868,7 @@
       "source_file": "dashboard/pages/learning-analytics.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 55,
+      "community": 59,
       "community_name": "learning-analytics.js",
       "norm_label": "learning-analytics.js",
       "id": "dashboard_pages_learning_analytics"
@@ -879,7 +879,7 @@
       "source_file": "dashboard/pages/learning-analytics.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 55,
+      "community": 59,
       "community_name": "learning-analytics.js",
       "norm_label": "renderlearninganalytics()",
       "id": "dashboard_pages_learning_analytics_renderlearninganalytics"
@@ -890,7 +890,7 @@
       "source_file": "dashboard/pages/memory.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 41,
+      "community": 42,
       "community_name": "memory.js",
       "norm_label": "memory.js",
       "id": "dashboard_pages_memory"
@@ -901,7 +901,7 @@
       "source_file": "dashboard/pages/memory.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 41,
+      "community": 42,
       "community_name": "memory.js",
       "norm_label": "rendermemory()",
       "id": "dashboard_pages_memory_rendermemory"
@@ -912,7 +912,7 @@
       "source_file": "dashboard/pages/memory.js",
       "source_location": "L38",
       "_origin": "ast",
-      "community": 41,
+      "community": 42,
       "community_name": "memory.js",
       "norm_label": "editmemory()",
       "id": "dashboard_pages_memory_editmemory"
@@ -923,7 +923,7 @@
       "source_file": "dashboard/pages/memory.js",
       "source_location": "L57",
       "_origin": "ast",
-      "community": 41,
+      "community": 42,
       "community_name": "memory.js",
       "norm_label": "savememory()",
       "id": "dashboard_pages_memory_savememory"
@@ -1022,7 +1022,7 @@
       "source_file": "dashboard/pages/prompts.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 43,
+      "community": 44,
       "community_name": "prompts.js",
       "norm_label": "prompts.js",
       "id": "dashboard_pages_prompts"
@@ -1033,7 +1033,7 @@
       "source_file": "dashboard/pages/prompts.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 43,
+      "community": 44,
       "community_name": "prompts.js",
       "norm_label": "renderprompts()",
       "id": "dashboard_pages_prompts_renderprompts"
@@ -1044,7 +1044,7 @@
       "source_file": "dashboard/pages/prompts.js",
       "source_location": "L41",
       "_origin": "ast",
-      "community": 43,
+      "community": 44,
       "community_name": "prompts.js",
       "norm_label": "viewprompt()",
       "id": "dashboard_pages_prompts_viewprompt"
@@ -1055,7 +1055,7 @@
       "source_file": "dashboard/pages/prompts.js",
       "source_location": "L61",
       "_origin": "ast",
-      "community": 43,
+      "community": 44,
       "community_name": "prompts.js",
       "norm_label": "copypromptfrommodal()",
       "id": "dashboard_pages_prompts_copypromptfrommodal"
@@ -1066,7 +1066,7 @@
       "source_file": "dashboard/pages/scheduler.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 35,
+      "community": 36,
       "community_name": "scheduler.js",
       "norm_label": "scheduler.js",
       "id": "dashboard_pages_scheduler"
@@ -1077,7 +1077,7 @@
       "source_file": "dashboard/pages/scheduler.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 35,
+      "community": 36,
       "community_name": "scheduler.js",
       "norm_label": "renderscheduler()",
       "id": "dashboard_pages_scheduler_renderscheduler"
@@ -1088,7 +1088,7 @@
       "source_file": "dashboard/pages/scheduler.js",
       "source_location": "L48",
       "_origin": "ast",
-      "community": 35,
+      "community": 36,
       "community_name": "scheduler.js",
       "norm_label": "showaddjob()",
       "id": "dashboard_pages_scheduler_showaddjob"
@@ -1099,7 +1099,7 @@
       "source_file": "dashboard/pages/scheduler.js",
       "source_location": "L75",
       "_origin": "ast",
-      "community": 35,
+      "community": 36,
       "community_name": "scheduler.js",
       "norm_label": "createjob()",
       "id": "dashboard_pages_scheduler_createjob"
@@ -1110,7 +1110,7 @@
       "source_file": "dashboard/pages/scheduler.js",
       "source_location": "L90",
       "_origin": "ast",
-      "community": 35,
+      "community": 36,
       "community_name": "scheduler.js",
       "norm_label": "deletejob()",
       "id": "dashboard_pages_scheduler_deletejob"
@@ -1121,7 +1121,7 @@
       "source_file": "dashboard/pages/session-replay.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 44,
+      "community": 45,
       "community_name": "session-replay.js",
       "norm_label": "session-replay.js",
       "id": "dashboard_pages_session_replay"
@@ -1132,7 +1132,7 @@
       "source_file": "dashboard/pages/session-replay.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 44,
+      "community": 45,
       "community_name": "session-replay.js",
       "norm_label": "rendersessionreplay()",
       "id": "dashboard_pages_session_replay_rendersessionreplay"
@@ -1143,7 +1143,7 @@
       "source_file": "dashboard/pages/session-replay.js",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 44,
+      "community": 45,
       "community_name": "session-replay.js",
       "norm_label": "replaysession()",
       "id": "dashboard_pages_session_replay_replaysession"
@@ -1154,7 +1154,7 @@
       "source_file": "dashboard/pages/session-replay.js",
       "source_location": "L83",
       "_origin": "ast",
-      "community": 44,
+      "community": 45,
       "community_name": "session-replay.js",
       "norm_label": "formatsize()",
       "id": "dashboard_pages_session_replay_formatsize"
@@ -1385,7 +1385,7 @@
       "source_file": "dashboard/pages/standards.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 45,
+      "community": 46,
       "community_name": "standards.js",
       "norm_label": "standards.js",
       "id": "dashboard_pages_standards"
@@ -1396,7 +1396,7 @@
       "source_file": "dashboard/pages/standards.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 45,
+      "community": 46,
       "community_name": "standards.js",
       "norm_label": "renderstandards()",
       "id": "dashboard_pages_standards_renderstandards"
@@ -1407,7 +1407,7 @@
       "source_file": "dashboard/pages/standards.js",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 45,
+      "community": 46,
       "community_name": "standards.js",
       "norm_label": "viewstandard()",
       "id": "dashboard_pages_standards_viewstandard"
@@ -1418,7 +1418,7 @@
       "source_file": "dashboard/pages/standards.js",
       "source_location": "L58",
       "_origin": "ast",
-      "community": 45,
+      "community": 46,
       "community_name": "standards.js",
       "norm_label": "rundiscovery()",
       "id": "dashboard_pages_standards_rundiscovery"
@@ -1433,7 +1433,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 59,
+      "community": 63,
       "community_name": "restore.sh",
       "norm_label": "restore.sh",
       "id": "restore"
@@ -1448,7 +1448,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 59,
+      "community": 63,
       "community_name": "restore.sh",
       "norm_label": "restore.sh script",
       "id": "restore_sh__entry"
@@ -1559,7 +1559,7 @@
       "source_location": "",
       "_origin": "ast",
       "community": 15,
-      "community_name": "main.swift",
+      "community_name": "Path",
       "norm_label": "path",
       "id": "path"
     },
@@ -1826,7 +1826,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 51,
+      "community": 54,
       "norm_label": "link-project.sh",
       "community_name": "link-project.sh",
       "id": "brain_graph_link_project"
@@ -1841,7 +1841,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 51,
+      "community": 54,
       "norm_label": "link-project.sh script",
       "community_name": "link-project.sh",
       "id": "brain_graph_link_project_sh__entry"
@@ -1856,7 +1856,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 52,
+      "community": 55,
       "norm_label": "serve-brain.sh",
       "community_name": "serve-brain.sh",
       "id": "brain_graph_serve_brain"
@@ -1871,7 +1871,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 52,
+      "community": 55,
       "norm_label": "serve-brain.sh script",
       "community_name": "serve-brain.sh",
       "id": "brain_graph_serve_brain_sh__entry"
@@ -1882,7 +1882,7 @@
       "source_file": "dashboard/api.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 54,
+      "community": 58,
       "norm_label": "api.js",
       "community_name": "api.js",
       "id": "dashboard_api"
@@ -1893,7 +1893,7 @@
       "source_file": "dashboard/api.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 54,
+      "community": 58,
       "norm_label": "api",
       "community_name": "api.js",
       "id": "dashboard_api_api"
@@ -2058,7 +2058,7 @@
       "source_file": "dashboard/pages/brain-search.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 38,
+      "community": 39,
       "norm_label": "brain-search.js",
       "community_name": "brain-search.js",
       "id": "dashboard_pages_brain_search"
@@ -2069,7 +2069,7 @@
       "source_file": "dashboard/pages/brain-search.js",
       "source_location": "L4",
       "_origin": "ast",
-      "community": 38,
+      "community": 39,
       "norm_label": "renderbrainsearch()",
       "community_name": "brain-search.js",
       "id": "dashboard_pages_brain_search_renderbrainsearch"
@@ -2080,7 +2080,7 @@
       "source_file": "dashboard/pages/brain-search.js",
       "source_location": "L42",
       "_origin": "ast",
-      "community": 38,
+      "community": 39,
       "norm_label": "brainsearchrun()",
       "community_name": "brain-search.js",
       "id": "dashboard_pages_brain_search_brainsearchrun"
@@ -2091,7 +2091,7 @@
       "source_file": "dashboard/pages/brain-search.js",
       "source_location": "L74",
       "_origin": "ast",
-      "community": 38,
+      "community": 39,
       "norm_label": "brainsearchingest()",
       "community_name": "brain-search.js",
       "id": "dashboard_pages_brain_search_brainsearchingest"
@@ -2311,7 +2311,7 @@
       "source_file": "dashboard/pages/orchestration.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 42,
+      "community": 43,
       "norm_label": "orchestration.js",
       "community_name": "orchestration.js",
       "id": "dashboard_pages_orchestration"
@@ -2322,7 +2322,7 @@
       "source_file": "dashboard/pages/orchestration.js",
       "source_location": "L3",
       "_origin": "ast",
-      "community": 42,
+      "community": 43,
       "norm_label": "renderorchestration()",
       "community_name": "orchestration.js",
       "id": "dashboard_pages_orchestration_renderorchestration"
@@ -2333,7 +2333,7 @@
       "source_file": "dashboard/pages/orchestration.js",
       "source_location": "L36",
       "_origin": "ast",
-      "community": 42,
+      "community": 43,
       "norm_label": "orchloadruns()",
       "community_name": "orchestration.js",
       "id": "dashboard_pages_orchestration_orchloadruns"
@@ -2344,7 +2344,7 @@
       "source_file": "dashboard/pages/orchestration.js",
       "source_location": "L55",
       "_origin": "ast",
-      "community": 42,
+      "community": 43,
       "norm_label": "orchrun()",
       "community_name": "orchestration.js",
       "id": "dashboard_pages_orchestration_orchrun"
@@ -2553,7 +2553,7 @@
       "source_file": "dashboard/pages/terminal.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 46,
+      "community": 47,
       "norm_label": "terminal.js",
       "community_name": "terminal.js",
       "id": "dashboard_pages_terminal"
@@ -2564,7 +2564,7 @@
       "source_file": "dashboard/pages/terminal.js",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 46,
+      "community": 47,
       "norm_label": "renderterminal()",
       "community_name": "terminal.js",
       "id": "dashboard_pages_terminal_renderterminal"
@@ -2575,7 +2575,7 @@
       "source_file": "dashboard/pages/terminal.js",
       "source_location": "L144",
       "_origin": "ast",
-      "community": 46,
+      "community": 47,
       "norm_label": "terminalreconnect()",
       "community_name": "terminal.js",
       "id": "dashboard_pages_terminal_terminalreconnect"
@@ -2586,7 +2586,7 @@
       "source_file": "dashboard/pages/terminal.js",
       "source_location": "L150",
       "_origin": "ast",
-      "community": 46,
+      "community": 47,
       "norm_label": "terminalclear()",
       "community_name": "terminal.js",
       "id": "dashboard_pages_terminal_terminalclear"
@@ -2744,7 +2744,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 56,
+      "community": 60,
       "norm_label": "start-monitor.sh",
       "community_name": "start-monitor.sh",
       "id": "dashboard_start_monitor"
@@ -2759,7 +2759,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 56,
+      "community": 60,
       "norm_label": "start-monitor.sh script",
       "community_name": "start-monitor.sh",
       "id": "dashboard_start_monitor_sh__entry"
@@ -2935,7 +2935,7 @@
       "source_file": "install.ps1",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 57,
+      "community": 61,
       "norm_label": "install.ps1",
       "community_name": "install.ps1",
       "id": "install_ps1_install"
@@ -2946,7 +2946,7 @@
       "source_file": "install.ps1",
       "source_location": "L6",
       "_origin": "ast",
-      "community": 57,
+      "community": 61,
       "norm_label": "resolve-python()",
       "community_name": "install.ps1",
       "id": "install_resolve_python"
@@ -2961,7 +2961,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 58,
+      "community": 62,
       "norm_label": "install.sh",
       "community_name": "install.sh script",
       "id": "install_sh_install"
@@ -2976,7 +2976,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 58,
+      "community": 62,
       "norm_label": "install.sh script",
       "community_name": "install.sh script",
       "id": "install_sh__entry"
@@ -3328,7 +3328,7 @@
       "source_file": "",
       "source_location": "",
       "_origin": "ast",
-      "community": 62,
+      "community": 66,
       "norm_label": "path",
       "community_name": "Path",
       "id": "server_py_path"
@@ -3365,7 +3365,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 60,
+      "community": 64,
       "norm_label": "start-agentic-os.sh",
       "community_name": "start-agentic-os.sh",
       "id": "start_agentic_os"
@@ -3380,7 +3380,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 60,
+      "community": 64,
       "norm_label": "start-agentic-os.sh script",
       "community_name": "start-agentic-os.sh",
       "id": "start_agentic_os_sh__entry"
@@ -3391,7 +3391,7 @@
       "source_file": "start.ps1",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 47,
+      "community": 48,
       "norm_label": "start.ps1",
       "community_name": "start.ps1",
       "id": "start_ps1_start"
@@ -3402,7 +3402,7 @@
       "source_file": "start.ps1",
       "source_location": "L11",
       "_origin": "ast",
-      "community": 47,
+      "community": 48,
       "norm_label": "resolve-python()",
       "community_name": "start.ps1",
       "id": "start_resolve_python"
@@ -3413,7 +3413,7 @@
       "source_file": "start.ps1",
       "source_location": "L43",
       "_origin": "ast",
-      "community": 47,
+      "community": 48,
       "norm_label": "find-freeport()",
       "community_name": "start.ps1",
       "id": "start_find_freeport"
@@ -3428,7 +3428,7 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 61,
+      "community": 65,
       "norm_label": "start.sh",
       "community_name": "start.sh script",
       "id": "start_sh_start"
@@ -3443,7 +3443,7 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 61,
+      "community": 65,
       "norm_label": "start.sh script",
       "community_name": "start.sh script",
       "id": "start_sh__entry"
@@ -3454,7 +3454,7 @@
       "source_file": "tests/conftest.py",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 37,
+      "community": 38,
       "norm_label": "conftest.py",
       "community_name": "conftest.py",
       "id": "tests_conftest"
@@ -3465,7 +3465,7 @@
       "source_file": "tests/conftest.py",
       "source_location": "L21",
       "_origin": "ast",
-      "community": 37,
+      "community": 38,
       "norm_label": "server_module()",
       "community_name": "conftest.py",
       "id": "tests_conftest_server_module"
@@ -3476,7 +3476,7 @@
       "source_file": "tests/conftest.py",
       "source_location": "L47",
       "_origin": "ast",
-      "community": 37,
+      "community": 38,
       "norm_label": "client()",
       "community_name": "conftest.py",
       "id": "tests_conftest_client"
@@ -3487,7 +3487,7 @@
       "source_file": "tests/conftest.py",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 37,
+      "community": 38,
       "norm_label": "shared pytest fixtures for the agentic os test suite.  the application code (``s",
       "community_name": "conftest.py",
       "id": "tests_conftest_rationale_1"
@@ -3498,7 +3498,7 @@
       "source_file": "tests/conftest.py",
       "source_location": "L22",
       "_origin": "ast",
-      "community": 37,
+      "community": 38,
       "norm_label": "import ``server`` with all filesystem paths redirected to ``tmp_path``.      ret",
       "community_name": "conftest.py",
       "id": "tests_conftest_rationale_22"
@@ -4312,7 +4312,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_server_kanban.py",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban"
@@ -4323,7 +4323,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L8",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "sync_threads()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_sync_threads"
@@ -4334,7 +4334,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L24",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "_create()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_create"
@@ -4345,7 +4345,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L31",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_board_empty()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_board_empty"
@@ -4356,7 +4356,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L37",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_create_and_get_task()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_create_and_get_task"
@@ -4367,7 +4367,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L45",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_get_missing_task_404()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_get_missing_task_404"
@@ -4378,7 +4378,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L49",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_board_groups_by_status()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_board_groups_by_status"
@@ -4389,7 +4389,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L61",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_update_task()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_update_task"
@@ -4400,7 +4400,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L69",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_update_missing_404()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_update_missing_404"
@@ -4411,7 +4411,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L73",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_complete_block_unblock()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_complete_block_unblock"
@@ -4422,7 +4422,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L83",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_comments()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_comments"
@@ -4433,7 +4433,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L89",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_links_add_and_remove()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_links_add_and_remove"
@@ -4444,7 +4444,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L102",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_link_missing_task_404()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_link_missing_task_404"
@@ -4455,7 +4455,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L108",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_specify_moves_triage_to_todo()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_specify_moves_triage_to_todo"
@@ -4466,7 +4466,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L113",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_decompose_creates_children()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_decompose_creates_children"
@@ -4477,7 +4477,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L122",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_dispatch_requires_valid_assignee()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_dispatch_requires_valid_assignee"
@@ -4488,7 +4488,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L127",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_create_with_agent_assignee_dispatches()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_create_with_agent_assignee_dispatches"
@@ -4499,7 +4499,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L136",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_dispatch_failure_blocks_task()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_dispatch_failure_blocks_task"
@@ -4510,7 +4510,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L143",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "test_bulk_dispatch_endpoint()",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_test_bulk_dispatch_endpoint"
@@ -4521,7 +4521,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L1",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "tests for the kanban board endpoints and autonomous dispatch logic.",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_rationale_1"
@@ -4532,7 +4532,7 @@
       "source_file": "tests/test_server_kanban.py",
       "source_location": "L9",
       "_origin": "ast",
-      "community": 8,
+      "community": 9,
       "norm_label": "run ``threading.thread`` targets synchronously so dispatch is deterministic.",
       "community_name": "test_server_kanban.py",
       "id": "tests_test_server_kanban_rationale_9"
@@ -4547,8 +4547,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 50,
+      "community": 51,
       "norm_label": "build-central.sh",
+      "community_name": "build-central.sh",
       "id": "brain_graph_build_central"
     },
     {
@@ -4561,8 +4562,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 50,
+      "community": 51,
       "norm_label": "build-central.sh script",
+      "community_name": "build-central.sh",
       "id": "brain_graph_build_central_sh__entry"
     },
     {
@@ -4575,8 +4577,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "community": 53,
+      "community": 57,
       "norm_label": "sync-to-windows.sh",
+      "community_name": "sync-to-windows.sh",
       "id": "brain_graph_sync_to_windows"
     },
     {
@@ -4589,8 +4592,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "community": 53,
+      "community": 57,
       "norm_label": "sync-to-windows.sh script",
+      "community_name": "sync-to-windows.sh",
       "id": "brain_graph_sync_to_windows_sh__entry"
     },
     {
@@ -4601,6 +4605,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "server.py",
+      "community_name": "server.py",
       "id": "server"
     },
     {
@@ -4611,6 +4616,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "get_cors_origins()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_get_cors_origins"
     },
     {
@@ -4619,8 +4625,9 @@
       "source_file": "server.py",
       "source_location": "L89",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "brainupdate",
+      "community_name": "run_skill",
       "id": "server_brainupdate"
     },
     {
@@ -4629,8 +4636,9 @@
       "source_file": "server.py",
       "source_location": "L92",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "skillrunrequest",
+      "community_name": "run_skill",
       "id": "server_skillrunrequest"
     },
     {
@@ -4641,6 +4649,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "orchestraterequest",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_orchestraterequest"
     },
     {
@@ -4651,6 +4660,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "skillcreate",
+      "community_name": "BaseModel",
       "id": "server_skillcreate"
     },
     {
@@ -4661,6 +4671,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "skillupdate",
+      "community_name": "BaseModel",
       "id": "server_skillupdate"
     },
     {
@@ -4671,6 +4682,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "skillcontextfilewrite",
+      "community_name": "BaseModel",
       "id": "server_skillcontextfilewrite"
     },
     {
@@ -4681,6 +4693,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "schedulejobrequest",
+      "community_name": "BaseModel",
       "id": "server_schedulejobrequest"
     },
     {
@@ -4689,8 +4702,9 @@
       "source_file": "server.py",
       "source_location": "L119",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "settingsupdate",
+      "community_name": "read_json",
       "id": "server_settingsupdate"
     },
     {
@@ -4701,6 +4715,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "backuprestorerequest",
+      "community_name": "Path",
       "id": "server_backuprestorerequest"
     },
     {
@@ -4709,8 +4724,9 @@
       "source_file": "server.py",
       "source_location": "L125",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "chatrequest",
+      "community_name": "run_skill",
       "id": "server_chatrequest"
     },
     {
@@ -4721,6 +4737,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "read_file()",
+      "community_name": "Path",
       "id": "server_read_file"
     },
     {
@@ -4729,8 +4746,9 @@
       "source_file": "server.py",
       "source_location": "L136",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "write_file()",
+      "community_name": "run_skill",
       "id": "server_write_file"
     },
     {
@@ -4741,6 +4759,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "list_dir()",
+      "community_name": "Path",
       "id": "server_list_dir"
     },
     {
@@ -4749,8 +4768,9 @@
       "source_file": "server.py",
       "source_location": "L145",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "read_json()",
+      "community_name": "read_json",
       "id": "server_read_json"
     },
     {
@@ -4759,8 +4779,9 @@
       "source_file": "server.py",
       "source_location": "L164",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "write_json()",
+      "community_name": "read_json",
       "id": "server_write_json"
     },
     {
@@ -4769,8 +4790,9 @@
       "source_file": "server.py",
       "source_location": "L168",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "iter_skill_dirs()",
+      "community_name": "read_json",
       "id": "server_iter_skill_dirs"
     },
     {
@@ -4779,8 +4801,9 @@
       "source_file": "server.py",
       "source_location": "L177",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "new_id()",
+      "community_name": "append_audit",
       "id": "server_new_id"
     },
     {
@@ -4789,8 +4812,9 @@
       "source_file": "server.py",
       "source_location": "L180",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "get_timestamp()",
+      "community_name": "append_audit",
       "id": "server_get_timestamp"
     },
     {
@@ -4799,8 +4823,9 @@
       "source_file": "server.py",
       "source_location": "L183",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "append_audit()",
+      "community_name": "append_audit",
       "id": "server_append_audit"
     },
     {
@@ -4811,6 +4836,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "record_brain_learning()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_record_brain_learning"
     },
     {
@@ -4821,6 +4847,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "load_agent_stats()",
+      "community_name": "load_agent_registry",
       "id": "server_load_agent_stats"
     },
     {
@@ -4829,8 +4856,9 @@
       "source_file": "server.py",
       "source_location": "L237",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "save_agent_stats()",
+      "community_name": "run_skill",
       "id": "server_save_agent_stats"
     },
     {
@@ -4839,8 +4867,9 @@
       "source_file": "server.py",
       "source_location": "L241",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "record_agent_run()",
+      "community_name": "run_skill",
       "id": "server_record_agent_run"
     },
     {
@@ -4849,8 +4878,9 @@
       "source_file": "server.py",
       "source_location": "L260",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "is_error_response()",
+      "community_name": "run_skill",
       "id": "server_is_error_response"
     },
     {
@@ -4859,8 +4889,9 @@
       "source_file": "server.py",
       "source_location": "L295",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "compute_skill_score()",
+      "community_name": "run_skill",
       "id": "server_compute_skill_score"
     },
     {
@@ -4869,8 +4900,9 @@
       "source_file": "server.py",
       "source_location": "L332",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "record_skill_score()",
+      "community_name": "run_skill",
       "id": "server_record_skill_score"
     },
     {
@@ -4881,6 +4913,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "load_agent_registry()",
+      "community_name": "load_agent_registry",
       "id": "server_load_agent_registry"
     },
     {
@@ -4891,6 +4924,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "save_agent_registry()",
+      "community_name": "load_agent_registry",
       "id": "server_save_agent_registry"
     },
     {
@@ -4899,8 +4933,9 @@
       "source_file": "server.py",
       "source_location": "L409",
       "_origin": "ast",
-      "community": 36,
+      "community": 37,
       "norm_label": "_cli_has_subcommand()",
+      "community_name": "hermes_cli_args",
       "id": "server_cli_has_subcommand"
     },
     {
@@ -4909,8 +4944,9 @@
       "source_file": "server.py",
       "source_location": "L417",
       "_origin": "ast",
-      "community": 36,
+      "community": 37,
       "norm_label": "hermes_cli_args()",
+      "community_name": "hermes_cli_args",
       "id": "server_hermes_cli_args"
     },
     {
@@ -4919,8 +4955,9 @@
       "source_file": "server.py",
       "source_location": "L437",
       "_origin": "ast",
-      "community": 36,
+      "community": 37,
       "norm_label": "hermes_available()",
+      "community_name": "hermes_cli_args",
       "id": "server_hermes_available"
     },
     {
@@ -4931,6 +4968,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "check_agent()",
+      "community_name": "load_agent_registry",
       "id": "server_check_agent"
     },
     {
@@ -4941,6 +4979,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute_agent_dynamic()",
+      "community_name": "load_agent_registry",
       "id": "server_execute_agent_dynamic"
     },
     {
@@ -4951,6 +4990,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute_agent_cli()",
+      "community_name": "load_agent_registry",
       "id": "server_execute_agent_cli"
     },
     {
@@ -4961,6 +5001,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute_agent_http()",
+      "community_name": "load_agent_registry",
       "id": "server_execute_agent_http"
     },
     {
@@ -4971,6 +5012,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute_agent_mcp()",
+      "community_name": "load_agent_registry",
       "id": "server_execute_agent_mcp"
     },
     {
@@ -4981,6 +5023,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "get_status()",
+      "community_name": "load_agent_registry",
       "id": "server_get_status"
     },
     {
@@ -4991,6 +5034,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "list_brain()",
+      "community_name": "Path",
       "id": "server_list_brain"
     },
     {
@@ -5001,6 +5045,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "get_brain_file()",
+      "community_name": "Path",
       "id": "server_get_brain_file"
     },
     {
@@ -5009,8 +5054,9 @@
       "source_file": "server.py",
       "source_location": "L621",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "update_brain_file()",
+      "community_name": "run_skill",
       "id": "server_update_brain_file"
     },
     {
@@ -5021,6 +5067,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "_brain_index_module()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_brain_index_module"
     },
     {
@@ -5031,6 +5078,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "ingest_brain_index()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ingest_brain_index"
     },
     {
@@ -5041,6 +5089,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "upsert_brain_doc()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_upsert_brain_doc"
     },
     {
@@ -5051,6 +5100,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "search_brain_index()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_search_brain_index"
     },
     {
@@ -5061,6 +5111,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "stats_brain_index()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_stats_brain_index"
     },
     {
@@ -5071,6 +5122,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "skill_dir_path()",
+      "community_name": "BaseModel",
       "id": "server_skill_dir_path"
     },
     {
@@ -5079,8 +5131,9 @@
       "source_file": "server.py",
       "source_location": "L717",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "resolve_skill_dir()",
+      "community_name": "read_json",
       "id": "server_resolve_skill_dir"
     },
     {
@@ -5091,6 +5144,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "skill_context_file_path()",
+      "community_name": "BaseModel",
       "id": "server_skill_context_file_path"
     },
     {
@@ -5099,8 +5153,9 @@
       "source_file": "server.py",
       "source_location": "L742",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "list_skills()",
+      "community_name": "read_json",
       "id": "server_list_skills"
     },
     {
@@ -5109,8 +5164,9 @@
       "source_file": "server.py",
       "source_location": "L759",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "get_skill()",
+      "community_name": "read_json",
       "id": "server_get_skill"
     },
     {
@@ -5121,6 +5177,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "create_skill()",
+      "community_name": "BaseModel",
       "id": "server_create_skill"
     },
     {
@@ -5131,6 +5188,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "update_skill()",
+      "community_name": "BaseModel",
       "id": "server_update_skill"
     },
     {
@@ -5141,6 +5199,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "get_skill_context_file()",
+      "community_name": "BaseModel",
       "id": "server_get_skill_context_file"
     },
     {
@@ -5151,6 +5210,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "put_skill_context_file()",
+      "community_name": "BaseModel",
       "id": "server_put_skill_context_file"
     },
     {
@@ -5161,6 +5221,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "delete_skill_context_file()",
+      "community_name": "BaseModel",
       "id": "server_delete_skill_context_file"
     },
     {
@@ -5169,8 +5230,9 @@
       "source_file": "server.py",
       "source_location": "L819",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "run_skill()",
+      "community_name": "run_skill",
       "id": "server_run_skill"
     },
     {
@@ -5181,6 +5243,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "_run_angle()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_run_angle"
     },
     {
@@ -5191,6 +5254,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "orchestrate_multi_agent()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_orchestrate_multi_agent"
     },
     {
@@ -5199,8 +5263,9 @@
       "source_file": "server.py",
       "source_location": "L1066",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "list_orchestration_runs()",
+      "community_name": "read_json",
       "id": "server_list_orchestration_runs"
     },
     {
@@ -5209,8 +5274,9 @@
       "source_file": "server.py",
       "source_location": "L1085",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "get_skill_eval()",
+      "community_name": "read_json",
       "id": "server_get_skill_eval"
     },
     {
@@ -5219,8 +5285,9 @@
       "source_file": "server.py",
       "source_location": "L1092",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "list_jobs()",
+      "community_name": "read_json",
       "id": "server_list_jobs"
     },
     {
@@ -5229,8 +5296,9 @@
       "source_file": "server.py",
       "source_location": "L1102",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "create_job()",
+      "community_name": "append_audit",
       "id": "server_create_job"
     },
     {
@@ -5239,8 +5307,9 @@
       "source_file": "server.py",
       "source_location": "L1122",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "delete_job()",
+      "community_name": "read_json",
       "id": "server_delete_job"
     },
     {
@@ -5251,6 +5320,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "get_audit()",
+      "community_name": "server.py",
       "id": "server_get_audit"
     },
     {
@@ -5259,8 +5329,9 @@
       "source_file": "server.py",
       "source_location": "L1154",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "get_cost()",
+      "community_name": "read_json",
       "id": "server_get_cost"
     },
     {
@@ -5269,8 +5340,9 @@
       "source_file": "server.py",
       "source_location": "L1159",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "record_cost()",
+      "community_name": "read_json",
       "id": "server_record_cost"
     },
     {
@@ -5279,8 +5351,9 @@
       "source_file": "server.py",
       "source_location": "L1175",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "list_plugins()",
+      "community_name": "read_json",
       "id": "server_list_plugins"
     },
     {
@@ -5289,8 +5362,9 @@
       "source_file": "server.py",
       "source_location": "L1180",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "install_plugin()",
+      "community_name": "read_json",
       "id": "server_install_plugin"
     },
     {
@@ -5299,8 +5373,9 @@
       "source_file": "server.py",
       "source_location": "L1243",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "uninstall_plugin()",
+      "community_name": "append_audit",
       "id": "server_uninstall_plugin"
     },
     {
@@ -5311,6 +5386,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "list_integrations()",
+      "community_name": "server.py",
       "id": "server_list_integrations"
     },
     {
@@ -5319,8 +5395,9 @@
       "source_file": "server.py",
       "source_location": "L1262",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "add_integration()",
+      "community_name": "append_audit",
       "id": "server_add_integration"
     },
     {
@@ -5331,6 +5408,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "list_backups()",
+      "community_name": "server.py",
       "id": "server_list_backups"
     },
     {
@@ -5339,8 +5417,9 @@
       "source_file": "server.py",
       "source_location": "L1303",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "create_backup()",
+      "community_name": "append_audit",
       "id": "server_create_backup"
     },
     {
@@ -5351,6 +5430,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "_resolve_backup_file()",
+      "community_name": "Path",
       "id": "server_resolve_backup_file"
     },
     {
@@ -5361,6 +5441,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "_safe_extractall()",
+      "community_name": "Path",
       "id": "server_safe_extractall"
     },
     {
@@ -5371,6 +5452,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "restore_backup()",
+      "community_name": "Path",
       "id": "server_restore_backup"
     },
     {
@@ -5381,6 +5463,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "list_prompts()",
+      "community_name": "Path",
       "id": "server_list_prompts"
     },
     {
@@ -5389,8 +5472,9 @@
       "source_file": "server.py",
       "source_location": "L1368",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "get_settings()",
+      "community_name": "read_json",
       "id": "server_get_settings"
     },
     {
@@ -5399,8 +5483,9 @@
       "source_file": "server.py",
       "source_location": "L1373",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "update_settings()",
+      "community_name": "read_json",
       "id": "server_update_settings"
     },
     {
@@ -5411,6 +5496,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "list_standards()",
+      "community_name": "Path",
       "id": "server_list_standards"
     },
     {
@@ -5419,8 +5505,9 @@
       "source_file": "server.py",
       "source_location": "L1400",
       "_origin": "ast",
-      "community": 1,
+      "community": 2,
       "norm_label": "discover_standards()",
+      "community_name": "append_audit",
       "id": "server_discover_standards"
     },
     {
@@ -5429,8 +5516,9 @@
       "source_file": "server.py",
       "source_location": "L1409",
       "_origin": "ast",
-      "community": 1,
+      "community": 4,
       "norm_label": "load_chat_history()",
+      "community_name": "read_json",
       "id": "server_load_chat_history"
     },
     {
@@ -5439,8 +5527,9 @@
       "source_file": "server.py",
       "source_location": "L1412",
       "_origin": "ast",
-      "community": 1,
+      "community": 8,
       "norm_label": "save_chat_message()",
+      "community_name": "run_skill",
       "id": "server_save_chat_message"
     },
     {
@@ -5449,8 +5538,9 @@
       "source_file": "server.py",
       "source_location": "L1419",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "run_cli()",
+      "community_name": "run_skill",
       "id": "server_run_cli"
     },
     {
@@ -5459,8 +5549,9 @@
       "source_file": "server.py",
       "source_location": "L1423",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "clean_hermes_output()",
+      "community_name": "run_skill",
       "id": "server_clean_hermes_output"
     },
     {
@@ -5469,8 +5560,9 @@
       "source_file": "server.py",
       "source_location": "L1448",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "execute_agent()",
+      "community_name": "run_skill",
       "id": "server_execute_agent"
     },
     {
@@ -5479,8 +5571,9 @@
       "source_file": "server.py",
       "source_location": "L1533",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "chat()",
+      "community_name": "run_skill",
       "id": "server_chat"
     },
     {
@@ -5489,8 +5582,9 @@
       "source_file": "server.py",
       "source_location": "L1566",
       "_origin": "ast",
-      "community": 1,
+      "community": 4,
       "norm_label": "get_chat_history()",
+      "community_name": "read_json",
       "id": "server_get_chat_history"
     },
     {
@@ -5501,6 +5595,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "ptysession",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ptysession"
     },
     {
@@ -5511,6 +5606,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": ".__init__()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ptysession_init"
     },
     {
@@ -5521,6 +5617,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": ".start()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ptysession_start"
     },
     {
@@ -5531,6 +5628,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": ".read()",
+      "community_name": "load_agent_registry",
       "id": "server_ptysession_read"
     },
     {
@@ -5541,6 +5639,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": ".write()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ptysession_write"
     },
     {
@@ -5551,6 +5650,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": ".resize()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ptysession_resize"
     },
     {
@@ -5561,6 +5661,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": ".close()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ptysession_close"
     },
     {
@@ -5571,6 +5672,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "ws_terminal()",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_ws_terminal"
     },
     {
@@ -5581,6 +5683,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "kanbantaskcreate",
+      "community_name": "BaseModel",
       "id": "server_kanbantaskcreate"
     },
     {
@@ -5591,6 +5694,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "kanbantaskupdate",
+      "community_name": "BaseModel",
       "id": "server_kanbantaskupdate"
     },
     {
@@ -5601,6 +5705,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "kanbancomplete",
+      "community_name": "BaseModel",
       "id": "server_kanbancomplete"
     },
     {
@@ -5611,6 +5716,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "kanbanblock",
+      "community_name": "BaseModel",
       "id": "server_kanbanblock"
     },
     {
@@ -5621,6 +5727,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "kanbancommentcreate",
+      "community_name": "BaseModel",
       "id": "server_kanbancommentcreate"
     },
     {
@@ -5631,6 +5738,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "kanbanlinkcreate",
+      "community_name": "BaseModel",
       "id": "server_kanbanlinkcreate"
     },
     {
@@ -5641,6 +5749,7 @@
       "_origin": "ast",
       "community": 10,
       "norm_label": "goalcreate",
+      "community_name": "BaseModel",
       "id": "server_goalcreate"
     },
     {
@@ -5649,8 +5758,9 @@
       "source_file": "server.py",
       "source_location": "L1732",
       "_origin": "ast",
-      "community": 2,
+      "community": 34,
       "norm_label": "goalupdate",
+      "community_name": "load_goals",
       "id": "server_goalupdate"
     },
     {
@@ -5661,6 +5771,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "journalsave",
+      "community_name": "server.py",
       "id": "server_journalsave"
     },
     {
@@ -5671,6 +5782,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "routersuggest",
+      "community_name": "server.py",
       "id": "server_routersuggest"
     },
     {
@@ -5681,6 +5793,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "routerroute",
+      "community_name": "server.py",
       "id": "server_routerroute"
     },
     {
@@ -5691,6 +5804,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "ensure_dir()",
+      "community_name": "server.py",
       "id": "server_ensure_dir"
     },
     {
@@ -5701,6 +5815,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "load_kanban_tasks()",
+      "community_name": "server.py",
       "id": "server_load_kanban_tasks"
     },
     {
@@ -5709,8 +5824,9 @@
       "source_file": "server.py",
       "source_location": "L1770",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_task_path()",
+      "community_name": "append_audit",
       "id": "server_kanban_task_path"
     },
     {
@@ -5719,8 +5835,9 @@
       "source_file": "server.py",
       "source_location": "L1780",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "save_kanban_task()",
+      "community_name": "append_audit",
       "id": "server_save_kanban_task"
     },
     {
@@ -5729,8 +5846,9 @@
       "source_file": "server.py",
       "source_location": "L1786",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "dispatch_kanban_task()",
+      "community_name": "append_audit",
       "id": "server_dispatch_kanban_task"
     },
     {
@@ -5739,8 +5857,9 @@
       "source_file": "server.py",
       "source_location": "L1802",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "_run_kanban_agent()",
+      "community_name": "append_audit",
       "id": "server_run_kanban_agent"
     },
     {
@@ -5749,8 +5868,9 @@
       "source_file": "server.py",
       "source_location": "L1847",
       "_origin": "ast",
-      "community": 2,
+      "community": 34,
       "norm_label": "load_goals()",
+      "community_name": "load_goals",
       "id": "server_load_goals"
     },
     {
@@ -5759,8 +5879,9 @@
       "source_file": "server.py",
       "source_location": "L1850",
       "_origin": "ast",
-      "community": 2,
+      "community": 34,
       "norm_label": "save_goals()",
+      "community_name": "load_goals",
       "id": "server_save_goals"
     },
     {
@@ -5771,6 +5892,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "kanban_board()",
+      "community_name": "server.py",
       "id": "server_kanban_board"
     },
     {
@@ -5781,6 +5903,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "kanban_get_task()",
+      "community_name": "server.py",
       "id": "server_kanban_get_task"
     },
     {
@@ -5789,8 +5912,9 @@
       "source_file": "server.py",
       "source_location": "L1878",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_delete_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_delete_task"
     },
     {
@@ -5799,8 +5923,9 @@
       "source_file": "server.py",
       "source_location": "L1887",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_create_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_create_task"
     },
     {
@@ -5809,8 +5934,9 @@
       "source_file": "server.py",
       "source_location": "L1911",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_update_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_update_task"
     },
     {
@@ -5819,8 +5945,9 @@
       "source_file": "server.py",
       "source_location": "L1930",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_dispatch_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_dispatch_task"
     },
     {
@@ -5829,8 +5956,9 @@
       "source_file": "server.py",
       "source_location": "L1941",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_complete_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_complete_task"
     },
     {
@@ -5839,8 +5967,9 @@
       "source_file": "server.py",
       "source_location": "L1955",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_block_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_block_task"
     },
     {
@@ -5849,8 +5978,9 @@
       "source_file": "server.py",
       "source_location": "L1968",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_unblock_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_unblock_task"
     },
     {
@@ -5859,8 +5989,9 @@
       "source_file": "server.py",
       "source_location": "L1981",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_add_comment()",
+      "community_name": "append_audit",
       "id": "server_kanban_add_comment"
     },
     {
@@ -5869,8 +6000,9 @@
       "source_file": "server.py",
       "source_location": "L1997",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_add_link()",
+      "community_name": "append_audit",
       "id": "server_kanban_add_link"
     },
     {
@@ -5879,8 +6011,9 @@
       "source_file": "server.py",
       "source_location": "L2013",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_remove_link()",
+      "community_name": "append_audit",
       "id": "server_kanban_remove_link"
     },
     {
@@ -5891,6 +6024,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "kanban_dispatch()",
+      "community_name": "server.py",
       "id": "server_kanban_dispatch"
     },
     {
@@ -5899,8 +6033,9 @@
       "source_file": "server.py",
       "source_location": "L2044",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_specify_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_specify_task"
     },
     {
@@ -5909,8 +6044,9 @@
       "source_file": "server.py",
       "source_location": "L2056",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "kanban_decompose_task()",
+      "community_name": "append_audit",
       "id": "server_kanban_decompose_task"
     },
     {
@@ -5919,8 +6055,9 @@
       "source_file": "server.py",
       "source_location": "L2085",
       "_origin": "ast",
-      "community": 2,
+      "community": 34,
       "norm_label": "list_goals()",
+      "community_name": "load_goals",
       "id": "server_list_goals"
     },
     {
@@ -5929,8 +6066,9 @@
       "source_file": "server.py",
       "source_location": "L2092",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "create_goal()",
+      "community_name": "append_audit",
       "id": "server_create_goal"
     },
     {
@@ -5939,8 +6077,9 @@
       "source_file": "server.py",
       "source_location": "L2120",
       "_origin": "ast",
-      "community": 2,
+      "community": 34,
       "norm_label": "update_goal()",
+      "community_name": "load_goals",
       "id": "server_update_goal"
     },
     {
@@ -5949,8 +6088,9 @@
       "source_file": "server.py",
       "source_location": "L2139",
       "_origin": "ast",
-      "community": 2,
+      "community": 34,
       "norm_label": "delete_goal()",
+      "community_name": "load_goals",
       "id": "server_delete_goal"
     },
     {
@@ -5961,6 +6101,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "list_journal_entries()",
+      "community_name": "server.py",
       "id": "server_list_journal_entries"
     },
     {
@@ -5971,6 +6112,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "get_journal_entry()",
+      "community_name": "server.py",
       "id": "server_get_journal_entry"
     },
     {
@@ -5981,6 +6123,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "save_journal_entry()",
+      "community_name": "server.py",
       "id": "server_save_journal_entry"
     },
     {
@@ -5991,6 +6134,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "search_journal()",
+      "community_name": "server.py",
       "id": "server_search_journal"
     },
     {
@@ -6001,6 +6145,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "get_agent_health()",
+      "community_name": "load_agent_registry",
       "id": "server_get_agent_health"
     },
     {
@@ -6011,6 +6156,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "get_agent_stats()",
+      "community_name": "load_agent_registry",
       "id": "server_get_agent_stats"
     },
     {
@@ -6021,6 +6167,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "refresh_agent_health()",
+      "community_name": "load_agent_registry",
       "id": "server_refresh_agent_health"
     },
     {
@@ -6031,6 +6178,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "agentregisterrequest",
+      "community_name": "load_agent_registry",
       "id": "server_agentregisterrequest"
     },
     {
@@ -6041,6 +6189,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "list_agents()",
+      "community_name": "load_agent_registry",
       "id": "server_list_agents"
     },
     {
@@ -6051,6 +6200,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "register_agent()",
+      "community_name": "load_agent_registry",
       "id": "server_register_agent"
     },
     {
@@ -6061,6 +6211,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "unregister_agent()",
+      "community_name": "load_agent_registry",
       "id": "server_unregister_agent"
     },
     {
@@ -6071,6 +6222,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "router_suggest()",
+      "community_name": "server.py",
       "id": "server_router_suggest"
     },
     {
@@ -6081,6 +6233,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "router_route()",
+      "community_name": "server.py",
       "id": "server_router_route"
     },
     {
@@ -6089,8 +6242,9 @@
       "source_file": "server.py",
       "source_location": "L2422",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "get_skill_analytics()",
+      "community_name": "read_json",
       "id": "server_get_skill_analytics"
     },
     {
@@ -6099,8 +6253,9 @@
       "source_file": "server.py",
       "source_location": "L2440",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "get_trend_analytics()",
+      "community_name": "read_json",
       "id": "server_get_trend_analytics"
     },
     {
@@ -6111,6 +6266,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "list_sessions()",
+      "community_name": "server.py",
       "id": "server_list_sessions"
     },
     {
@@ -6121,6 +6277,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "get_session_replay()",
+      "community_name": "server.py",
       "id": "server_get_session_replay"
     },
     {
@@ -6131,6 +6288,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "index()",
+      "community_name": "server.py",
       "id": "server_index"
     },
     {
@@ -6141,6 +6299,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "test_page()",
+      "community_name": "server.py",
       "id": "server_test_page"
     },
     {
@@ -6151,6 +6310,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "_recompute_agent_time()",
+      "community_name": "server.py",
       "id": "server_recompute_agent_time"
     },
     {
@@ -6161,6 +6321,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "get_agent_time()",
+      "community_name": "server.py",
       "id": "server_get_agent_time"
     },
     {
@@ -6171,6 +6332,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "agent_time_skin()",
+      "community_name": "server.py",
       "id": "server_agent_time_skin"
     },
     {
@@ -6179,8 +6341,9 @@
       "source_file": "server.py",
       "source_location": "L2655",
       "_origin": "ast",
-      "community": 1,
+      "community": 4,
       "norm_label": "get_agent_insights()",
+      "community_name": "read_json",
       "id": "server_get_agent_insights"
     },
     {
@@ -6191,6 +6354,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "favicon()",
+      "community_name": "server.py",
       "id": "server_favicon"
     },
     {
@@ -6201,6 +6365,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "favicon_svg()",
+      "community_name": "server.py",
       "id": "server_favicon_svg"
     },
     {
@@ -6211,6 +6376,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "return local dashboard origins allowed to call the api.",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_49"
     },
     {
@@ -6219,8 +6385,9 @@
       "source_file": "server.py",
       "source_location": "L146",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "load json from path, returning ``default`` when the file is missing.      on cor",
+      "community_name": "read_json",
       "id": "server_rationale_146"
     },
     {
@@ -6229,8 +6396,9 @@
       "source_file": "server.py",
       "source_location": "L165",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "serialize data as pretty json to path.",
+      "community_name": "read_json",
       "id": "server_rationale_165"
     },
     {
@@ -6239,8 +6407,9 @@
       "source_file": "server.py",
       "source_location": "L169",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "yield skill directories, skipping hidden and underscore-prefixed ones.",
+      "community_name": "read_json",
       "id": "server_rationale_169"
     },
     {
@@ -6251,6 +6420,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "push a single document into the centralized brain index.      best-effort: a bra",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_202"
     },
     {
@@ -6259,8 +6429,9 @@
       "source_file": "server.py",
       "source_location": "L242",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "persist real invocation stats for an agent (consumed by /api/agents/health).",
+      "community_name": "run_skill",
       "id": "server_rationale_242"
     },
     {
@@ -6269,8 +6440,9 @@
       "source_file": "server.py",
       "source_location": "L261",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "detect the error/refusal/busy sentinels this server emits on agent failures.",
+      "community_name": "run_skill",
       "id": "server_rationale_261"
     },
     {
@@ -6279,8 +6451,9 @@
       "source_file": "server.py",
       "source_location": "L296",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "weighted 0-100 quality score from eval.json criteria + response features.",
+      "community_name": "run_skill",
       "id": "server_rationale_296"
     },
     {
@@ -6289,8 +6462,9 @@
       "source_file": "server.py",
       "source_location": "L333",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "append a run's score to skills/<name>/score-history.json.",
+      "community_name": "run_skill",
       "id": "server_rationale_333"
     },
     {
@@ -6301,6 +6475,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "load agent registry from disk, merging with builtins.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_388"
     },
     {
@@ -6311,6 +6486,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "save custom agents to disk (excluding builtins).",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_403"
     },
     {
@@ -6319,8 +6495,9 @@
       "source_file": "server.py",
       "source_location": "L418",
       "_origin": "ast",
-      "community": 36,
+      "community": 37,
       "norm_label": "build the command to invoke hermes, bridging through wsl if the real agent only",
+      "community_name": "hermes_cli_args",
       "id": "server_rationale_418"
     },
     {
@@ -6329,8 +6506,9 @@
       "source_file": "server.py",
       "source_location": "L438",
       "_origin": "ast",
-      "community": 36,
+      "community": 37,
       "norm_label": "cached: this spawns a subprocess (possibly via wsl), and /api/status is polled e",
+      "community_name": "hermes_cli_args",
       "id": "server_rationale_438"
     },
     {
@@ -6341,6 +6519,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "dynamic agent check based on registry configuration.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_452"
     },
     {
@@ -6351,6 +6530,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute a message on any registered agent.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_512"
     },
     {
@@ -6361,6 +6541,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute via cli binary.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_532"
     },
     {
@@ -6371,6 +6552,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute via http api endpoint.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_564"
     },
     {
@@ -6381,6 +6563,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "execute via mcp server.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_584"
     },
     {
@@ -6391,6 +6574,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "lazy import of brain-core so a missing dir never breaks server boot.",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_633"
     },
     {
@@ -6401,6 +6585,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "agents push a single document into the brain. fields: source,     source_path, t",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_657"
     },
     {
@@ -6409,8 +6594,9 @@
       "source_file": "server.py",
       "source_location": "L718",
       "_origin": "ast",
-      "community": 2,
+      "community": 4,
       "norm_label": "return the directory of an existing skill by matching ``name`` against the     a",
+      "community_name": "read_json",
       "id": "server_rationale_718"
     },
     {
@@ -6421,6 +6607,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "run a single agent on its angle. returns (agent, output, error).",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_931"
     },
     {
@@ -6431,6 +6618,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "spin up multiple agents on the same project goal from different angles,     then",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_940"
     },
     {
@@ -6441,6 +6629,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "list connected external apps/integrations.",
+      "community_name": "server.py",
       "id": "server_rationale_1255"
     },
     {
@@ -6449,8 +6638,9 @@
       "source_file": "server.py",
       "source_location": "L1263",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "connect an external app via url/webhook.",
+      "community_name": "append_audit",
       "id": "server_rationale_1263"
     },
     {
@@ -6461,6 +6651,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "resolve a restore request to a real .tar.gz inside backups/, rejecting traversal",
+      "community_name": "Path",
       "id": "server_rationale_1317"
     },
     {
@@ -6471,6 +6662,7 @@
       "_origin": "ast",
       "community": 15,
       "norm_label": "extract a tar archive, refusing members that would escape dest (cve-2007-4559).",
+      "community_name": "Path",
       "id": "server_rationale_1332"
     },
     {
@@ -6479,8 +6671,9 @@
       "source_file": "server.py",
       "source_location": "L1424",
       "_origin": "ast",
-      "community": 9,
+      "community": 8,
       "norm_label": "strip cli metadata from hermes output, returning only the ai response.",
+      "community_name": "run_skill",
       "id": "server_rationale_1424"
     },
     {
@@ -6491,6 +6684,7 @@
       "_origin": "ast",
       "community": 5,
       "norm_label": "wraps a real pseudo-terminal shell process, posix (stdlib pty) or windows (pywin",
+      "community_name": "orchestrate_multi_agent",
       "id": "server_rationale_1572"
     },
     {
@@ -6499,8 +6693,9 @@
       "source_file": "server.py",
       "source_location": "L1771",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "resolve a task id to its file path, rejecting anything that isn't a plain genera",
+      "community_name": "append_audit",
       "id": "server_rationale_1771"
     },
     {
@@ -6509,8 +6704,9 @@
       "source_file": "server.py",
       "source_location": "L1787",
       "_origin": "ast",
-      "community": 4,
+      "community": 2,
       "norm_label": "move a task to in_progress and hand it to its assignee agent in the background.",
+      "community_name": "append_audit",
       "id": "server_rationale_1787"
     },
     {
@@ -6521,6 +6717,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "list all registered agents (built-in + custom).",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_2282"
     },
     {
@@ -6531,6 +6728,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "register a new custom agent.",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_2293"
     },
     {
@@ -6541,6 +6739,7 @@
       "_origin": "ast",
       "community": 3,
       "norm_label": "remove a custom agent (built-ins cannot be removed).",
+      "community_name": "load_agent_registry",
       "id": "server_rationale_2348"
     },
     {
@@ -6551,6 +6750,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "run the analyzer to (re)generate data/agent-time.json. returns report.",
+      "community_name": "server.py",
       "id": "server_rationale_2575"
     },
     {
@@ -6561,6 +6761,7 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "# note: the interactive terminal is provided by the in-app websocket",
+      "community_name": "server.py",
       "id": "server_rationale_2518"
     },
     {
@@ -6571,7 +6772,98 @@
       "_origin": "ast",
       "community": 1,
       "norm_label": "# note: no recompute happens at startup or import; the report is only",
+      "community_name": "server.py",
       "id": "server_rationale_2567"
+    },
+    {
+      "label": "keepalive-brain-wsl.sh",
+      "file_type": "code",
+      "source_file": "brain/graph/keepalive-brain-wsl.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "community": 52,
+      "norm_label": "keepalive-brain-wsl.sh",
+      "community_name": "keepalive-brain-wsl.sh",
+      "id": "brain_graph_keepalive_brain_wsl"
+    },
+    {
+      "label": "keepalive-brain-wsl.sh script",
+      "file_type": "code",
+      "source_file": "brain/graph/keepalive-brain-wsl.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "community": 52,
+      "norm_label": "keepalive-brain-wsl.sh script",
+      "community_name": "keepalive-brain-wsl.sh",
+      "id": "brain_graph_keepalive_brain_wsl_sh__entry"
+    },
+    {
+      "label": "serve-brain-wsl.sh",
+      "file_type": "code",
+      "source_file": "brain/graph/serve-brain-wsl.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "community": 56,
+      "norm_label": "serve-brain-wsl.sh",
+      "community_name": "serve-brain-wsl.sh",
+      "id": "brain_graph_serve_brain_wsl"
+    },
+    {
+      "label": "serve-brain-wsl.sh script",
+      "file_type": "code",
+      "source_file": "brain/graph/serve-brain-wsl.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "community": 56,
+      "norm_label": "serve-brain-wsl.sh script",
+      "community_name": "serve-brain-wsl.sh",
+      "id": "brain_graph_serve_brain_wsl_sh__entry"
+    },
+    {
+      "label": "learn-loop.sh",
+      "file_type": "code",
+      "source_file": "brain/graph/learn-loop.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "community": 53,
+      "norm_label": "learn-loop.sh",
+      "community_name": "learn-loop.sh",
+      "id": "brain_graph_learn_loop"
+    },
+    {
+      "label": "learn-loop.sh script",
+      "file_type": "code",
+      "source_file": "brain/graph/learn-loop.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "community": 53,
+      "norm_label": "learn-loop.sh script",
+      "community_name": "learn-loop.sh",
+      "id": "brain_graph_learn_loop_sh__entry"
     }
   ],
   "links": [
@@ -18266,8 +18558,41 @@
       "confidence_score": 1.0,
       "source": "server_rationale_2575",
       "target": "server_recompute_agent_time"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "brain/graph/keepalive-brain-wsl.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "brain_graph_keepalive_brain_wsl",
+      "target": "brain_graph_keepalive_brain_wsl_sh__entry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "brain/graph/serve-brain-wsl.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "brain_graph_serve_brain_wsl",
+      "target": "brain_graph_serve_brain_wsl_sh__entry"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "brain/graph/learn-loop.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "confidence_score": 1.0,
+      "source": "brain_graph_learn_loop",
+      "target": "brain_graph_learn_loop_sh__entry"
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "174a8450efbe972e8cd8d2e1e6a7e795d7d2de73"
+  "built_at_commit": "28c1689fb725ba4fb0956bc8e9dbea9bfb8cf4da"
 }

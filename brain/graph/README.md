@@ -23,13 +23,23 @@ bash brain/graph/keepalive-brain-wsl.sh     # restart WSL serve if :8090 drops (
 ```
 Set `CENTRAL_BRAIN_PORT` to override the serve port (default 8090).
 
-## What it contains today
-- Code symbols of agentic-os as nodes (functions/classes/modules), with call/import edges.
-- Linked projects (added via `link-project.sh`).
-- Memory NOTES (markdown under `brain/`) are NOT yet graph nodes. To make them
-  queryable, set an LLM key (GEMINI_API_KEY / OPENAI_API_KEY / etc.) and run
-  `graphify .` (no `--code-only`) so notes are semantically extracted. Until
-  then, notes remain the write path; the graph indexes code structure.
+## Continuous learning
+`learn-loop.sh` runs the self-improving pass (replaces the plain rebuild):
+1. Rebuild code graph + cluster (edges + community labels).
+2. If an LLM key is set (GEMINI/OPENAI/ANTHROPIC/GOOGLE), deep-extract `brain/corpus/` (diagrams/designs/notes) into the graph.
+3. Merge agentic-os + corpus + linked projects → central-graph.json.
+4. **Measure + heuristically optimize** (offline learning): computes node/link
+   counts, orphan rate, community-size balance, and file size; collapses tiny
+   communities into `_misc` for tighter recall; records metrics to `metrics.json`
+   and writes what it improved to `learnings.md` (the brain's own memory of
+   improvements — compounds each run).
+5. Sync to Windows brain (redundant).
+
+Drop sources to learn from in `brain/corpus/{diagrams,designs,notes}/`.
+Without an LLM key, corpus files are stored but only become graph nodes via
+the semantic (keyed) path — code is always graphed offline.
+
+Hourly cron `agentic-os-brain-rebuild` runs the learn-loop.
 
 ## Notes
 - `graphify`'s MCP HTTP serve requires the extra: `pip install "graphifyy[mcp]"` (done in the venv).

@@ -1,0 +1,29 @@
+[
+  {
+    "ts": "2026-07-26T15:06:18.723582",
+    "nodes": 614,
+    "edges": 0,
+    "orphan_rate": 100.0,
+    "tiny_communities": 18,
+    "size_mb": 0.54,
+    "size_mb_after_opt": 0.27
+  },
+  {
+    "ts": "2026-07-26T15:06:36.876480",
+    "nodes": 614,
+    "edges": 0,
+    "orphan_rate": 100.0,
+    "tiny_communities": 18,
+    "size_mb": 0.55,
+    "size_mb_after_opt": 0.27
+  },
+  {
+    "ts": "2026-07-26T15:07:14.174676",
+    "nodes": 614,
+    "edges": 1024,
+    "orphan_rate": 0.2,
+    "tiny_communities": 18,
+    "size_mb": 0.55,
+    "size_mb_after_opt": 0.44
+  }
+]
