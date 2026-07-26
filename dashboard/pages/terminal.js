@@ -68,10 +68,11 @@ async function renderTerminal() {
   window._agenticTerm = term;
   window._agenticFit = fitAddon;
 
-  // Connect WebSocket
+  // Connect WebSocket — same origin as the dashboard. The terminal endpoint
+  // (/ws/terminal) lives on the main server; the old standalone 8082 process
+  // was removed, so we target the live endpoint instead of a dead port.
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wsPort = 8082;
-  const wsUrl = `${protocol}//${window.location.hostname}:${wsPort}`;
+  const wsUrl = `${protocol}//${window.location.host}/ws/terminal`;
   const statusEl = document.getElementById('terminalStatus');
 
   try {
@@ -83,11 +84,18 @@ async function renderTerminal() {
       statusEl.style.background = 'var(--green)';
       term.writeln('\x1b[32m✓ Connected to Agentic OS terminal\x1b[0m');
       term.writeln(`\x1b[90m  WSL • ${navigator.userAgent.includes('Windows') ? 'Windows browser → WSL shell' : 'Linux shell'}\x1b[0m\r\n`);
-      ws.send(JSON.stringify({ action: 'resize', cols: term.cols, rows: term.rows }));
+      ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
     };
 
     ws.onmessage = (event) => {
-      if (typeof event.data === 'string') {
+      if (typeof event.data !== 'string') return;
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'output' && typeof msg.data === 'string') {
+          term.write(msg.data);
+        }
+      } catch {
+        // Fallback: write raw payload if it isn't JSON
         term.write(event.data);
       }
     };
@@ -106,7 +114,7 @@ async function renderTerminal() {
     // Send input
     term.onData((data) => {
       if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ action: 'input', data: data }));
+        ws.send(JSON.stringify({ type: 'input', data: data }));
       }
     });
 
@@ -117,7 +125,7 @@ async function renderTerminal() {
       resizeTimeout = setTimeout(() => {
         fitAddon.fit();
         if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ action: 'resize', cols: term.cols, rows: term.rows }));
+          ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
         }
       }, 100);
     });
@@ -144,7 +152,7 @@ function terminalClear() {
     window._agenticTerm.clear();
     // Also send clear escape sequence to PTY
     if (window._agenticWs && window._agenticWs.readyState === WebSocket.OPEN) {
-      window._agenticWs.send(JSON.stringify({ action: 'input', data: '\x0c' }));
+      window._agenticWs.send(JSON.stringify({ type: 'input', data: '\x0c' }));
     }
   }
 }
