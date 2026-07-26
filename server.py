@@ -2810,14 +2810,24 @@ if __name__ == "__main__":
 
     import uvicorn
 
+    # Single source of truth: the dashboard port lives in data/settings.json.
+    # Read it here so `--port` defaults to it (launchers, scheduler, docs all agree).
+    _settings_port = 8080
+    try:
+        _sf = BASE_DIR / "data" / "settings.json"
+        if _sf.exists():
+            _settings_port = int(json.loads(_sf.read_text(encoding="utf-8")).get("dashboard", {}).get("port", 8080))
+    except Exception:
+        _settings_port = 8080
+
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=8081)
+    parser.add_argument("--port", type=int, default=_settings_port)
     parser.add_argument("--host", type=str, default="0.0.0.0")
     args = parser.parse_args()
 
     # ── Double-launch guard ───────────────────────────────────────────
     # Refuse to start if the API port is already bound by another process.
-    # Without this, two server.py instances collide on 8081 (and 8082),
+    # Without this, two server.py instances collide on the API port (default 8080),
     # producing phantom "register doesn't persist" bugs and bind crashes.
     probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:

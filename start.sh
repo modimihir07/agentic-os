@@ -7,7 +7,7 @@
 
 set -euo pipefail
 
-PORT="${PORT:-8081}"
+PORT="${PORT:-$(python3 -c "import json;print(json.load(open('data/settings.json')).get('dashboard',{}).get('port',8080))" 2>/dev/null || echo 8080)}"
 PID_FILE=".agentic-os.pid"
 DASHBOARD_URL="http://127.0.0.1:${PORT}"
 

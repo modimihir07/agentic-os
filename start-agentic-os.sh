@@ -9,7 +9,7 @@ DIR="/home/austin/agentic-os"
 LOG="/tmp/agentic-os.log"
 PIDFILE="$DIR/.agentic-os.pid"
 HOST="0.0.0.0"
-PORT="8080"
+PORT="$(python3 -c "import json;print(json.load(open('data/settings.json')).get('dashboard',{}).get('port',8080))" 2>/dev/null || echo 8080)"
 
 # Already serving? Then do nothing (idempotent).
 if ss -ltn 2>/dev/null | grep -q ":$PORT "; then

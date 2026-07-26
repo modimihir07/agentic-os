@@ -36,9 +36,9 @@ cd ~/agentic-os
 ```
 
 **URLs:**
-- Dashboard: `http://127.0.0.1:8081`
+- Dashboard: `http://127.0.0.1:8080`
 - Web Terminal: `http://127.0.0.1:8082` (WebSocket)
-- API Base: `http://127.0.0.1:8081/api/`
+- API Base: `http://127.0.0.1:8080/api/`
 
 ---
 
@@ -170,7 +170,7 @@ Via the dashboard: **Agent Health** → **+ Add Agent**
 
 Or via API:
 ```bash
-curl -X POST http://127.0.0.1:8081/api/agents/register \
+curl -X POST http://127.0.0.1:8080/api/agents/register \
   -H "Content-Type: application/json" \
   -d '{
     "name": "my-llm",
@@ -191,7 +191,7 @@ Via the dashboard: **Agent Health** → click **Remove** on any custom agent.
 
 Or via API:
 ```bash
-curl -X DELETE http://127.0.0.1:8081/api/agents/my-llm
+curl -X DELETE http://127.0.0.1:8080/api/agents/my-llm
 ```
 
 Built-in agents cannot be removed.
@@ -572,7 +572,7 @@ cp -r skills/_template skills/my-skill
 
 ```python
 # In server.py, add to BUILTIN_AGENTS dict, or use the API:
-curl -X POST http://127.0.0.1:8081/api/agents/register \
+curl -X POST http://127.0.0.1:8080/api/agents/register \
   -H "Content-Type: application/json" \
   -d '{"name":"my-agent","binary":"my-binary","type":"cli"}'
 ```
@@ -595,7 +595,7 @@ curl -X POST http://127.0.0.1:8081/api/agents/register \
 ### Server Lifecycle
 
 ```bash
-./start.sh          # Start (port 8081 + terminal on 8082)
+./start.sh          # Start (dashboard port from data/settings.json, default 8080)
 ./start.sh --open   # Start + open browser
 ./start.sh --stop   # Stop
 ./start.sh --status # Check if running

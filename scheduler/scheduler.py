@@ -31,7 +31,14 @@ import urllib.error
 BASE_DIR = Path(__file__).parent.resolve()
 JOBS_DIR = BASE_DIR / "jobs"
 # Server URL — same host, main API port. Override with AGENTIC_OS_URL env.
-SERVER_URL = "http://127.0.0.1:8080"
+# Server URL — read the canonical port from settings.json so there is a
+# single source of truth (launchers + server + scheduler all agree).
+try:
+    _SET = json.loads(Path(__file__).parent.parent.joinpath("data", "settings.json").read_text(encoding="utf-8"))
+    _PORT = int(_SET.get("dashboard", {}).get("port", 8080))
+except Exception:
+    _PORT = 8080
+SERVER_URL = f"http://127.0.0.1:{_PORT}"
 RUN_TIMEOUT = 300  # seconds per skill run
 
 
