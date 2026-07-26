@@ -2527,7 +2527,7 @@ import signal
 
 dashboard_dir = BASE_DIR / "dashboard"
 if dashboard_dir.exists():
-    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir)), name="dashboard")
+    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
 
 # graphify knowledge-graph output (built by `graphify . --code-only`).
 # Served so dashboard pages can link/open the interactive graph.
