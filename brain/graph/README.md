@@ -18,6 +18,8 @@ bash brain/graph/build-central.sh            # rebuild WSL central brain (code g
 bash brain/graph/link-project.sh <name> <graph.json>   # register a project's graph into the brain
 bash brain/graph/sync-to-windows.sh          # rebuild + push merged graph to Windows central brain
 bash brain/graph/serve-brain.sh             # serve WSL central brain over HTTP MCP (:8090)
+bash brain/graph/serve-brain-wsl.sh         # redundant WSL serve (:8090, independent of Windows brain)
+bash brain/graph/keepalive-brain-wsl.sh     # restart WSL serve if :8090 drops (fail-safe)
 ```
 Set `CENTRAL_BRAIN_PORT` to override the serve port (default 8090).
 
@@ -33,3 +35,5 @@ Set `CENTRAL_BRAIN_PORT` to override the serve port (default 8090).
 - `graphify`'s MCP HTTP serve requires the extra: `pip install "graphifyy[mcp]"` (done in the venv).
 - The write path for memory is still `brain/*.md` + `audit` + `data/`; graphify reads those, never writes them.
 - Rebuild is scheduled hourly by the `agentic-os-brain-rebuild` cron.
+- WSL serve is kept alive every 5 min by the `agentic-os-brain-keepalive-wsl` cron (fail-safe; mirrors Windows `keepalive-brain.bat`).
+- Two independent brain endpoints exist on :8090 — WSL (this tree) and Windows (`C:\Users\Austin\Brains\central\`). Either can answer if the other is down.
