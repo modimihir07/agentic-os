@@ -119,6 +119,7 @@ const PAGE_TITLES = {
   cost: { title: 'Cost Analytics', breadcrumb: 'Usage & spending' },
   'agent-insights': { title: 'Agent Insights', breadcrumb: 'AI usage analytics' },
   'brain-search': { title: 'Brain Search', breadcrumb: 'Unified knowledge index' },
+  'orchestration': { title: 'Multi-Agent Run', breadcrumb: 'Fan-out + converge agents' },
   plugins: { title: 'Plugin Registry', breadcrumb: 'Manage plugins' },
   backups: { title: 'Backups', breadcrumb: 'Disaster recovery' },
   prompts: { title: 'Prompt Library', breadcrumb: 'Reusable templates' },

@@ -168,11 +168,39 @@ def ingest_chat(conn: sqlite3.Connection, path: Path | None = None) -> int:
     return count
 
 
+def ingest_orchestration(conn: sqlite3.Connection, root: Path | None = None) -> int:
+    """Index multi-agent orchestration runs (my delegate_task fan-outs) so
+    past 'spin up N agents on a goal' runs are searchable in the brain."""
+    root = root or (BASE_DIR / "data" / "orchestration-runs")
+    if not root.exists():
+        return 0
+    count = 0
+    for f in sorted(root.glob("*.json")):
+        try:
+            d = json.loads(f.read_text(encoding="utf-8", errors="replace"))
+        except (json.JSONDecodeError, OSError):
+            continue
+        goal = d.get("goal", "")
+        synthesis = d.get("synthesis", "") or ""
+        angles = d.get("angles", {}) or {}
+        angle_blob = "\n".join(f"{a}: {p}" for a, p in angles.items())
+        agents = ", ".join(d.get("agents", []) or [])
+        content = f"GOAL: {goal}\n\nANGLES ({agents}):\n{angle_blob}\n\nSYNTHESIS:\n{synthesis}"
+        rel = str(f.relative_to(BASE_DIR))
+        upsert_doc(conn, source="orchestration", source_path=rel,
+                   title=f"Orchestration: {goal[:80]}", content=content,
+                   agent=d.get("converge_agent") or "orchestrate",
+                   updated_at=d.get("timestamp"))
+        count += 1
+    return count
+
+
 def ingest_all(conn: sqlite3.Connection) -> dict:
     return {
         "brain": ingest_brain(conn),
         "skill-learning": ingest_skill_learnings(conn),
         "chat": ingest_chat(conn),
+        "orchestration": ingest_orchestration(conn),
     }
 
 

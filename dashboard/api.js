@@ -97,6 +97,9 @@ const api = {
   getBrainIndexSearch: (q, source = '', limit = 20) => api.get(`/api/brain-index/search?q=${encodeURIComponent(q)}&limit=${limit}${source ? `&source=${encodeURIComponent(source)}` : ''}`),
   getBrainIndexStats: () => api.get('/api/brain-index/stats'),
   brainIndexIngest: () => api.post('/api/brain-index/ingest', {}),
+  // Multi-Agent Orchestration (fan-out + converge)
+  orchestrate: (payload) => api.post('/api/orchestrate', payload),
+  getOrchestrationRuns: (limit = 50) => api.get(`/api/orchestrate/runs?limit=${limit}`),
   // Agent Registry
   getAgents: () => api.get('/api/agents'),
   registerAgent: (data) => api.post('/api/agents/register', data),

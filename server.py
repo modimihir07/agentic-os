@@ -20,6 +20,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -91,6 +92,13 @@ class BrainUpdate(BaseModel):
 class SkillRunRequest(BaseModel):
     input: Optional[str] = ""
     agent: Optional[str] = "auto"
+
+class OrchestrateRequest(BaseModel):
+    goal: str
+    angles: Optional[dict] = None          # {agent: custom_angle_prompt}
+    agents: Optional[list] = None          # override default [opencode, gemini, hermes]
+    converge_agent: Optional[str] = "hermes"
+    converge_prompt: Optional[str] = None  # custom synthesis instruction
 
 class SkillCreate(BaseModel):
     name: str
@@ -914,6 +922,164 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
         "output": response_text,
         "message": f"Skill '{name}' completed via {agent_choice}",
     }
+
+
+# ─── Routes: Multi-Agent Orchestration (fan-out + converge) ─────────
+ORCHESTRATION_DIR = BASE_DIR / "data" / "orchestration-runs"
+
+def _run_angle(agent: str, angle_prompt: str):
+    """Run a single agent on its angle. Returns (agent, output, error)."""
+    try:
+        out = execute_agent(agent, angle_prompt)
+        return agent, out, None
+    except Exception as e:
+        return agent, f"⚠ Error from {agent}: {e}", str(e)
+
+@app.post("/api/orchestrate")
+def orchestrate_multi_agent(req: OrchestrateRequest):
+    """Spin up multiple agents on the same project goal from different angles,
+    then converge their outputs into a single synthesis.
+
+    Default angles (one per built-in agent):
+      - opencode  -> implementation plan / code for the goal
+      - gemini    -> research, analysis, risk/feasibility
+      - hermes    -> coordination, memory, integration plan
+    A convergence step feeds all angle outputs to `converge_agent`
+    (default hermes) to produce the unified result.
+    """
+    if not req.goal or not req.goal.strip():
+        raise HTTPException(422, "goal is required")
+
+    agents = req.agents or ["opencode", "gemini", "hermes"]
+    # Validate agents exist in the registry
+    registry = load_agent_registry()
+    unknown = [a for a in agents if a not in registry]
+    if unknown:
+        raise HTTPException(400, f"unknown agent(s): {unknown}")
+
+    # Default angle prompts per role
+    default_angles = {
+        "opencode": (
+            f"PROJECT GOAL: {req.goal}\n\n"
+            "You are the IMPLEMENTATION agent. Produce a concrete implementation "
+            "approach: architecture, files to create/modify, key functions, and a "
+            "step-by-step build plan. Be specific and actionable. Do not do the "
+            "other agents' jobs — focus on engineering."
+        ),
+        "gemini": (
+            f"PROJECT GOAL: {req.goal}\n\n"
+            "You are the RESEARCH / ANALYSIS agent. Investigate the problem space: "
+            "relevant approaches, trade-offs, risks, feasibility, and any external "
+            "facts or references. Do not write implementation code — focus on "
+            "analysis and evidence."
+        ),
+        "hermes": (
+            f"PROJECT GOAL: {req.goal}\n\n"
+            "You are the COORDINATION / MEMORY agent. Define how the work should be "
+            "sequenced, what shared state/memory is needed, how the implementation "
+            "and research results integrate, and any scheduling/coordination plan. "
+            "Focus on orchestration, not on coding or research yourself."
+        ),
+    }
+    angle_prompts = {}
+    for a in agents:
+        if req.angles and a in req.angles and req.angles[a]:
+            angle_prompts[a] = req.angles[a]
+        else:
+            angle_prompts[a] = default_angles.get(a, f"PROJECT GOAL: {req.goal}\n\nAddress this goal from your perspective as {a}.")
+
+    # Fan-out: run all angles in parallel
+    outputs = {}
+    with ThreadPoolExecutor(max_workers=len(agents)) as ex:
+        futures = {ex.submit(_run_angle, a, angle_prompts[a]): a for a in agents}
+        for fut in futures:
+            a = futures[fut]
+            _ag, out, _err = fut.result()
+            outputs[a] = out
+
+    # Converge
+    converge = req.converge_agent or "hermes"
+    if converge not in registry:
+        converge = agents[0]
+    angle_block = "\n\n".join(
+        f"### {a.upper()} ANGLE OUTPUT:\n{outputs[a]}" for a in agents
+    )
+    synthesis_prompt = req.converge_prompt or (
+        f"PROJECT GOAL: {req.goal}\n\n"
+        "You are the CONVERGENCE agent. Below are the outputs of multiple agents "
+        "who each tackled the same project goal from a different angle. Synthesize "
+        "them into ONE coherent plan/result:\n"
+        "- Resolve contradictions between angles.\n"
+        "- Produce a unified, prioritized action plan (or final answer).\n"
+        "- Call out open risks and the single next step.\n\n"
+        f"{angle_block}"
+    )
+    synthesis, conv_err = _run_angle(converge, synthesis_prompt)
+
+    # Persist the run
+    run_id = uuid.uuid4().hex[:12]
+    timestamp = get_timestamp()
+    run_record = {
+        "run_id": run_id,
+        "timestamp": timestamp,
+        "goal": req.goal,
+        "agents": agents,
+        "angles": angle_prompts,
+        "outputs": outputs,
+        "converge_agent": converge,
+        "synthesis": synthesis,
+        "converge_error": conv_err,
+    }
+    ORCHESTRATION_DIR.mkdir(parents=True, exist_ok=True)
+    run_file = ORCHESTRATION_DIR / f"{run_id}.json"
+    write_json(run_file, run_record)
+
+    # Make the run searchable in the brain
+    try:
+        bi = _brain_index_module()
+        conn = bi.get_conn()
+        bi.upsert_doc(
+            conn, source="agent-note",
+            source_path=f"data/orchestration-runs/{run_id}.json",
+            title=f"Multi-agent run: {req.goal[:80]}",
+            content=f"GOAL: {req.goal}\n\nSYNTHESIS:\n{synthesis[:2000]}",
+            agent=f"orchestrate/{converge}", updated_at=timestamp,
+        )
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"[orchestrate] brain upsert failed: {e}")
+
+    return {
+        "status": "completed",
+        "run_id": run_id,
+        "goal": req.goal,
+        "agents": agents,
+        "outputs": outputs,
+        "converge_agent": converge,
+        "synthesis": synthesis,
+        "converge_error": conv_err,
+        "run_file": str(run_file.relative_to(BASE_DIR)),
+    }
+
+
+@app.get("/api/orchestrate/runs")
+def list_orchestration_runs(limit: int = 50):
+    ORCHESTRATION_DIR.mkdir(parents=True, exist_ok=True)
+    files = sorted(ORCHESTRATION_DIR.glob("*.json"), reverse=True)[:limit]
+    runs = []
+    for f in files:
+        try:
+            d = read_json(f, default={})
+            runs.append({
+                "run_id": d.get("run_id"),
+                "timestamp": d.get("timestamp"),
+                "goal": d.get("goal"),
+                "agents": d.get("agents"),
+                "converge_agent": d.get("converge_agent"),
+            })
+        except Exception:
+            continue
+    return {"runs": runs}
 
 @app.get("/api/skills/{name}/eval")
 def get_skill_eval(name: str):
