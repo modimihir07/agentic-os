@@ -2517,8 +2517,7 @@ import signal
 
 # NOTE: The interactive terminal is provided by the in-app WebSocket
 # endpoint `/ws/terminal` (see PtySession above). The previous standalone
-# WebSocket terminal server on port 8082 was removed to avoid two
-# redundant terminal implementations.
+# terminal process was removed to avoid two redundant terminal implementations.
 
 
 
