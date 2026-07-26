@@ -5,7 +5,7 @@ All notable changes to Agentic OS will be documented in this file.
 ## [v1.3.0] - 2026-06-28
 
 ### Added
-- **Web Terminal** — Full bash shell in browser via xterm.js + WebSocket PTY (port 8082)
+- **Web Terminal** — Full bash shell in browser via xterm.js + WebSocket PTY (served on the main dashboard port; endpoint `/ws/terminal`)
   - 256-color support, terminal resizing, 10k line scrollback
   - Reconnect and clear buttons
   - Dark theme matching dashboard

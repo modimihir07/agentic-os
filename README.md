@@ -94,7 +94,7 @@ A locally-hosted operating system for AI agents — an open-source GitHub reposi
 ### Linux/macOS
 
 ```bash
-git clone https://github.com/modimihir07/agentic-os.git
+git clone https://github.com/zumayaaustin-creator/agentic-os.git
 cd agentic-os
 chmod +x install.sh && ./install.sh
 ./start.sh
@@ -104,7 +104,7 @@ chmod +x install.sh && ./install.sh
 ### Windows PowerShell
 
 ```powershell
-git clone https://github.com/modimihir07/agentic-os.git
+git clone https://github.com/zumayaaustin-creator/agentic-os.git
 cd agentic-os
 .\install.ps1
 .\start.ps1
@@ -382,10 +382,10 @@ MIT License — free to use, modify, and distribute.
   <p>
     <a href="https://dev.to/mihir_nmodi_14a06a4019e1/i-built-an-open-source-agent-os-2h30">📖 Read the dev.to article</a>
     ·
-    <a href="https://github.com/modimihir07/agentic-os/issues">Report Bug</a>
+    <a href="https://github.com/zumayaaustin-creator/agentic-os/issues">Report Bug</a>
     ·
-    <a href="https://github.com/modimihir07/agentic-os/discussions">Discussions</a>
+    <a href="https://github.com/zumayaaustin-creator/agentic-os/discussions">Discussions</a>
     ·
-    <a href="https://github.com/modimihir07/agentic-os">GitHub</a>
+    <a href="https://github.com/zumayaaustin-creator/agentic-os">GitHub</a>
   </p>
 </div>

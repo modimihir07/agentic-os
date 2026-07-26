@@ -37,7 +37,7 @@ cd ~/agentic-os
 
 **URLs:**
 - Dashboard: `http://127.0.0.1:8080`
-- Web Terminal: `http://127.0.0.1:8082` (WebSocket)
+- Web Terminal: `http://127.0.0.1:8080/ws/terminal` (WebSocket PTY on the main dashboard port)
 - API Base: `http://127.0.0.1:8080/api/`
 
 ---
@@ -109,7 +109,7 @@ The terminal provides a full bash shell in the browser using xterm.js connected 
 
 **How it works:**
 1. Server forks a PTY (`pty.fork()`) running `/bin/bash`
-2. WebSocket server on port 8082 relays I/O between browser and PTY
+2. WebSocket endpoint `/ws/terminal` (on the main dashboard port) relays I/O between browser and PTY
 3. xterm.js renders the terminal with 256-color support
 4. Resize events propagate via `ioctl(TIOCSWINSZ)`
 
@@ -610,7 +610,7 @@ PID file: `.agentic-os.pid`
 ## Changelog
 
 ### v1.3.0 (2026-06-28)
-- **Web Terminal**: Added browser-based bash shell (xterm.js + WebSocket PTY on port 8082)
+- **Web Terminal**: Added browser-based bash shell (xterm.js + WebSocket PTY at `/ws/terminal` on the main port)
 - **Agent Registry**: Dynamic agent registration system (add/remove custom agents via dashboard)
 - **Agent Health Page**: Complete rewrite with card view, registry table, add agent form
 - **Hermes Free Models**: Switched to Qwen 3 80B free + 3 fallback chain (OpenAI, Google, NVIDIA)

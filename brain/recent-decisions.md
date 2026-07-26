@@ -12,13 +12,13 @@
 - Scheduler rewrite; `start.sh` / `start-agentic-os.sh` improvements.
 - New skills added: firebase-* (10), notion-knowledge-capture, xcode-project-setup, audit-test-plugin, test-plugin.
 - `.gitignore` extended to exclude runtime artifacts (pid, graphify-out, logs).
-- VERIFIED live: server on :8081, all new endpoints return 200; register/unregister persists correctly.
+- VERIFIED live: server on :8080 (port sourced from `data/settings.json`), all new endpoints return 200; register/unregister persists correctly.
 - CAVEAT (FIXED 2026-07-25): agent `check_command` previously ran via `subprocess.run(..., shell=True)` — command-injection risk. Now uses `shlex.split` + `shell=False`. Verified: malicious `"; touch /tmp/PWNED"` no longer executes.
-- CAVEAT (FIXED 2026-07-25): running two `server.py` on same port caused phantom "register doesn't persist" + 8082 bind crash. Added startup port guard (exits cleanly with message) + terminal websocket now binds gracefully instead of crashing. Verified: 2nd instance bails with exit 1.
+- CAVEAT (FIXED 2026-07-25): running two `server.py` on same port caused phantom "register doesn't persist" + 8082 bind crash. Added startup port guard (exits cleanly with message) + terminal websocket consolidated to the single `/ws/terminal` endpoint on the main port instead of a separate 8082 process. Verified: 2nd instance bails with exit 1.
 
 ## 2026-07-25 — Security & ops hardening (commit pending)
 - Fixed command-injection in `check_agent()` custom check_type: `shell=True` → `shlex.split` + `shell=False`.
-- Added double-launch guard in `main`: probe API port (8081) before `uvicorn.run`; exit 1 with clear message if already bound.
+- Added double-launch guard in `main`: probe API port from `data/settings.json` (default 8080) before `uvicorn.run`; exit 1 with clear message if already bound.
 - Made `start_terminal_server` (8082) fail gracefully — pre-bind probe + try/except, logs warning instead of crashing the process.
 
 ## Archived (older than 30 days)

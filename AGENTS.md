@@ -13,9 +13,9 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 | Field | Value |
 |-------|-------|
 | **Name** | Agentic OS |
-| **Location** | `~/Desktop/Agentic OS Project/` |
-| **GitHub** | [github.com/modimihir07/agentic-os](https://github.com/modimihir07/agentic-os) |
-| **Author** | modimihir07 |
+| **Location** | `/home/austin/agentic-os` |
+| **GitHub** | [github.com/zumayaaustin-creator/agentic-os](https://github.com/zumayaaustin-creator/agentic-os) |
+| **Author** | zumayaaustin-creator |
 | **Created** | May 17, 2026 |
 | **License** | MIT |
 | **Inspiration** | "Agent OS: Claude + Hermes AI = Superpowers!" (YouTube), MindStudio 4-layer architecture, obra/superpowers, NousResearch/hermes-agent, buildermethods/agent-os, shivsoji/claude-os |
@@ -182,7 +182,7 @@ Your role is to act as the **kernel** of this system: route tasks to the right a
 ## Directory Structure
 
 ```
-~/Desktop/Agentic OS Project/
+/home/austin/agentic-os/
 ├── AGENTS.md                  # THIS FILE — complete context for any AI agent
 ├── README.md                  # User-facing documentation
 ├── server.py                  # FastAPI backend (REST API for dashboard)
