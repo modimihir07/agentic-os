@@ -34,7 +34,9 @@ echo "==> [2/2] merging linked project graphs into central brain"
 MAPS=()
 [ -f "$OUT/agentic-os.json" ] && MAPS+=("$OUT/agentic-os.json")
 for g in "$OUT"/projects/*.json; do
-  [ -f "$g" ] && MAPS+=("$g")
+  [ -f "$g" ] || continue
+  [ "$(basename "$g")" = "registry.json" ] && continue
+  MAPS+=("$g")
 done
 
 if [ "${#MAPS[@]}" -eq 0 ]; then

@@ -1,0 +1,2036 @@
+{
+  "restore.ps1": {
+    "loc": 47,
+    "language": "ps1",
+    "size": 1303,
+    "weight": 23.5
+  },
+  "start-agentic-os.sh": {
+    "loc": 43,
+    "language": "sh",
+    "size": 1486,
+    "weight": 30.1
+  },
+  "pytest.ini": {
+    "loc": 4,
+    "language": "ini",
+    "size": 65,
+    "weight": 2.0
+  },
+  "requirements.txt": {
+    "loc": 6,
+    "language": "txt",
+    "size": 145,
+    "weight": 3.0
+  },
+  ".gitignore": {
+    "loc": 26,
+    "language": "txt",
+    "size": 413,
+    "weight": 13.0
+  },
+  "README.md": {
+    "loc": 391,
+    "language": "md",
+    "size": 20320,
+    "weight": 156.4
+  },
+  "restore.sh": {
+    "loc": 32,
+    "language": "sh",
+    "size": 749,
+    "weight": 22.4
+  },
+  "install.ps1": {
+    "loc": 107,
+    "language": "ps1",
+    "size": 3990,
+    "weight": 53.5
+  },
+  "start.ps1": {
+    "loc": 71,
+    "language": "ps1",
+    "size": 2377,
+    "weight": 35.5
+  },
+  ".agentic-os.pid": {
+    "loc": 1,
+    "language": "pid",
+    "size": 6,
+    "weight": 0.5
+  },
+  "CHANGELOG.md": {
+    "loc": 72,
+    "language": "md",
+    "size": 2899,
+    "weight": 28.8
+  },
+  "server.py": {
+    "loc": 3007,
+    "language": "py",
+    "size": 117066,
+    "weight": 3007.0
+  },
+  "AGENTS.md": {
+    "loc": 454,
+    "language": "md",
+    "size": 23621,
+    "weight": 181.6
+  },
+  "hermes.log": {
+    "loc": 121,
+    "language": "log",
+    "size": 11298,
+    "weight": 60.5
+  },
+  "Launch-Dashboard.bat": {
+    "loc": 4,
+    "language": "bat",
+    "size": 96,
+    "weight": 2.0
+  },
+  "requirements-dev.txt": {
+    "loc": 4,
+    "language": "txt",
+    "size": 66,
+    "weight": 2.0
+  },
+  "brain-cli.py": {
+    "loc": 56,
+    "language": "py",
+    "size": 1903,
+    "weight": 56.0
+  },
+  "backup.sh": {
+    "loc": 24,
+    "language": "sh",
+    "size": 489,
+    "weight": 16.8
+  },
+  "start.bat": {
+    "loc": 2,
+    "language": "bat",
+    "size": 79,
+    "weight": 1.0
+  },
+  "regen_graph_html.py": {
+    "loc": 53,
+    "language": "py",
+    "size": 1877,
+    "weight": 53.0
+  },
+  "LICENSE": {
+    "loc": 21,
+    "language": "txt",
+    "size": 1069,
+    "weight": 10.5
+  },
+  "backup.ps1": {
+    "loc": 42,
+    "language": "ps1",
+    "size": 1418,
+    "weight": 21.0
+  },
+  "install.sh": {
+    "loc": 84,
+    "language": "sh",
+    "size": 2414,
+    "weight": 58.8
+  },
+  "OPERATIONAL-NOTES.md": {
+    "loc": 28,
+    "language": "md",
+    "size": 1160,
+    "weight": 11.2
+  },
+  "start.sh": {
+    "loc": 104,
+    "language": "sh",
+    "size": 3547,
+    "weight": 72.8
+  },
+  "skills-lock.json": {
+    "loc": 77,
+    "language": "json",
+    "size": 3113,
+    "weight": 38.5
+  },
+  "docs/index.html": {
+    "loc": 258,
+    "language": "html",
+    "size": 17619,
+    "weight": 154.8
+  },
+  "docs/README.md": {
+    "loc": 664,
+    "language": "md",
+    "size": 23268,
+    "weight": 265.6
+  },
+  "docs/GRAPHIFY_MEMORY.md": {
+    "loc": 58,
+    "language": "md",
+    "size": 3007,
+    "weight": 23.2
+  },
+  "docs/agentic-os-architecture.svg": {
+    "loc": 223,
+    "language": "svg",
+    "size": 15781,
+    "weight": 111.5
+  },
+  "docs/.nojekyll": {
+    "loc": 0,
+    "language": "txt",
+    "size": 0,
+    "weight": 0.5
+  },
+  "docs/google2ccfc2c8679b95ca.html": {
+    "loc": 1,
+    "language": "html",
+    "size": 53,
+    "weight": 0.6
+  },
+  "docs/robots.txt": {
+    "loc": 3,
+    "language": "txt",
+    "size": 94,
+    "weight": 1.5
+  },
+  "docs/OS-DRAFT-NOTES.md": {
+    "loc": 158,
+    "language": "md",
+    "size": 7873,
+    "weight": 63.2
+  },
+  "docs/sitemap.xml": {
+    "loc": 15,
+    "language": "xml",
+    "size": 468,
+    "weight": 7.5
+  },
+  "dashboard/start-monitor.sh": {
+    "loc": 10,
+    "language": "sh",
+    "size": 406,
+    "weight": 7.0
+  },
+  "dashboard/app.js": {
+    "loc": 93,
+    "language": "js",
+    "size": 4183,
+    "weight": 83.7
+  },
+  "dashboard/index.html": {
+    "loc": 102,
+    "language": "html",
+    "size": 7653,
+    "weight": 61.2
+  },
+  "dashboard/test.html": {
+    "loc": 20,
+    "language": "html",
+    "size": 512,
+    "weight": 12.0
+  },
+  "dashboard/api.js": {
+    "loc": 107,
+    "language": "js",
+    "size": 7403,
+    "weight": 96.3
+  },
+  "dashboard/styles.css": {
+    "loc": 1503,
+    "language": "css",
+    "size": 47769,
+    "weight": 751.5
+  },
+  "dashboard/utils.js": {
+    "loc": 140,
+    "language": "js",
+    "size": 6361,
+    "weight": 126.0
+  },
+  "dashboard/AGENT_TIME_MONITOR.md": {
+    "loc": 65,
+    "language": "md",
+    "size": 2935,
+    "weight": 26.0
+  },
+  "dashboard/serve_monitor.py": {
+    "loc": 163,
+    "language": "py",
+    "size": 6316,
+    "weight": 163.0
+  },
+  "standards/api-response-format.md": {
+    "loc": 28,
+    "language": "md",
+    "size": 521,
+    "weight": 11.2
+  },
+  "standards/index.yml": {
+    "loc": 9,
+    "language": "yml",
+    "size": 256,
+    "weight": 5.4
+  },
+  "standards/naming-conventions.md": {
+    "loc": 17,
+    "language": "md",
+    "size": 472,
+    "weight": 6.8
+  },
+  "brain/memory.md": {
+    "loc": 31,
+    "language": "md",
+    "size": 1746,
+    "weight": 12.4
+  },
+  "brain/health-report.md": {
+    "loc": 33,
+    "language": "md",
+    "size": 1495,
+    "weight": 13.2
+  },
+  "brain/log.md": {
+    "loc": 23,
+    "language": "md",
+    "size": 1286,
+    "weight": 9.2
+  },
+  "brain/constitution.md": {
+    "loc": 26,
+    "language": "md",
+    "size": 1327,
+    "weight": 10.4
+  },
+  "brain/business-brain.md": {
+    "loc": 39,
+    "language": "md",
+    "size": 1804,
+    "weight": 15.6
+  },
+  "brain/constraints.md": {
+    "loc": 18,
+    "language": "md",
+    "size": 587,
+    "weight": 7.2
+  },
+  "brain/active-projects.md": {
+    "loc": 30,
+    "language": "md",
+    "size": 1618,
+    "weight": 12.0
+  },
+  "brain/github-activity.md": {
+    "loc": 26,
+    "language": "md",
+    "size": 1319,
+    "weight": 10.4
+  },
+  "brain/agent-learnings.md": {
+    "loc": 22,
+    "language": "md",
+    "size": 808,
+    "weight": 8.8
+  },
+  "brain/skill-usage.md": {
+    "loc": 40,
+    "language": "md",
+    "size": 1823,
+    "weight": 16.0
+  },
+  "brain/recent-decisions.md": {
+    "loc": 31,
+    "language": "md",
+    "size": 2785,
+    "weight": 12.4
+  },
+  "brain/identity.md": {
+    "loc": 17,
+    "language": "md",
+    "size": 1028,
+    "weight": 6.8
+  },
+  ".hermes/audit.log": {
+    "loc": 0,
+    "language": "log",
+    "size": 0,
+    "weight": 0.5
+  },
+  "scheduler/scheduler.py": {
+    "loc": 181,
+    "language": "py",
+    "size": 6655,
+    "weight": 181.0
+  },
+  "scripts/integrity_check.py": {
+    "loc": 156,
+    "language": "py",
+    "size": 5788,
+    "weight": 156.0
+  },
+  "scripts/analyze_agent_time.py": {
+    "loc": 229,
+    "language": "py",
+    "size": 7297,
+    "weight": 229.0
+  },
+  "scripts/update-api-docs.py": {
+    "loc": 89,
+    "language": "py",
+    "size": 3218,
+    "weight": 89.0
+  },
+  "brain-core/brain_index.db": {
+    "loc": 3137,
+    "language": "db",
+    "size": 430080,
+    "weight": 1568.5
+  },
+  "brain-core/brain_index.py": {
+    "loc": 273,
+    "language": "py",
+    "size": 9739,
+    "weight": 273.0
+  },
+  "tests/test_server_kanban.py": {
+    "loc": 158,
+    "language": "py",
+    "size": 6208,
+    "weight": 158.0
+  },
+  "tests/test_server_helpers.py": {
+    "loc": 147,
+    "language": "py",
+    "size": 5788,
+    "weight": 147.0
+  },
+  "tests/test_server_endpoints.py": {
+    "loc": 359,
+    "language": "py",
+    "size": 16988,
+    "weight": 359.0
+  },
+  "tests/test_scheduler.py": {
+    "loc": 65,
+    "language": "py",
+    "size": 2232,
+    "weight": 65.0
+  },
+  "tests/conftest.py": {
+    "loc": 51,
+    "language": "py",
+    "size": 1815,
+    "weight": 51.0
+  },
+  "audit/audit.log": {
+    "loc": 255,
+    "language": "log",
+    "size": 38455,
+    "weight": 127.5
+  },
+  "registry/plugins.json": {
+    "loc": 137,
+    "language": "json",
+    "size": 3712,
+    "weight": 68.5
+  },
+  "prompts/debug-incident.md": {
+    "loc": 27,
+    "language": "md",
+    "size": 764,
+    "weight": 10.8
+  },
+  "prompts/standup-email.md": {
+    "loc": 24,
+    "language": "md",
+    "size": 309,
+    "weight": 9.6
+  },
+  "prompts/system-audit.md": {
+    "loc": 13,
+    "language": "md",
+    "size": 557,
+    "weight": 5.2
+  },
+  "prompts/draft-blog.md": {
+    "loc": 18,
+    "language": "md",
+    "size": 668,
+    "weight": 7.2
+  },
+  "prompts/brainstorm-session.md": {
+    "loc": 29,
+    "language": "md",
+    "size": 765,
+    "weight": 11.6
+  },
+  "prompts/code-review.md": {
+    "loc": 13,
+    "language": "md",
+    "size": 577,
+    "weight": 5.2
+  },
+  "prompts/daily-standup.md": {
+    "loc": 24,
+    "language": "md",
+    "size": 442,
+    "weight": 9.6
+  },
+  "prompts/project-plan.md": {
+    "loc": 25,
+    "language": "md",
+    "size": 581,
+    "weight": 10.0
+  },
+  "prompts/research-topic.md": {
+    "loc": 23,
+    "language": "md",
+    "size": 674,
+    "weight": 9.2
+  },
+  "prompts/meeting-notes.md": {
+    "loc": 29,
+    "language": "md",
+    "size": 582,
+    "weight": 11.6
+  },
+  "data/integrations.json": {
+    "loc": 11,
+    "language": "json",
+    "size": 211,
+    "weight": 5.5
+  },
+  "data/agent-stats.json": {
+    "loc": 29,
+    "language": "json",
+    "size": 783,
+    "weight": 14.5
+  },
+  "data/settings.json": {
+    "loc": 38,
+    "language": "json",
+    "size": 785,
+    "weight": 19.0
+  },
+  "data/chat-history.json": {
+    "loc": 326,
+    "language": "json",
+    "size": 17523,
+    "weight": 163.0
+  },
+  "data/router-keywords.json": {
+    "loc": 29,
+    "language": "json",
+    "size": 366,
+    "weight": 14.5
+  },
+  "data/cost-history.json": {
+    "loc": 21,
+    "language": "json",
+    "size": 436,
+    "weight": 10.5
+  },
+  "data/goals.json": {
+    "loc": 13,
+    "language": "json",
+    "size": 385,
+    "weight": 6.5
+  },
+  "data/agent-time.json": {
+    "loc": 104,
+    "language": "json",
+    "size": 2946,
+    "weight": 52.0
+  },
+  "data/agent-registry.json": {
+    "loc": 47,
+    "language": "json",
+    "size": 1065,
+    "weight": 23.5
+  },
+  "data/agent-routes.json": {
+    "loc": 42,
+    "language": "json",
+    "size": 1351,
+    "weight": 21.0
+  },
+  "data/orchestration-runs/relverif-20260726.json": {
+    "loc": 18,
+    "language": "json",
+    "size": 2166,
+    "weight": 9.0
+  },
+  "data/kanban/906a5d23.json": {
+    "loc": 12,
+    "language": "json",
+    "size": 349,
+    "weight": 6.0
+  },
+  "registry/marketplace/.gitkeep": {
+    "loc": 0,
+    "language": "txt",
+    "size": 0,
+    "weight": 0.5
+  },
+  "agents/opencode/AGENTS.md": {
+    "loc": 12,
+    "language": "md",
+    "size": 479,
+    "weight": 4.8
+  },
+  "agents/opencode/opencode.json": {
+    "loc": 9,
+    "language": "json",
+    "size": 458,
+    "weight": 4.5
+  },
+  "agents/hermes/SOUL.md": {
+    "loc": 20,
+    "language": "md",
+    "size": 661,
+    "weight": 8.0
+  },
+  "agents/hermes/MEMORY.md": {
+    "loc": 38,
+    "language": "md",
+    "size": 1438,
+    "weight": 15.2
+  },
+  "agents/hermes/USER.md": {
+    "loc": 17,
+    "language": "md",
+    "size": 574,
+    "weight": 6.8
+  },
+  "agents/gemini/GEMINI.md": {
+    "loc": 21,
+    "language": "md",
+    "size": 650,
+    "weight": 8.4
+  },
+  "agents/gemini/gemini-extension.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 234,
+    "weight": 3.5
+  },
+  "scheduler/jobs/devops-audit-job.json": {
+    "loc": 11,
+    "language": "json",
+    "size": 276,
+    "weight": 5.5
+  },
+  "scheduler/jobs/heartbeat-job.json": {
+    "loc": 11,
+    "language": "json",
+    "size": 262,
+    "weight": 5.5
+  },
+  "scheduler/jobs/brain-index-ingest-job.json": {
+    "loc": 10,
+    "language": "json",
+    "size": 233,
+    "weight": 5.0
+  },
+  "scheduler/jobs/memory-consolidation-job.json": {
+    "loc": 11,
+    "language": "json",
+    "size": 300,
+    "weight": 5.5
+  },
+  "scheduler/jobs/daily-standup-job.json": {
+    "loc": 10,
+    "language": "json",
+    "size": 204,
+    "weight": 5.0
+  },
+  "scheduler/jobs/test-audit-job.json": {
+    "loc": 10,
+    "language": "json",
+    "size": 210,
+    "weight": 5.0
+  },
+  "skills/multi-angle-orchestration/SKILL.md": {
+    "loc": 66,
+    "language": "md",
+    "size": 3412,
+    "weight": 26.4
+  },
+  "skills/multi-agent-run/SKILL.md": {
+    "loc": 60,
+    "language": "md",
+    "size": 2572,
+    "weight": 24.0
+  },
+  "skills/cost-analytics/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 174,
+    "weight": 3.5
+  },
+  "skills/cost-analytics/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/cost-analytics/SKILL.md": {
+    "loc": 31,
+    "language": "md",
+    "size": 899,
+    "weight": 12.4
+  },
+  "skills/cost-analytics/learnings.md": {
+    "loc": 16,
+    "language": "md",
+    "size": 448,
+    "weight": 6.4
+  },
+  "skills/meeting-minutes/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 176,
+    "weight": 3.5
+  },
+  "skills/meeting-minutes/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/meeting-minutes/SKILL.md": {
+    "loc": 30,
+    "language": "md",
+    "size": 785,
+    "weight": 12.0
+  },
+  "skills/meeting-minutes/learnings.md": {
+    "loc": 5,
+    "language": "md",
+    "size": 110,
+    "weight": 2.0
+  },
+  "skills/tdd-cycle/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 175,
+    "weight": 3.5
+  },
+  "skills/tdd-cycle/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/tdd-cycle/SKILL.md": {
+    "loc": 33,
+    "language": "md",
+    "size": 925,
+    "weight": 13.2
+  },
+  "skills/tdd-cycle/learnings.md": {
+    "loc": 11,
+    "language": "md",
+    "size": 285,
+    "weight": 4.4
+  },
+  "skills/systematic-debug/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 183,
+    "weight": 3.5
+  },
+  "skills/systematic-debug/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/systematic-debug/SKILL.md": {
+    "loc": 35,
+    "language": "md",
+    "size": 1073,
+    "weight": 14.0
+  },
+  "skills/systematic-debug/learnings.md": {
+    "loc": 21,
+    "language": "md",
+    "size": 613,
+    "weight": 8.4
+  },
+  "skills/goal-planner/eval.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 221,
+    "weight": 4.0
+  },
+  "skills/goal-planner/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/goal-planner/SKILL.md": {
+    "loc": 34,
+    "language": "md",
+    "size": 865,
+    "weight": 13.6
+  },
+  "skills/goal-planner/learnings.md": {
+    "loc": 9,
+    "language": "md",
+    "size": 264,
+    "weight": 3.6
+  },
+  "skills/memory-consolidation/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 194,
+    "weight": 3.5
+  },
+  "skills/memory-consolidation/score-history.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 129,
+    "weight": 4.0
+  },
+  "skills/memory-consolidation/SKILL.md": {
+    "loc": 32,
+    "language": "md",
+    "size": 970,
+    "weight": 12.8
+  },
+  "skills/memory-consolidation/learnings.md": {
+    "loc": 65,
+    "language": "md",
+    "size": 3166,
+    "weight": 26.0
+  },
+  "skills/backup-skill/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 168,
+    "weight": 3.5
+  },
+  "skills/backup-skill/score-history.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 131,
+    "weight": 4.0
+  },
+  "skills/backup-skill/SKILL.md": {
+    "loc": 31,
+    "language": "md",
+    "size": 804,
+    "weight": 12.4
+  },
+  "skills/backup-skill/learnings.md": {
+    "loc": 10,
+    "language": "md",
+    "size": 254,
+    "weight": 4.0
+  },
+  "skills/test-plugin/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 155,
+    "weight": 3.5
+  },
+  "skills/test-plugin/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/test-plugin/SKILL.md": {
+    "loc": 34,
+    "language": "md",
+    "size": 531,
+    "weight": 13.6
+  },
+  "skills/test-plugin/learnings.md": {
+    "loc": 9,
+    "language": "md",
+    "size": 220,
+    "weight": 3.6
+  },
+  "skills/devops-audit/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 170,
+    "weight": 3.5
+  },
+  "skills/devops-audit/audit-report-2026-05-17.md": {
+    "loc": 92,
+    "language": "md",
+    "size": 2999,
+    "weight": 36.8
+  },
+  "skills/devops-audit/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/devops-audit/SKILL.md": {
+    "loc": 32,
+    "language": "md",
+    "size": 857,
+    "weight": 12.8
+  },
+  "skills/devops-audit/learnings.md": {
+    "loc": 5,
+    "language": "md",
+    "size": 118,
+    "weight": 2.0
+  },
+  "skills/daily-standup/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 180,
+    "weight": 3.5
+  },
+  "skills/daily-standup/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 2,
+    "weight": 0.5
+  },
+  "skills/daily-standup/SKILL.md": {
+    "loc": 31,
+    "language": "md",
+    "size": 809,
+    "weight": 12.4
+  },
+  "skills/daily-standup/learnings.md": {
+    "loc": 44,
+    "language": "md",
+    "size": 2099,
+    "weight": 17.6
+  },
+  "skills/brainstorming/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 193,
+    "weight": 3.5
+  },
+  "skills/brainstorming/score-history.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 131,
+    "weight": 4.0
+  },
+  "skills/brainstorming/SKILL.md": {
+    "loc": 33,
+    "language": "md",
+    "size": 918,
+    "weight": 13.2
+  },
+  "skills/brainstorming/learnings.md": {
+    "loc": 32,
+    "language": "md",
+    "size": 1074,
+    "weight": 12.8
+  },
+  "skills/audit-test-plugin/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 155,
+    "weight": 3.5
+  },
+  "skills/audit-test-plugin/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/audit-test-plugin/SKILL.md": {
+    "loc": 34,
+    "language": "md",
+    "size": 531,
+    "weight": 13.6
+  },
+  "skills/audit-test-plugin/learnings.md": {
+    "loc": 6,
+    "language": "md",
+    "size": 120,
+    "weight": 2.4
+  },
+  "skills/content-draft/eval.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 222,
+    "weight": 4.0
+  },
+  "skills/content-draft/score-history.json": {
+    "loc": 19,
+    "language": "json",
+    "size": 362,
+    "weight": 9.5
+  },
+  "skills/content-draft/SKILL.md": {
+    "loc": 33,
+    "language": "md",
+    "size": 848,
+    "weight": 13.2
+  },
+  "skills/content-draft/learnings.md": {
+    "loc": 28,
+    "language": "md",
+    "size": 1162,
+    "weight": 11.2
+  },
+  "skills/code-review/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 186,
+    "weight": 3.5
+  },
+  "skills/code-review/score-history.json": {
+    "loc": 14,
+    "language": "json",
+    "size": 260,
+    "weight": 7.0
+  },
+  "skills/code-review/SKILL.md": {
+    "loc": 37,
+    "language": "md",
+    "size": 891,
+    "weight": 14.8
+  },
+  "skills/code-review/learnings.md": {
+    "loc": 7,
+    "language": "md",
+    "size": 164,
+    "weight": 2.8
+  },
+  "skills/_template/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 155,
+    "weight": 3.5
+  },
+  "skills/_template/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/_template/SKILL.md": {
+    "loc": 34,
+    "language": "md",
+    "size": 531,
+    "weight": 13.6
+  },
+  "skills/_template/learnings.md": {
+    "loc": 6,
+    "language": "md",
+    "size": 120,
+    "weight": 2.4
+  },
+  "skills/heartbeat/eval.json": {
+    "loc": 7,
+    "language": "json",
+    "size": 180,
+    "weight": 3.5
+  },
+  "skills/heartbeat/score-history.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 131,
+    "weight": 4.0
+  },
+  "skills/heartbeat/SKILL.md": {
+    "loc": 32,
+    "language": "md",
+    "size": 873,
+    "weight": 12.8
+  },
+  "skills/heartbeat/learnings.md": {
+    "loc": 10,
+    "language": "md",
+    "size": 219,
+    "weight": 4.0
+  },
+  "skills/project-planner/eval.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 220,
+    "weight": 4.0
+  },
+  "skills/project-planner/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/project-planner/SKILL.md": {
+    "loc": 33,
+    "language": "md",
+    "size": 904,
+    "weight": 13.2
+  },
+  "skills/project-planner/learnings.md": {
+    "loc": 5,
+    "language": "md",
+    "size": 101,
+    "weight": 2.0
+  },
+  "skills/research-synthesis/eval.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 219,
+    "weight": 4.0
+  },
+  "skills/research-synthesis/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/research-synthesis/SKILL.md": {
+    "loc": 34,
+    "language": "md",
+    "size": 905,
+    "weight": 13.6
+  },
+  "skills/research-synthesis/learnings.md": {
+    "loc": 5,
+    "language": "md",
+    "size": 111,
+    "weight": 2.0
+  },
+  "skills/codebase-inspection-loop/eval.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 217,
+    "weight": 4.0
+  },
+  "skills/codebase-inspection-loop/loop.py": {
+    "loc": 336,
+    "language": "py",
+    "size": 11550,
+    "weight": 336.0
+  },
+  "skills/codebase-inspection-loop/score-history.json": {
+    "loc": 1,
+    "language": "json",
+    "size": 3,
+    "weight": 0.5
+  },
+  "skills/codebase-inspection-loop/SKILL.md": {
+    "loc": 107,
+    "language": "md",
+    "size": 4947,
+    "weight": 42.8
+  },
+  "skills/codebase-inspection-loop/learnings.md": {
+    "loc": 10,
+    "language": "md",
+    "size": 451,
+    "weight": 4.0
+  },
+  "skills/content-draft/context/2026-07-27-one-line-test.md": {
+    "loc": 12,
+    "language": "md",
+    "size": 314,
+    "weight": 4.8
+  },
+  "brain/journal/2026-06-05.md": {
+    "loc": 2,
+    "language": "md",
+    "size": 42,
+    "weight": 0.8
+  },
+  "brain/journal/2026-06-28.md": {
+    "loc": 1,
+    "language": "md",
+    "size": 63,
+    "weight": 0.4
+  },
+  "brain/journal/2026-07-05.md": {
+    "loc": 1,
+    "language": "md",
+    "size": 198,
+    "weight": 0.4
+  },
+  "brain/journal/2026-06-25.md": {
+    "loc": 1,
+    "language": "md",
+    "size": 39,
+    "weight": 0.4
+  },
+  "brain/archive/decisions-2026-05.md": {
+    "loc": 9,
+    "language": "md",
+    "size": 437,
+    "weight": 3.6
+  },
+  "brain/graph/serve-brain.sh": {
+    "loc": 22,
+    "language": "sh",
+    "size": 756,
+    "weight": 15.4
+  },
+  "brain/graph/build-central.sh": {
+    "loc": 49,
+    "language": "sh",
+    "size": 2247,
+    "weight": 34.3
+  },
+  "brain/graph/README.md": {
+    "loc": 49,
+    "language": "md",
+    "size": 3016,
+    "weight": 19.6
+  },
+  "brain/graph/serve-brain-wsl.sh": {
+    "loc": 19,
+    "language": "sh",
+    "size": 743,
+    "weight": 13.3
+  },
+  "brain/graph/metrics.json": {
+    "loc": 173,
+    "language": "json",
+    "size": 3591,
+    "weight": 86.5
+  },
+  "brain/graph/learn-loop.sh": {
+    "loc": 112,
+    "language": "sh",
+    "size": 5076,
+    "weight": 78.4
+  },
+  "brain/graph/link-project.sh": {
+    "loc": 44,
+    "language": "sh",
+    "size": 1339,
+    "weight": 30.8
+  },
+  "brain/graph/keepalive-brain-wsl.sh": {
+    "loc": 18,
+    "language": "sh",
+    "size": 765,
+    "weight": 12.6
+  },
+  "brain/graph/learnings.md": {
+    "loc": 95,
+    "language": "md",
+    "size": 3832,
+    "weight": 38.0
+  },
+  "brain/graph/wsl-keepalive.log": {
+    "loc": 54,
+    "language": "log",
+    "size": 3146,
+    "weight": 27.0
+  },
+  "brain/graph/sync-to-windows.sh": {
+    "loc": 27,
+    "language": "sh",
+    "size": 1126,
+    "weight": 18.9
+  },
+  "standards/profiles/default/config.yml": {
+    "loc": 6,
+    "language": "yml",
+    "size": 145,
+    "weight": 3.6
+  },
+  "dashboard/pages/standards.js": {
+    "loc": 65,
+    "language": "js",
+    "size": 2653,
+    "weight": 58.5
+  },
+  "dashboard/pages/scheduler.js": {
+    "loc": 99,
+    "language": "js",
+    "size": 4071,
+    "weight": 89.1
+  },
+  "dashboard/pages/memory.js": {
+    "loc": 67,
+    "language": "js",
+    "size": 2658,
+    "weight": 60.3
+  },
+  "dashboard/pages/agent-insights.js": {
+    "loc": 193,
+    "language": "js",
+    "size": 9088,
+    "weight": 173.7
+  },
+  "dashboard/pages/skills.js": {
+    "loc": 335,
+    "language": "js",
+    "size": 16416,
+    "weight": 301.5
+  },
+  "dashboard/pages/goals.js": {
+    "loc": 176,
+    "language": "js",
+    "size": 7738,
+    "weight": 158.4
+  },
+  "dashboard/pages/journal.js": {
+    "loc": 166,
+    "language": "js",
+    "size": 6983,
+    "weight": 149.4
+  },
+  "dashboard/pages/session-replay.js": {
+    "loc": 87,
+    "language": "js",
+    "size": 4506,
+    "weight": 78.3
+  },
+  "dashboard/pages/terminal.js": {
+    "loc": 158,
+    "language": "js",
+    "size": 5228,
+    "weight": 142.2
+  },
+  "dashboard/pages/cost.js": {
+    "loc": 158,
+    "language": "js",
+    "size": 7487,
+    "weight": 142.2
+  },
+  "dashboard/pages/backups.js": {
+    "loc": 77,
+    "language": "js",
+    "size": 3214,
+    "weight": 69.3
+  },
+  "dashboard/pages/smart-router.js": {
+    "loc": 171,
+    "language": "js",
+    "size": 7450,
+    "weight": 153.9
+  },
+  "dashboard/pages/dashboard.js": {
+    "loc": 141,
+    "language": "js",
+    "size": 6078,
+    "weight": 126.9
+  },
+  "dashboard/pages/settings.js": {
+    "loc": 183,
+    "language": "js",
+    "size": 8829,
+    "weight": 164.7
+  },
+  "dashboard/pages/learning-analytics.js": {
+    "loc": 103,
+    "language": "js",
+    "size": 5499,
+    "weight": 92.7
+  },
+  "dashboard/pages/kanban.js": {
+    "loc": 348,
+    "language": "js",
+    "size": 15424,
+    "weight": 313.2
+  },
+  "dashboard/pages/prompts.js": {
+    "loc": 68,
+    "language": "js",
+    "size": 2795,
+    "weight": 61.2
+  },
+  "dashboard/pages/audit.js": {
+    "loc": 85,
+    "language": "js",
+    "size": 3945,
+    "weight": 76.5
+  },
+  "dashboard/pages/orchestration.js": {
+    "loc": 92,
+    "language": "js",
+    "size": 5138,
+    "weight": 82.8
+  },
+  "dashboard/pages/agent-time.js": {
+    "loc": 176,
+    "language": "js",
+    "size": 8062,
+    "weight": 158.4
+  },
+  "dashboard/pages/command-center.js": {
+    "loc": 465,
+    "language": "js",
+    "size": 18264,
+    "weight": 418.5
+  },
+  "dashboard/pages/setup-wizard.js": {
+    "loc": 128,
+    "language": "js",
+    "size": 5324,
+    "weight": 115.2
+  },
+  "dashboard/pages/brain-search.js": {
+    "loc": 91,
+    "language": "js",
+    "size": 4872,
+    "weight": 81.9
+  },
+  "dashboard/pages/agent-health.js": {
+    "loc": 220,
+    "language": "js",
+    "size": 9803,
+    "weight": 198.0
+  },
+  "dashboard/pages/chat.js": {
+    "loc": 248,
+    "language": "js",
+    "size": 9302,
+    "weight": 223.2
+  },
+  "dashboard/pages/agent-time-monitor.html": {
+    "loc": 222,
+    "language": "html",
+    "size": 9956,
+    "weight": 133.2
+  },
+  "dashboard/pages/plugins.js": {
+    "loc": 181,
+    "language": "js",
+    "size": 7916,
+    "weight": 162.9
+  },
+  ".agents/skills/xcode-project-setup/SKILL.md": {
+    "loc": 140,
+    "language": "md",
+    "size": 6069,
+    "weight": 56.0
+  },
+  ".agents/skills/firebase-crashlytics/SKILL.md": {
+    "loc": 42,
+    "language": "md",
+    "size": 1679,
+    "weight": 16.8
+  },
+  ".agents/skills/firebase-firestore/SKILL.md": {
+    "loc": 89,
+    "language": "md",
+    "size": 3928,
+    "weight": 35.6
+  },
+  ".agents/skills/firebase-remote-config-basics/SKILL.md": {
+    "loc": 124,
+    "language": "md",
+    "size": 4805,
+    "weight": 49.6
+  },
+  ".agents/skills/firebase-app-hosting-basics/SKILL.md": {
+    "loc": 73,
+    "language": "md",
+    "size": 2356,
+    "weight": 29.2
+  },
+  ".agents/skills/notion-knowledge-capture/LICENSE.txt": {
+    "loc": 7,
+    "language": "txt",
+    "size": 1057,
+    "weight": 3.5
+  },
+  ".agents/skills/notion-knowledge-capture/SKILL.md": {
+    "loc": 56,
+    "language": "md",
+    "size": 3316,
+    "weight": 22.4
+  },
+  ".agents/skills/firebase-data-connect/templates.md": {
+    "loc": 318,
+    "language": "md",
+    "size": 7194,
+    "weight": 127.2
+  },
+  ".agents/skills/firebase-data-connect/SKILL.md": {
+    "loc": 191,
+    "language": "md",
+    "size": 9434,
+    "weight": 76.4
+  },
+  ".agents/skills/firebase-data-connect/examples.md": {
+    "loc": 638,
+    "language": "md",
+    "size": 14968,
+    "weight": 255.2
+  },
+  ".agents/skills/firebase-auth-basics/SKILL.md": {
+    "loc": 118,
+    "language": "md",
+    "size": 4168,
+    "weight": 47.2
+  },
+  ".agents/skills/firebase-hosting-basics/SKILL.md": {
+    "loc": 64,
+    "language": "md",
+    "size": 2140,
+    "weight": 25.6
+  },
+  ".agents/skills/firebase-hosting-basics/learnings.md": {
+    "loc": 7,
+    "language": "md",
+    "size": 167,
+    "weight": 2.8
+  },
+  ".agents/skills/firebase-security-rules-auditor/SKILL.md": {
+    "loc": 70,
+    "language": "md",
+    "size": 3552,
+    "weight": 28.0
+  },
+  ".agents/skills/firebase-basics/SKILL.md": {
+    "loc": 148,
+    "language": "md",
+    "size": 7064,
+    "weight": 59.2
+  },
+  ".agents/skills/firebase-ai-logic-basics/score-history.json": {
+    "loc": 8,
+    "language": "json",
+    "size": 131,
+    "weight": 4.0
+  },
+  ".agents/skills/firebase-ai-logic-basics/SKILL.md": {
+    "loc": 165,
+    "language": "md",
+    "size": 6894,
+    "weight": 66.0
+  },
+  ".agents/skills/firebase-ai-logic-basics/learnings.md": {
+    "loc": 13,
+    "language": "md",
+    "size": 447,
+    "weight": 5.2
+  },
+  ".agents/skills/firebase-ai-logic-basics/references/usage_patterns_web.md": {
+    "loc": 186,
+    "language": "md",
+    "size": 5450,
+    "weight": 74.4
+  },
+  ".agents/skills/firebase-ai-logic-basics/references/usage_patterns_android.md": {
+    "loc": 157,
+    "language": "md",
+    "size": 4545,
+    "weight": 62.8
+  },
+  ".agents/skills/firebase-ai-logic-basics/references/ios_setup.md": {
+    "loc": 156,
+    "language": "md",
+    "size": 4834,
+    "weight": 62.4
+  },
+  ".agents/skills/firebase-ai-logic-basics/references/flutter_setup.md": {
+    "loc": 95,
+    "language": "md",
+    "size": 3091,
+    "weight": 38.0
+  },
+  ".agents/skills/firebase-basics/references/android_setup.md": {
+    "loc": 41,
+    "language": "md",
+    "size": 1820,
+    "weight": 16.4
+  },
+  ".agents/skills/firebase-basics/references/firebase-service-init.md": {
+    "loc": 20,
+    "language": "md",
+    "size": 692,
+    "weight": 8.0
+  },
+  ".agents/skills/firebase-basics/references/local-env-setup.md": {
+    "loc": 80,
+    "language": "md",
+    "size": 2741,
+    "weight": 32.0
+  },
+  ".agents/skills/firebase-basics/references/ios_setup.md": {
+    "loc": 113,
+    "language": "md",
+    "size": 4055,
+    "weight": 45.2
+  },
+  ".agents/skills/firebase-basics/references/web_setup.md": {
+    "loc": 77,
+    "language": "md",
+    "size": 1675,
+    "weight": 30.8
+  },
+  ".agents/skills/firebase-basics/references/firebase-cli-guide.md": {
+    "loc": 18,
+    "language": "md",
+    "size": 464,
+    "weight": 7.2
+  },
+  ".agents/skills/firebase-basics/references/flutter_setup.md": {
+    "loc": 143,
+    "language": "md",
+    "size": 4839,
+    "weight": 57.2
+  },
+  ".agents/skills/firebase-basics/references/refresh/claude.md": {
+    "loc": 12,
+    "language": "md",
+    "size": 380,
+    "weight": 4.8
+  },
+  ".agents/skills/firebase-basics/references/refresh/gemini-cli.md": {
+    "loc": 13,
+    "language": "md",
+    "size": 482,
+    "weight": 5.2
+  },
+  ".agents/skills/firebase-basics/references/refresh/android_studio.md": {
+    "loc": 41,
+    "language": "md",
+    "size": 1311,
+    "weight": 16.4
+  },
+  ".agents/skills/firebase-basics/references/refresh/antigravity.md": {
+    "loc": 64,
+    "language": "md",
+    "size": 2119,
+    "weight": 25.6
+  },
+  ".agents/skills/firebase-basics/references/refresh/other-agents.md": {
+    "loc": 67,
+    "language": "md",
+    "size": 2302,
+    "weight": 26.8
+  },
+  ".agents/skills/firebase-basics/references/setup/other_agents.md": {
+    "loc": 99,
+    "language": "md",
+    "size": 3486,
+    "weight": 39.6
+  },
+  ".agents/skills/firebase-basics/references/setup/cursor.md": {
+    "loc": 93,
+    "language": "md",
+    "size": 3112,
+    "weight": 37.2
+  },
+  ".agents/skills/firebase-basics/references/setup/github_copilot.md": {
+    "loc": 104,
+    "language": "md",
+    "size": 3428,
+    "weight": 41.6
+  },
+  ".agents/skills/firebase-basics/references/setup/android_studio.md": {
+    "loc": 23,
+    "language": "md",
+    "size": 658,
+    "weight": 9.2
+  },
+  ".agents/skills/firebase-basics/references/setup/gemini_cli.md": {
+    "loc": 53,
+    "language": "md",
+    "size": 2037,
+    "weight": 21.2
+  },
+  ".agents/skills/firebase-basics/references/setup/antigravity.md": {
+    "loc": 98,
+    "language": "md",
+    "size": 3398,
+    "weight": 39.2
+  },
+  ".agents/skills/firebase-basics/references/setup/claude_code.md": {
+    "loc": 45,
+    "language": "md",
+    "size": 1927,
+    "weight": 18.0
+  },
+  ".agents/skills/firebase-hosting-basics/references/deploying.md": {
+    "loc": 48,
+    "language": "md",
+    "size": 1201,
+    "weight": 19.2
+  },
+  ".agents/skills/firebase-hosting-basics/references/configuration.md": {
+    "loc": 115,
+    "language": "md",
+    "size": 1832,
+    "weight": 46.0
+  },
+  ".agents/skills/firebase-auth-basics/references/client_sdk_android.md": {
+    "loc": 160,
+    "language": "md",
+    "size": 4717,
+    "weight": 64.0
+  },
+  ".agents/skills/firebase-auth-basics/references/security_rules.md": {
+    "loc": 49,
+    "language": "md",
+    "size": 1309,
+    "weight": 19.6
+  },
+  ".agents/skills/firebase-auth-basics/references/client_sdk_web.md": {
+    "loc": 301,
+    "language": "md",
+    "size": 7670,
+    "weight": 120.4
+  },
+  ".agents/skills/firebase-auth-basics/references/ios_setup.md": {
+    "loc": 87,
+    "language": "md",
+    "size": 2487,
+    "weight": 34.8
+  },
+  ".agents/skills/firebase-auth-basics/references/flutter_setup.md": {
+    "loc": 149,
+    "language": "md",
+    "size": 5596,
+    "weight": 59.6
+  },
+  ".agents/skills/firebase-data-connect/reference/operations.md": {
+    "loc": 385,
+    "language": "md",
+    "size": 11226,
+    "weight": 154.0
+  },
+  ".agents/skills/firebase-data-connect/reference/sdk_android.md": {
+    "loc": 126,
+    "language": "md",
+    "size": 3794,
+    "weight": 50.4
+  },
+  ".agents/skills/firebase-data-connect/reference/sdk_admin_node.md": {
+    "loc": 141,
+    "language": "md",
+    "size": 4202,
+    "weight": 56.4
+  },
+  ".agents/skills/firebase-data-connect/reference/native_sql.md": {
+    "loc": 170,
+    "language": "md",
+    "size": 7066,
+    "weight": 68.0
+  },
+  ".agents/skills/firebase-data-connect/reference/sdk_ios.md": {
+    "loc": 157,
+    "language": "md",
+    "size": 4332,
+    "weight": 62.8
+  },
+  ".agents/skills/firebase-data-connect/reference/search.md": {
+    "loc": 264,
+    "language": "md",
+    "size": 8922,
+    "weight": 105.6
+  },
+  ".agents/skills/firebase-data-connect/reference/schema.md": {
+    "loc": 290,
+    "language": "md",
+    "size": 7622,
+    "weight": 116.0
+  },
+  ".agents/skills/firebase-data-connect/reference/sdk_web.md": {
+    "loc": 146,
+    "language": "md",
+    "size": 4005,
+    "weight": 58.4
+  },
+  ".agents/skills/firebase-data-connect/reference/cloud_functions.md": {
+    "loc": 184,
+    "language": "md",
+    "size": 6111,
+    "weight": 73.6
+  },
+  ".agents/skills/firebase-data-connect/reference/config.md": {
+    "loc": 271,
+    "language": "md",
+    "size": 6962,
+    "weight": 108.4
+  },
+  ".agents/skills/firebase-data-connect/reference/sdk_flutter.md": {
+    "loc": 134,
+    "language": "md",
+    "size": 3511,
+    "weight": 53.6
+  },
+  ".agents/skills/firebase-data-connect/reference/data_seeding.md": {
+    "loc": 185,
+    "language": "md",
+    "size": 5925,
+    "weight": 74.0
+  },
+  ".agents/skills/firebase-data-connect/reference/security.md": {
+    "loc": 295,
+    "language": "md",
+    "size": 8944,
+    "weight": 118.0
+  },
+  ".agents/skills/firebase-data-connect/reference/realtime.md": {
+    "loc": 210,
+    "language": "md",
+    "size": 7738,
+    "weight": 84.0
+  },
+  ".agents/skills/notion-knowledge-capture/evaluations/README.md": {
+    "loc": 95,
+    "language": "md",
+    "size": 3487,
+    "weight": 38.0
+  },
+  ".agents/skills/notion-knowledge-capture/evaluations/conversation-to-wiki.json": {
+    "loc": 31,
+    "language": "json",
+    "size": 2035,
+    "weight": 15.5
+  },
+  ".agents/skills/notion-knowledge-capture/evaluations/decision-record.json": {
+    "loc": 31,
+    "language": "json",
+    "size": 2220,
+    "weight": 15.5
+  },
+  ".agents/skills/notion-knowledge-capture/reference/documentation-database.md": {
+    "loc": 93,
+    "language": "md",
+    "size": 2745,
+    "weight": 37.2
+  },
+  ".agents/skills/notion-knowledge-capture/reference/learning-database.md": {
+    "loc": 35,
+    "language": "md",
+    "size": 1322,
+    "weight": 14.0
+  },
+  ".agents/skills/notion-knowledge-capture/reference/team-wiki-database.md": {
+    "loc": 27,
+    "language": "md",
+    "size": 927,
+    "weight": 10.8
+  },
+  ".agents/skills/notion-knowledge-capture/reference/database-best-practices.md": {
+    "loc": 112,
+    "language": "md",
+    "size": 2876,
+    "weight": 44.8
+  },
+  ".agents/skills/notion-knowledge-capture/reference/faq-database.md": {
+    "loc": 57,
+    "language": "md",
+    "size": 2037,
+    "weight": 22.8
+  },
+  ".agents/skills/notion-knowledge-capture/reference/decision-log-database.md": {
+    "loc": 58,
+    "language": "md",
+    "size": 2033,
+    "weight": 23.2
+  },
+  ".agents/skills/notion-knowledge-capture/reference/how-to-guide-database.md": {
+    "loc": 38,
+    "language": "md",
+    "size": 1237,
+    "weight": 15.2
+  },
+  ".agents/skills/notion-knowledge-capture/assets/notion-small.svg": {
+    "loc": 11,
+    "language": "svg",
+    "size": 15777,
+    "weight": 5.5
+  },
+  ".agents/skills/notion-knowledge-capture/assets/notion.png": {
+    "loc": 76,
+    "language": "png",
+    "size": 8526,
+    "weight": 38.0
+  },
+  ".agents/skills/notion-knowledge-capture/agents/openai.yaml": {
+    "loc": 14,
+    "language": "yaml",
+    "size": 512,
+    "weight": 8.4
+  },
+  ".agents/skills/notion-knowledge-capture/examples/how-to-guide.md": {
+    "loc": 118,
+    "language": "md",
+    "size": 2838,
+    "weight": 47.2
+  },
+  ".agents/skills/notion-knowledge-capture/examples/conversation-to-faq.md": {
+    "loc": 226,
+    "language": "md",
+    "size": 16242,
+    "weight": 90.4
+  },
+  ".agents/skills/notion-knowledge-capture/examples/decision-capture.md": {
+    "loc": 126,
+    "language": "md",
+    "size": 3568,
+    "weight": 50.4
+  },
+  ".agents/skills/firebase-app-hosting-basics/references/emulation.md": {
+    "loc": 59,
+    "language": "md",
+    "size": 1493,
+    "weight": 23.6
+  },
+  ".agents/skills/firebase-app-hosting-basics/references/cli_commands.md": {
+    "loc": 85,
+    "language": "md",
+    "size": 3217,
+    "weight": 34.0
+  },
+  ".agents/skills/firebase-app-hosting-basics/references/configuration.md": {
+    "loc": 59,
+    "language": "md",
+    "size": 1742,
+    "weight": 23.6
+  },
+  ".agents/skills/firebase-remote-config-basics/references/android_setup.md": {
+    "loc": 91,
+    "language": "md",
+    "size": 3484,
+    "weight": 36.4
+  },
+  ".agents/skills/firebase-remote-config-basics/references/ios_setup.md": {
+    "loc": 89,
+    "language": "md",
+    "size": 2678,
+    "weight": 35.6
+  },
+  ".agents/skills/firebase-firestore/references/standard/security_rules.md": {
+    "loc": 577,
+    "language": "md",
+    "size": 26681,
+    "weight": 230.8
+  },
+  ".agents/skills/firebase-firestore/references/standard/indexes.md": {
+    "loc": 113,
+    "language": "md",
+    "size": 4455,
+    "weight": 45.2
+  },
+  ".agents/skills/firebase-firestore/references/standard/android_sdk_usage.md": {
+    "loc": 193,
+    "language": "md",
+    "size": 5185,
+    "weight": 77.2
+  },
+  ".agents/skills/firebase-firestore/references/standard/ios_setup.md": {
+    "loc": 174,
+    "language": "md",
+    "size": 5376,
+    "weight": 69.6
+  },
+  ".agents/skills/firebase-firestore/references/standard/flutter_setup.md": {
+    "loc": 176,
+    "language": "md",
+    "size": 4612,
+    "weight": 70.4
+  },
+  ".agents/skills/firebase-firestore/references/standard/provisioning.md": {
+    "loc": 110,
+    "language": "md",
+    "size": 2901,
+    "weight": 44.0
+  },
+  ".agents/skills/firebase-firestore/references/standard/web_sdk_usage.md": {
+    "loc": 192,
+    "language": "md",
+    "size": 4547,
+    "weight": 76.8
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/python_sdk_usage.md": {
+    "loc": 138,
+    "language": "md",
+    "size": 2946,
+    "weight": 55.2
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/security_rules.md": {
+    "loc": 577,
+    "language": "md",
+    "size": 26681,
+    "weight": 230.8
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/data_model.md": {
+    "loc": 66,
+    "language": "md",
+    "size": 2880,
+    "weight": 26.4
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/indexes.md": {
+    "loc": 135,
+    "language": "md",
+    "size": 4936,
+    "weight": 54.0
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/android_sdk_usage.md": {
+    "loc": 230,
+    "language": "md",
+    "size": 8755,
+    "weight": 92.0
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/ios_setup.md": {
+    "loc": 189,
+    "language": "md",
+    "size": 5970,
+    "weight": 75.6
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/flutter_setup.md": {
+    "loc": 180,
+    "language": "md",
+    "size": 4761,
+    "weight": 72.0
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/provisioning.md": {
+    "loc": 118,
+    "language": "md",
+    "size": 3257,
+    "weight": 47.2
+  },
+  ".agents/skills/firebase-firestore/references/enterprise/web_sdk_usage.md": {
+    "loc": 127,
+    "language": "md",
+    "size": 4264,
+    "weight": 50.8
+  },
+  ".agents/skills/firebase-crashlytics/references/android_setup.md": {
+    "loc": 152,
+    "language": "md",
+    "size": 5169,
+    "weight": 60.8
+  },
+  ".agents/skills/firebase-crashlytics/references/ios_setup.md": {
+    "loc": 115,
+    "language": "md",
+    "size": 4556,
+    "weight": 46.0
+  },
+  ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/.gitignore": {
+    "loc": 9,
+    "language": "txt",
+    "size": 153,
+    "weight": 4.5
+  },
+  ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.swift": {
+    "loc": 17,
+    "language": "swift",
+    "size": 428,
+    "weight": 8.5
+  },
+  ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.resolved": {
+    "loc": 41,
+    "language": "resolved",
+    "size": 1076,
+    "weight": 20.5
+  },
+  ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Sources/main.swift": {
+    "loc": 232,
+    "language": "swift",
+    "size": 9135,
+    "weight": 116.0
+  }
+}

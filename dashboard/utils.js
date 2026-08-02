@@ -131,6 +131,7 @@ const PAGE_TITLES = {
   kanban: { title: 'Kanban Board', breadcrumb: 'Multi-agent task management' },
   goals: { title: 'Goals', breadcrumb: 'Project targets and progress' },
   journal: { title: 'Journal', breadcrumb: 'Daily entries and notes' },
+  'command-center': { title: 'Command Center', breadcrumb: 'Dispatch & live console' },
   'agent-health': { title: 'Agent Health', breadcrumb: 'Real-time agent monitoring' },
   'smart-router': { title: 'Smart Router', breadcrumb: 'Task routing intelligence' },
   'learning-analytics': { title: 'Learning Analytics', breadcrumb: 'Skill improvement tracking' },

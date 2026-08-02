@@ -378,7 +378,7 @@ MIT License — free to use, modify, and distribute.
 ---
 
 <div align="center">
-  <p><strong>Agentic OS</strong> — Built with ❤️ by <a href="https://github.com/modimihir07">Mihir Modi</a></p>
+  <p><strong>Agentic OS</strong> — Built with ❤️ by <a href="https://github.com/zumayaaustin-creator">zumayaaustin-creator</a></p>
   <p>
     <a href="https://dev.to/mihir_nmodi_14a06a4019e1/i-built-an-open-source-agent-os-2h30">📖 Read the dev.to article</a>
     ·

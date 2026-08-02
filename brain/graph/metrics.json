@@ -1,29 +1,452 @@
 [
   {
-    "ts": "2026-07-26T15:06:18.723582",
-    "nodes": 614,
-    "edges": 0,
-    "orphan_rate": 100.0,
-    "tiny_communities": 18,
-    "size_mb": 0.54,
-    "size_mb_after_opt": 0.27
-  },
-  {
-    "ts": "2026-07-26T15:06:36.876480",
-    "nodes": 614,
-    "edges": 0,
-    "orphan_rate": 100.0,
-    "tiny_communities": 18,
-    "size_mb": 0.55,
-    "size_mb_after_opt": 0.27
-  },
-  {
-    "ts": "2026-07-26T15:07:14.174676",
-    "nodes": 614,
-    "edges": 1024,
+    "ts": "2026-07-31T07:37:10.190247",
+    "nodes": 353239,
+    "edges": 813967,
     "orphan_rate": 0.2,
-    "tiny_communities": 18,
-    "size_mb": 0.55,
-    "size_mb_after_opt": 0.44
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T08:39:12.784816",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T09:41:13.804449",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T10:43:16.718801",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T11:45:06.623312",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T12:47:03.411555",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T13:49:03.550535",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T14:51:04.157326",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T15:53:05.834762",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T16:55:09.265464",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T17:57:25.984773",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T18:59:24.282251",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T20:01:26.732048",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T21:03:28.674003",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T22:05:37.886834",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-07-31T23:07:45.544454",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T00:09:44.106160",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T01:11:48.697669",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T02:13:54.308566",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T03:15:54.031893",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T04:18:07.740755",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T08:31:12.645013",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T09:33:53.827691",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T10:36:54.426489",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T11:39:57.899023",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T12:42:59.672619",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T13:44:55.042765",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T14:46:56.672216",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T15:48:54.854600",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T16:50:55.743582",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 328,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T17:52:57.507803",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T18:54:59.199787",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T19:57:00.176586",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T20:59:02.909762",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T22:01:08.195011",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-01T23:03:08.627157",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T00:05:10.554252",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T01:07:10.391817",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T02:09:13.002457",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T03:11:14.631370",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T04:13:19.708635",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T05:15:25.037875",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T06:17:43.869979",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T08:49:45.923977",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T09:51:55.830403",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T10:53:54.055989",
+    "nodes": 353239,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T11:55:54.164324",
+    "nodes": 353240,
+    "edges": 813967,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T12:57:55.404337",
+    "nodes": 353240,
+    "edges": 813973,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T13:59:58.647677",
+    "nodes": 353241,
+    "edges": 813973,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
+  },
+  {
+    "ts": "2026-08-02T15:01:58.236831",
+    "nodes": 353241,
+    "edges": 813973,
+    "orphan_rate": 0.2,
+    "tiny_communities": 327,
+    "size_mb": 526.82,
+    "size_mb_after_opt": 447.02
   }
 ]

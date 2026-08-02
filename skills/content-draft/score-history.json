@@ -1,1 +1,19 @@
-[]
+[
+  {
+    "date": "2026-07-27",
+    "run": "one-line-test",
+    "scores": {
+      "brand_tone_match": 0.95,
+      "factual_accuracy": 1.0,
+      "structure_clarity": 0.9,
+      "engagement": 0.5
+    },
+    "weighted_score": 0.865
+  },
+  {
+    "date": "2026-07-28",
+    "timestamp": "2026-07-28T02:19:31.481617+00:00",
+    "score": 50,
+    "agent": "hermes"
+  }
+]

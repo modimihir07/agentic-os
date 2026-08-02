@@ -1,0 +1,357 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "install.sh",
+      "file_type": "code",
+      "source_file": "install.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "install",
+      "community": 1,
+      "norm_label": "install.sh"
+    },
+    {
+      "label": "install.sh script",
+      "file_type": "code",
+      "source_file": "install.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "install_sh__entry",
+      "community": 1,
+      "norm_label": "install.sh script"
+    },
+    {
+      "label": "TERM",
+      "file_type": "code",
+      "source_file": "install.sh",
+      "source_location": "L8",
+      "metadata": {
+        "language": "bash",
+        "kind": "code"
+      },
+      "_origin": "ast",
+      "id": "install_term",
+      "community": 1,
+      "norm_label": "term"
+    },
+    {
+      "label": "openclaw-setup.sh",
+      "file_type": "code",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "roles_openclaw_files_openclaw_setup",
+      "community": 0,
+      "norm_label": "openclaw-setup.sh"
+    },
+    {
+      "label": "openclaw-setup.sh script",
+      "file_type": "code",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "roles_openclaw_files_openclaw_setup_sh__entry",
+      "community": 0,
+      "norm_label": "openclaw-setup.sh script"
+    },
+    {
+      "label": "TERM",
+      "file_type": "code",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L5",
+      "metadata": {
+        "language": "bash",
+        "kind": "code"
+      },
+      "_origin": "ast",
+      "id": "roles_openclaw_files_openclaw_setup_term",
+      "community": 0,
+      "norm_label": "term"
+    },
+    {
+      "label": "COLORTERM",
+      "file_type": "code",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L6",
+      "metadata": {
+        "language": "bash",
+        "kind": "code"
+      },
+      "_origin": "ast",
+      "id": "roles_openclaw_files_openclaw_setup_colorterm",
+      "community": 0,
+      "norm_label": "colorterm"
+    },
+    {
+      "label": "show-lobster.sh",
+      "file_type": "code",
+      "source_file": "roles/openclaw/files/show-lobster.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "roles_openclaw_files_show_lobster",
+      "community": 3,
+      "norm_label": "show-lobster.sh"
+    },
+    {
+      "label": "show-lobster.sh script",
+      "file_type": "code",
+      "source_file": "roles/openclaw/files/show-lobster.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "roles_openclaw_files_show_lobster_sh__entry",
+      "community": 3,
+      "norm_label": "show-lobster.sh script"
+    },
+    {
+      "label": "run-playbook.sh",
+      "file_type": "code",
+      "source_file": "run-playbook.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "run_playbook",
+      "community": 2,
+      "norm_label": "run-playbook.sh"
+    },
+    {
+      "label": "run-playbook.sh script",
+      "file_type": "code",
+      "source_file": "run-playbook.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "run_playbook_sh__entry",
+      "community": 2,
+      "norm_label": "run-playbook.sh script"
+    },
+    {
+      "label": "extract_openclaw_user_from_args()",
+      "file_type": "code",
+      "source_file": "run-playbook.sh",
+      "source_location": "L9",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "run_playbook_extract_openclaw_user_from_args",
+      "community": 2,
+      "norm_label": "extract_openclaw_user_from_args()"
+    },
+    {
+      "label": "entrypoint.sh",
+      "file_type": "code",
+      "source_file": "tests/entrypoint.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "tests_entrypoint",
+      "community": 4,
+      "norm_label": "entrypoint.sh"
+    },
+    {
+      "label": "entrypoint.sh script",
+      "file_type": "code",
+      "source_file": "tests/entrypoint.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "tests_entrypoint_sh__entry",
+      "community": 4,
+      "norm_label": "entrypoint.sh script"
+    },
+    {
+      "label": "run-tests.sh",
+      "file_type": "code",
+      "source_file": "tests/run-tests.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "tests_run_tests",
+      "community": 5,
+      "norm_label": "run-tests.sh"
+    },
+    {
+      "label": "run-tests.sh script",
+      "file_type": "code",
+      "source_file": "tests/run-tests.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "tests_run_tests_sh__entry",
+      "community": 5,
+      "norm_label": "run-tests.sh script"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "install.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "install",
+      "target": "install_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "install.sh",
+      "source_location": "L8",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "install",
+      "target": "install_term",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L6",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "roles_openclaw_files_openclaw_setup",
+      "target": "roles_openclaw_files_openclaw_setup_colorterm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "roles_openclaw_files_openclaw_setup",
+      "target": "roles_openclaw_files_openclaw_setup_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "roles/openclaw/files/openclaw-setup.sh",
+      "source_location": "L5",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "roles_openclaw_files_openclaw_setup",
+      "target": "roles_openclaw_files_openclaw_setup_term",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "roles/openclaw/files/show-lobster.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "roles_openclaw_files_show_lobster",
+      "target": "roles_openclaw_files_show_lobster_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "run-playbook.sh",
+      "source_location": "L9",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "run_playbook",
+      "target": "run_playbook_extract_openclaw_user_from_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "run-playbook.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "run_playbook",
+      "target": "run_playbook_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "run-playbook.sh",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "run_playbook_sh__entry",
+      "target": "run_playbook_extract_openclaw_user_from_args",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/entrypoint.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_entrypoint",
+      "target": "tests_entrypoint_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/run-tests.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_run_tests",
+      "target": "tests_run_tests_sh__entry",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "b52506035fb399ed963e98a61a99cd782b704789"
+}

@@ -1,34 +1,50 @@
 # Skill Usage & Effectiveness
 
-> Last updated: 2026-07-26 (brain-guardian)
+> Last updated: 2026-08-02
 
-## Most Used Skills (by audit log count)
-| Skill | Runs | Last Run | Notes |
-|-------|------|----------|-------|
-| memory-consolidation | 13 | 2026-07-26 | Latest run FAILED — Hermes timed out (180s) |
-| code-review | 8 | 2026-07-26 | Recent runs failed via opencode (postinstall broken) |
-| daily-standup | 4 | — | |
-| backup-skill | 3 | 2026-07-26 | opencode broken |
-| test-plugin / tdd-cycle / heartbeat / goal-planner / firebase-hosting-basics / firebase-ai-logic-basics | 2 each | — | |
+Source: audit/audit.log (373 entries) — 46 `skill_run`, 24 `skill_scored` (counted separately).
 
-## Eval Data (score-history.json)
-| Skill | Has Data |
-|-------|----------|
-| code-review | yes (largest history) |
-| heartbeat, firebase-ai-logic-basics, backup-skill, memory-consolidation | yes (1–2 entries) |
-| others | empty |
-Scores are all ~45–50 stub-quality; no meaningful eval trend yet.
+## Most Used Skills (by audit log `skill_run` count)
+| Skill | Runs | Last Run | Avg Score |
+|-------|------|----------|-----------|
+| memory-consolidation | 13 | 2026-07-30 | 50 (n=2) |
+| backup-skill | 6 | 2026-08-02 | 48 (n=5) |
+| code-review | 5 | 2026-07-26 | 50 (n=3) |
+| audit-test-plugin | 5 | 2026-08-02 | 45 (n=5) — all runs errored |
+| daily-standup | 3 | 2026-07-31 | 45 (n=3) |
+| tdd-cycle | 2 | 2026-06-26 | — |
+| test-plugin | 2 | 2026-06-28 | — |
+| goal-planner | 2 | 2026-06-28 | — |
+| firebase-hosting-basics | 2 | 2026-06-28 | — |
+| firebase-app-hosting-basics | 1 | 2026-08-02 | 45 (n=1) |
+| firebase-ai-logic-basics | 1 | 2026-07-25 | 45 (n=1) |
+| heartbeat | 1 | 2026-07-25 | 50 (n=1) |
+| brainstorming | 1 | 2026-07-28 | 50 (n=1) |
 
-## New Learnings Since 2026-06-28
-15 skills have learnings.md updated 2026-07-17 → 2026-07-26 (backup-skill, code-review, devops-audit, memory-consolidation most recent on 2026-07-26).
+## Most Effective Skills (by eval score, /100 scale)
+| Skill | Avg Score | Scored Runs | Trend |
+|-------|-----------|-------------|-------|
+| devops-audit | 53 | 1 | flat |
+| code-review | 50 | 3 | flat |
+| memory-consolidation | 50 | 2 | flat |
+| heartbeat | 50 | 1 | flat |
+| brainstorming | 50 | 1 | flat |
+| content-draft | 50 | 1 | flat |
+| backup-skill | 48 | 5 | flat |
+| daily-standup | 45 | 3 | flat |
+| audit-test-plugin | 45 | 5 | flat — **scores unreliable, all runs failed** |
+
+⚠️ Scores are compressed in a 45–53 band. The eval layer records failed
+opencode/Hermes-routed runs as `success: true`, so scores are not a trustworthy
+quality signal until routing is fixed.
 
 ## Skills Per Project
 | Project | Skills Used |
 |---------|-------------|
-| Agentic OS | daily-standup, heartbeat, devops-audit, memory-consolidation, backup-skill |
-| Kitchen-Inventory | code-review, firebase-ai-logic-basics, firebase-hosting-basics, systematic-debug, tdd-cycle |
+| Agentic OS | memory-consolidation, backup-skill, daily-standup, heartbeat, devops-audit, audit-test-plugin, goal-planner, brainstorming, multi-angle-orchestration |
+| Kitchen-Inventory | code-review, systematic-debug, tdd-cycle, firebase-* |
+| Pendelton-comms-live | (none since 2026-02-28) |
 
-## ⚠ Alerts
-- **opencode agent broken** (installed with --ignore-scripts; postinstall never ran). All opencode-dispatched skill runs on 2026-07-25/26 returned errors, yet audit still logs success=true with score ~50 — scoring is masking failures.
-- Kanban dispatch to opencode failed (task fffc3981, 2026-07-26).
-- memory-consolidation via hermes timed out on 2026-07-26 17:03 UTC.
+## Learnings activity
+10 skills carry learnings.md entries; no new learnings written since the 2026-07-30
+memory-consolidation run. 9 skills have non-empty score-history.json.

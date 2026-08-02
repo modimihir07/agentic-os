@@ -1,0 +1,8 @@
+{
+  "criteria": [
+    { "name": "coverage", "weight": 0.3 },
+    { "name": "finding_quality", "weight": 0.35 },
+    { "name": "loop_discipline", "weight": 0.2 },
+    { "name": "report_clarity", "weight": 0.15 }
+  ]
+}

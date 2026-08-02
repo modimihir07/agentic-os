@@ -32,7 +32,7 @@ async function renderLearningAnalytics() {
       } else {
         const topSkills = skills.sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 6);
         grid.innerHTML = topSkills.map(s => {
-          const pct = Math.round((s.score || 0) * 100);
+          const pct = Math.round((s.score || 0));
           return `
             <div class="card chart-card" style="position:relative">
               <div style="font-size:13px;font-weight:600;margin-bottom:4px;text-transform:capitalize">${escapeHtml(s.name)}</div>
@@ -64,12 +64,12 @@ async function renderLearningAnalytics() {
               <div style="display:flex;align-items:flex-end;gap:3px;height:${chartHeight}px;padding-top:20px">
                 ${vals.map((v, i) => {
                   const h = (v / maxVal) * (chartHeight - 25);
-                  return `<div style="flex:1;height:${h}px;background:linear-gradient(180deg,var(--accent),var(--accent-light));border-radius:3px 3px 0 0;min-height:4px;transition:height 0.3s ease" title="${(v * 100).toFixed(0)}%"></div>`;
+                  return `<div style="flex:1;height:${h}px;background:linear-gradient(180deg,var(--accent),var(--accent-light));border-radius:3px 3px 0 0;min-height:4px;transition:height 0.3s ease" title="${(v).toFixed(0)}%"></div>`;
                 }).join('')}
               </div>
               <div style="display:flex;justify-content:space-between;margin-top:4px">
                 <span class="text-xs text-muted">${vals.length} data points</span>
-                <span class="text-xs text-muted">Avg: ${(vals.reduce((a, b) => a + b, 0) / vals.length * 100).toFixed(0)}%</span>
+                <span class="text-xs text-muted">Avg: ${(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(0)}%</span>
               </div>
             </div>
           `;
@@ -82,13 +82,13 @@ async function renderLearningAnalytics() {
         details.innerHTML = '';
       } else {
         details.innerHTML = skills.map(s => {
-          const pct = Math.round((s.score || 0) * 100);
+          const pct = Math.round((s.score || 0));
           return `
             <div class="card" style="margin-bottom:8px">
               <div style="display:flex;align-items:center;justify-content:space-between">
                 <div>
                   <div style="font-weight:600;text-transform:capitalize">${escapeHtml(s.name)}</div>
-                  <div class="text-muted text-sm">${s.evals || 0} evaluations · Best: ${((s.best || 0) * 100).toFixed(0)}%</div>
+                  <div class="text-muted text-sm">${s.evals || 0} evaluations · Best: ${(s.best || 0).toFixed(0)}%</div>
                 </div>
                 <span style="font-size:16px;font-weight:700;color:${pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--yellow)' : 'var(--red)'}">${pct}%</span>
               </div>

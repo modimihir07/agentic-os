@@ -12,7 +12,9 @@ def test_status_ok(client, server_module, monkeypatch):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "healthy"
-    assert {a["name"] for a in body["agents"]} == {"opencode", "hermes", "gemini"}
+    # The registry grew beyond the original 3 builtins — assert the core
+    # agents are present rather than pinning an exact set.
+    assert {"opencode", "hermes", "gemini"} <= {a["name"] for a in body["agents"]}
     assert body["skills_count"] == 0
 
 
@@ -88,7 +90,8 @@ def test_get_skill_and_missing(client, server_module):
 def test_get_skill_eval(client, server_module):
     _make_skill(server_module, "tdd-cycle", scores=[{"score": 7}])
     assert client.get("/api/skills/tdd-cycle/eval").json() == {"scores": [{"score": 7}]}
-    assert client.get("/api/skills/other/eval").json() == {"scores": []}
+    # Unknown skills now 404 (same contract as GET /api/skills/{name}).
+    assert client.get("/api/skills/other/eval").status_code == 404
 
 
 @pytest.mark.parametrize("name,expected_agent", [
@@ -167,7 +170,11 @@ def test_cost_empty_then_record(client):
 
 # ─── Plugins ───────────────────────────────────────────────────────
 
-def test_plugins_install_flow(client):
+def test_plugins_install_flow(client, server_module):
+    # Local installs copy from the skills/_template skeleton — build a minimal one.
+    template = server_module.BASE_DIR / "skills" / "_template"
+    template.mkdir(parents=True)
+    (template / "SKILL.md").write_text("---\nversion: 1.0.0\n---\n")
     assert client.get("/api/plugins").json() == {"plugins": []}
     assert client.post("/api/plugins/install", json={"name": "cool-plugin"}).json()["status"] == "installed"
     assert client.post("/api/plugins/install", json={"name": "cool-plugin"}).json()["status"] == "already_installed"
@@ -235,24 +242,43 @@ def test_chat_records_history(client, server_module, monkeypatch):
     assert history[1]["role"] == "assistant"
 
 
+def test_chat_custom_registered_agent_uses_dynamic_executor(client, server_module, monkeypatch):
+    # Custom agents from data/agent-registry.json are accepted by /api/chat
+    # and must run through the registry-driven executor, not "Unknown agent".
+    server_module.AGENT_REGISTRY_FILE.write_text(json.dumps({
+        "echo-bot": {"name": "echo-bot", "type": "cli", "binary": "echo",
+                     "run_args": ["echo", "{message}"]},
+    }))
+    monkeypatch.setattr(server_module, "execute_agent_dynamic", lambda a, m: f"dynamic:{m}")
+    r = client.post("/api/chat", json={"agent": "echo-bot", "message": "hi"})
+    assert r.status_code == 200
+    assert r.json()["response"]["content"] == "dynamic:hi"
+
+
 # ─── Terminal ──────────────────────────────────────────────────────
+# The terminal is WebSocket-only now (/ws/terminal); the old REST
+# /api/terminal/* endpoints were removed.
 
-def test_terminal_session_and_blank_command(client, server_module):
-    assert client.get("/api/terminal/session").json()["cwd"]
-    r = client.post("/api/terminal/run", json={"command": "   "})
-    assert r.json()["returncode"] == 0
-
-
-def test_terminal_cd_invalid_dir(client):
-    r = client.post("/api/terminal/run", json={"command": "cd /this/does/not/exist"})
-    assert r.json()["returncode"] == 1
-    assert "no such directory" in r.json()["stderr"]
+def test_terminal_rest_endpoints_removed(client):
+    assert client.get("/api/terminal/session").status_code == 404
+    assert client.post("/api/terminal/run", json={"command": "echo hi"}).status_code == 404
 
 
-def test_terminal_run_echo(client):
-    r = client.post("/api/terminal/run", json={"command": "echo hello-term"})
-    assert r.json()["returncode"] == 0
-    assert "hello-term" in r.json()["stdout"]
+def test_terminal_websocket_rejects_foreign_origin(client):
+    from starlette.websockets import WebSocketDisconnect
+
+    with pytest.raises(WebSocketDisconnect):
+        with client.websocket_connect(
+            "/ws/terminal", headers={"origin": "https://evil.example"}
+        ):
+            pass
+
+
+def test_terminal_websocket_accepts_local_origin(client):
+    with client.websocket_connect(
+        "/ws/terminal", headers={"origin": "http://localhost:8080"}
+    ):
+        pass  # clean disconnect closes the PTY session server-side
 
 
 # ─── Goals ─────────────────────────────────────────────────────────
@@ -294,8 +320,8 @@ def test_journal_save_get_list_search(client, server_module):
 def test_agent_health(client, server_module, monkeypatch):
     monkeypatch.setattr(server_module.shutil, "which", lambda n: None)
     body = client.get("/api/agents/health").json()
-    assert len(body["agents"]) == 3
-    assert body["agents"][0]["success_rate"] == 100
+    assert len(body["agents"]) == len(server_module.load_agent_registry())
+    assert body["agents"][0]["success_rate"] == 0
 
 
 def test_agent_stats_valid_and_invalid(client, server_module, monkeypatch):
@@ -306,7 +332,8 @@ def test_agent_stats_valid_and_invalid(client, server_module, monkeypatch):
 
 def test_agent_health_refresh(client, server_module, monkeypatch):
     monkeypatch.setattr(server_module.shutil, "which", lambda n: None)
-    assert len(client.post("/api/agents/health/refresh").json()["agents"]) == 3
+    body = client.post("/api/agents/health/refresh").json()
+    assert len(body["agents"]) == len(server_module.load_agent_registry())
 
 
 # ─── Smart router ──────────────────────────────────────────────────
@@ -342,8 +369,8 @@ def test_skill_analytics(client, server_module):
 def test_trend_analytics(client, server_module):
     _make_skill(server_module, "tdd-cycle", scores=[{"score": 3, "date": "d1"}])
     body = client.get("/api/analytics/trends").json()["trends"]
-    assert body[0]["name"] == "tdd-cycle"
-    assert body[0]["scores"] == [3]
+    # Frontend contract: an OBJECT mapping skill name -> recent scores.
+    assert body["tdd-cycle"] == [3]
 
 
 # ─── Session replay ────────────────────────────────────────────────

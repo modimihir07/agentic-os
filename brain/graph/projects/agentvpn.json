@@ -1,0 +1,1364 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "docker-entrypoint.sh",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint",
+      "community": 0,
+      "norm_label": "docker-entrypoint.sh"
+    },
+    {
+      "label": "docker-entrypoint.sh script",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_sh__entry",
+      "community": 0,
+      "norm_label": "docker-entrypoint.sh script"
+    },
+    {
+      "label": "cleanup()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L35",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_cleanup",
+      "community": 0,
+      "norm_label": "cleanup()"
+    },
+    {
+      "label": "patch_config_var()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L57",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_patch_config_var",
+      "community": 0,
+      "norm_label": "patch_config_var()"
+    },
+    {
+      "label": "setup_firewall()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L101",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_setup_firewall",
+      "community": 0,
+      "norm_label": "setup_firewall()"
+    },
+    {
+      "label": "teardown_firewall()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L147",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_teardown_firewall",
+      "community": 0,
+      "norm_label": "teardown_firewall()"
+    },
+    {
+      "label": "ensure_socks5()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L152",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_ensure_socks5",
+      "community": 0,
+      "norm_label": "ensure_socks5()"
+    },
+    {
+      "label": "connect_once()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L171",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_connect_once",
+      "community": 0,
+      "norm_label": "connect_once()"
+    },
+    {
+      "label": "healthcheck()",
+      "file_type": "code",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L253",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "docker_entrypoint_healthcheck",
+      "community": 0,
+      "norm_label": "healthcheck()"
+    },
+    {
+      "label": "pi-scan.sh",
+      "file_type": "code",
+      "source_file": "scripts/pi-scan.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "scripts_pi_scan",
+      "community": 6,
+      "norm_label": "pi-scan.sh"
+    },
+    {
+      "label": "pi-scan.sh script",
+      "file_type": "code",
+      "source_file": "scripts/pi-scan.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "scripts_pi_scan_sh__entry",
+      "community": 6,
+      "norm_label": "pi-scan.sh script"
+    },
+    {
+      "label": "vpn-cleanup.sh",
+      "file_type": "code",
+      "source_file": "scripts/vpn-cleanup.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "scripts_vpn_cleanup",
+      "community": 7,
+      "norm_label": "vpn-cleanup.sh"
+    },
+    {
+      "label": "vpn-cleanup.sh script",
+      "file_type": "code",
+      "source_file": "scripts/vpn-cleanup.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "scripts_vpn_cleanup_sh__entry",
+      "community": 7,
+      "norm_label": "vpn-cleanup.sh script"
+    },
+    {
+      "label": "wait-for-vpn.sh",
+      "file_type": "code",
+      "source_file": "scripts/wait-for-vpn.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "scripts_wait_for_vpn",
+      "community": 8,
+      "norm_label": "wait-for-vpn.sh"
+    },
+    {
+      "label": "wait-for-vpn.sh script",
+      "file_type": "code",
+      "source_file": "scripts/wait-for-vpn.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "scripts_wait_for_vpn_sh__entry",
+      "community": 8,
+      "norm_label": "wait-for-vpn.sh script"
+    },
+    {
+      "label": "test-pi-scan.sh",
+      "file_type": "code",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "tests_test_pi_scan",
+      "community": 4,
+      "norm_label": "test-pi-scan.sh"
+    },
+    {
+      "label": "test-pi-scan.sh script",
+      "file_type": "code",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "tests_test_pi_scan_sh__entry",
+      "community": 4,
+      "norm_label": "test-pi-scan.sh script"
+    },
+    {
+      "label": "run_test()",
+      "file_type": "code",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L15",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "tests_test_pi_scan_run_test",
+      "community": 4,
+      "norm_label": "run_test()"
+    },
+    {
+      "label": "run_ml_test()",
+      "file_type": "code",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L116",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "id": "tests_test_pi_scan_run_ml_test",
+      "community": 4,
+      "norm_label": "run_ml_test()"
+    },
+    {
+      "label": "download-assets.sh",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/download-assets.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_download_assets",
+      "community": 9,
+      "norm_label": "download-assets.sh"
+    },
+    {
+      "label": "download-assets.sh script",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/download-assets.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_download_assets_sh__entry",
+      "community": 9,
+      "norm_label": "download-assets.sh script"
+    },
+    {
+      "label": "main.rs",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main",
+      "community": 3,
+      "norm_label": "main.rs"
+    },
+    {
+      "label": "load_model()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L28",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_load_model",
+      "community": 1,
+      "norm_label": "load_model()"
+    },
+    {
+      "label": "Result",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "result",
+      "community": 1,
+      "norm_label": "result"
+    },
+    {
+      "label": "RunnableModel",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "runnablemodel",
+      "community": 1,
+      "norm_label": "runnablemodel"
+    },
+    {
+      "label": "load_tokenizer()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L44",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_load_tokenizer",
+      "community": 2,
+      "norm_label": "load_tokenizer()"
+    },
+    {
+      "label": "Tokenizer",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "tokenizer",
+      "community": 2,
+      "norm_label": "tokenizer"
+    },
+    {
+      "label": "prepare_chunk_inputs()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L56",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_prepare_chunk_inputs",
+      "community": 1,
+      "norm_label": "prepare_chunk_inputs()"
+    },
+    {
+      "label": "Array2",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "array2",
+      "community": 1,
+      "norm_label": "array2"
+    },
+    {
+      "label": "softmax_class_one()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L85",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "community": 3,
+      "norm_label": "softmax_class_one()"
+    },
+    {
+      "label": "run_model()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L95",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_run_model",
+      "community": 1,
+      "norm_label": "run_model()"
+    },
+    {
+      "label": "truncate_content()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L121",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_truncate_content",
+      "community": 5,
+      "norm_label": "truncate_content()"
+    },
+    {
+      "label": "String",
+      "file_type": "code",
+      "source_file": "",
+      "source_location": "",
+      "_origin": "ast",
+      "id": "string",
+      "community": 5,
+      "norm_label": "string"
+    },
+    {
+      "label": "classify()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L138",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_classify",
+      "community": 2,
+      "norm_label": "classify()"
+    },
+    {
+      "label": "main()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L195",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_main",
+      "community": 2,
+      "norm_label": "main()"
+    },
+    {
+      "label": "softmax_basic()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L232",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_softmax_basic",
+      "community": 3,
+      "norm_label": "softmax_basic()"
+    },
+    {
+      "label": "softmax_high_class_one()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L238",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_softmax_high_class_one",
+      "community": 3,
+      "norm_label": "softmax_high_class_one()"
+    },
+    {
+      "label": "softmax_low_class_one()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L244",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_softmax_low_class_one",
+      "community": 3,
+      "norm_label": "softmax_low_class_one()"
+    },
+    {
+      "label": "softmax_wrong_size()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L250",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_softmax_wrong_size",
+      "community": 3,
+      "norm_label": "softmax_wrong_size()"
+    },
+    {
+      "label": "tokenizer_loads()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L256",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_tokenizer_loads",
+      "community": 2,
+      "norm_label": "tokenizer_loads()"
+    },
+    {
+      "label": "model_loads()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L264",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_model_loads",
+      "community": 1,
+      "norm_label": "model_loads()"
+    },
+    {
+      "label": "classify_safe_content()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L269",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_classify_safe_content",
+      "community": 2,
+      "norm_label": "classify_safe_content()"
+    },
+    {
+      "label": "truncate_short_content()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L275",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_truncate_short_content",
+      "community": 3,
+      "norm_label": "truncate_short_content()"
+    },
+    {
+      "label": "truncate_long_content()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L281",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_truncate_long_content",
+      "community": 5,
+      "norm_label": "truncate_long_content()"
+    },
+    {
+      "label": "classify_injection_content()",
+      "file_type": "code",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L289",
+      "_origin": "ast",
+      "id": "tools_pi_ml_scan_src_main_classify_injection_content",
+      "community": 2,
+      "norm_label": "classify_injection_content()"
+    }
+  ],
+  "links": [
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_cleanup",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L171",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_connect_once",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L152",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_ensure_socks5",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L253",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_healthcheck",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L57",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_patch_config_var",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L101",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_setup_firewall",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L147",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "docker_entrypoint",
+      "target": "docker_entrypoint_teardown_firewall",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L399",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_sh__entry",
+      "target": "docker_entrypoint_cleanup",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L276",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_sh__entry",
+      "target": "docker_entrypoint_connect_once",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L310",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_sh__entry",
+      "target": "docker_entrypoint_healthcheck",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L68",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_sh__entry",
+      "target": "docker_entrypoint_patch_config_var",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L316",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_sh__entry",
+      "target": "docker_entrypoint_teardown_firewall",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L37",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_cleanup",
+      "target": "docker_entrypoint_teardown_firewall",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L243",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_connect_once",
+      "target": "docker_entrypoint_setup_firewall",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "docker-entrypoint.sh",
+      "source_location": "L244",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "docker_entrypoint_connect_once",
+      "target": "docker_entrypoint_ensure_socks5",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/pi-scan.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "scripts_pi_scan",
+      "target": "scripts_pi_scan_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/vpn-cleanup.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "scripts_vpn_cleanup",
+      "target": "scripts_vpn_cleanup_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "scripts/wait-for-vpn.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "scripts_wait_for_vpn",
+      "target": "scripts_wait_for_vpn_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L116",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_test_pi_scan",
+      "target": "tests_test_pi_scan_run_ml_test",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_test_pi_scan",
+      "target": "tests_test_pi_scan_run_test",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tests_test_pi_scan",
+      "target": "tests_test_pi_scan_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L137",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "tests_test_pi_scan_sh__entry",
+      "target": "tests_test_pi_scan_run_ml_test",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test-pi-scan.sh",
+      "source_location": "L35",
+      "weight": 1.0,
+      "context": "call",
+      "_origin": "ast",
+      "source": "tests_test_pi_scan_sh__entry",
+      "target": "tests_test_pi_scan_run_test",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/download-assets.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_download_assets",
+      "target": "tools_pi_ml_scan_download_assets_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L13",
+      "weight": 1.0,
+      "context": "import",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "array2",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L138",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_classify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L289",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_classify_injection_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L269",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_classify_safe_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_load_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_load_tokenizer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L195",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_main",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L264",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_model_loads",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L56",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_prepare_chunk_inputs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_run_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L232",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_softmax_basic",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L85",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L238",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_softmax_high_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L244",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_softmax_low_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L250",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_softmax_wrong_size",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L256",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_tokenizer_loads",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L121",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_truncate_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L281",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_truncate_long_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L275",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main",
+      "target": "tools_pi_ml_scan_src_main_truncate_short_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L140",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify",
+      "target": "tools_pi_ml_scan_src_main_load_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_load_model",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L28",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_load_model",
+      "target": "runnablemodel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L265",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_model_loads",
+      "target": "tools_pi_ml_scan_src_main_load_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L138",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_load_tokenizer",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L56",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_prepare_chunk_inputs",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_run_model",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L85",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "target": "result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_run_model",
+      "target": "runnablemodel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L139",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify",
+      "target": "tools_pi_ml_scan_src_main_load_tokenizer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L44",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_load_tokenizer",
+      "target": "tokenizer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L257",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_tokenizer_loads",
+      "target": "tools_pi_ml_scan_src_main_load_tokenizer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L163",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify",
+      "target": "tools_pi_ml_scan_src_main_prepare_chunk_inputs",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L56",
+      "weight": 1.0,
+      "context": "generic_arg",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_prepare_chunk_inputs",
+      "target": "array2",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L95",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_run_model",
+      "target": "array2",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L116",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_run_model",
+      "target": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L233",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_softmax_basic",
+      "target": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L239",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_softmax_high_class_one",
+      "target": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L245",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_softmax_low_class_one",
+      "target": "tools_pi_ml_scan_src_main_softmax_class_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L164",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify",
+      "target": "tools_pi_ml_scan_src_main_run_model",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L142",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify",
+      "target": "tools_pi_ml_scan_src_main_truncate_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L121",
+      "weight": 1.0,
+      "context": "return_type",
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_truncate_content",
+      "target": "string",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L283",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_truncate_long_content",
+      "target": "tools_pi_ml_scan_src_main_truncate_content",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L291",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify_injection_content",
+      "target": "tools_pi_ml_scan_src_main_classify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L270",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_classify_safe_content",
+      "target": "tools_pi_ml_scan_src_main_classify",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "tools/pi-ml-scan/src/main.rs",
+      "source_location": "L207",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "tools_pi_ml_scan_src_main_main",
+      "target": "tools_pi_ml_scan_src_main_classify",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "89d0a26540970c638b4b1fa0436644f2bdbed5c3"
+}

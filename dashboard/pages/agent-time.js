@@ -79,7 +79,7 @@ async function loadAgentTime(recompute) {
           <div><div style="font-size:22px;font-weight:700">${g.edges}</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">edges</div></div>
           <div><div style="font-size:22px;font-weight:700">${g.communities != null ? g.communities : '—'}</div><div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">communities</div></div>
         </div>
-        <a class="btn btn-ghost btn-sm mt-3" href="/dashboard/graphify-out/graph.html" target="_blank">↗ Open interactive graph</a>
+        <a class="btn btn-ghost btn-sm mt-3" href="/graphify-out/graph-standalone.html" target="_blank">↗ Open brain graph</a>
       </div>` : '';
 
     body.innerHTML = `

@@ -38,7 +38,18 @@ def server_module(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "JOURNAL_DIR", base / "brain" / "journal")
     monkeypatch.setattr(server, "CHAT_HISTORY_FILE",
                         base / "data" / "chat-history.json")
-    monkeypatch.setattr(server, "_terminal_cwd", str(base))
+    monkeypatch.setattr(server, "AGENT_STATS_FILE",
+                        base / "data" / "agent-stats.json")
+    monkeypatch.setattr(server, "AGENT_REGISTRY_FILE",
+                        base / "data" / "agent-registry.json")
+    monkeypatch.setattr(server, "ORCHESTRATION_DIR",
+                        base / "data" / "orchestration-runs")
+    monkeypatch.setattr(server, "AGENT_TIME_REPORT",
+                        base / "data" / "agent-time.json")
+    monkeypatch.setattr(server, "AGENT_TIME_ANALYZER",
+                        base / "scripts" / "analyze_agent_time.py")
+    monkeypatch.setattr(server, "ROUTER_KEYWORDS_FILE",
+                        base / "data" / "router-keywords.json")
 
     return server
 

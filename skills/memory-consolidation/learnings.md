@@ -41,7 +41,16 @@
 - No contradictions found across skill learnings
 - Cleaned stale truncated run log (Run 82b75bcd) and stale opencode-timeout logs from firebase-hosting-basics
 
-## 2026-07-17 (Run 5e7d871e)
+## 2026-07-26 (Run — consolidation)
+- Agent: hermes
+- Input: (none)
+- 18 learnings.md files all under 600 words — no compression needed
+- score-history.json: backup-skill (1 entry, 2026-07-26), code-review (2 entries, 2026-07-26) — both <20 entries, no pruning; remaining 16 empty
+- recent-decisions.md: 2 recent entries (2026-06-28, 2026-07-25), both <30 days old — no archiving needed; 2026-05-17 already archived
+- Cleaned corrupted run-log pollution from 4 skill learnings files (devops-audit, code-review, backup-skill, memory-consolidation): removed truncated "## Skill Instructions / name: / description:" fragments and opencode postinstall-error blocks left by failed runs
+- No contradictions found across skill learnings
+
+## 2026-07-26 (Run 33b38b7d)
 - Agent: hermes
 - Input: (none)
 - Output: ⏱ Hermes timed out.
@@ -54,3 +63,17 @@ The model took too long to respond. Try a shorter query or check your OpenRouter
 ---
 name: memory-consolidation
 desc
+
+## 2026-07-30 (Run 2a0ed767)
+- Agent: hermes
+- Input: (none)
+- Output: ─  ⚕ Hermes  ─────────────────────────────────────────────────────────────────
+HTTP 404: Model 'tencent/hy3:free' not found. The requested model does not
+exist in our configuration or OpenRouter catalog.
+──────────────────────────────────────────────────────────────────────────────
+hermes --resume 20260730_021950_469228
+
+## 2026-07-30 09:19:55 · hermes · done
+- Task: memory-consolidation
+- Outcome: ─  ⚕ Hermes  ───────────────────────────────────────────────────────────────── HTTP 404: Model 'tencent/hy3:free' not found. The requested model does not exist in our configuration or OpenRouter catalog. ────────────────────────────────────────────────────────────────────────────
+

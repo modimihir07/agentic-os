@@ -1,45 +1,45 @@
 {
   "project": "agentic-os",
-  "generated_at": "2026-07-25T18:27:15.982570+00:00",
+  "generated_at": "2026-07-29T05:41:30.188526+00:00",
   "method": "session-gap estimate (GAP=1800s, TAIL=120s)",
   "graph": {
-    "nodes": 321,
-    "edges": 517,
-    "communities": 41,
+    "nodes": 1164,
+    "edges": 1633,
+    "communities": 170,
     "file": "graphify-out/graph.json"
   },
   "gap_seconds": 1800,
   "tail_seconds": 120,
-  "total_seconds": 20568,
-  "total_human": "5h 42m 48s",
+  "total_seconds": 40213,
+  "total_human": "11h 10m 13s",
   "agents": {
     "opencode": {
-      "sessions": 8,
-      "touches": 42,
-      "total_seconds": 4566,
+      "sessions": 14,
+      "touches": 72,
+      "total_seconds": 13665,
       "first_seen": "2026-06-23T11:17:40.771655+00:00",
-      "last_seen": "2026-07-25T17:40:45.570834+00:00"
+      "last_seen": "2026-07-28T03:41:42.745269+00:00"
     },
     "system": {
-      "sessions": 12,
-      "touches": 114,
-      "total_seconds": 7374,
+      "sessions": 19,
+      "touches": 147,
+      "total_seconds": 14485,
       "first_seen": "2026-06-25T17:58:22.902546+00:00",
-      "last_seen": "2026-07-25T17:10:23.236024+00:00"
+      "last_seen": "2026-07-28T03:48:09.153757+00:00"
     },
     "hermes": {
-      "sessions": 9,
-      "touches": 36,
-      "total_seconds": 6808,
+      "sessions": 13,
+      "touches": 53,
+      "total_seconds": 9364,
       "first_seen": "2026-06-26T01:25:01.320339+00:00",
-      "last_seen": "2026-07-25T17:42:17.726478+00:00"
+      "last_seen": "2026-07-28T03:46:22.384599+00:00"
     },
     "gemini": {
-      "sessions": 1,
-      "touches": 3,
-      "total_seconds": 220,
+      "sessions": 2,
+      "touches": 4,
+      "total_seconds": 340,
       "first_seen": "2026-06-28T17:26:01.078648+00:00",
-      "last_seen": "2026-06-28T17:27:41.105686+00:00"
+      "last_seen": "2026-07-28T02:37:03.695958+00:00"
     },
     "test_claude": {
       "sessions": 1,
@@ -56,11 +56,11 @@
       "last_seen": "2026-07-17T17:30:21.986571+00:00"
     },
     "kilocode": {
-      "sessions": 2,
-      "touches": 3,
-      "total_seconds": 240,
+      "sessions": 3,
+      "touches": 6,
+      "total_seconds": 360,
       "first_seen": "2026-06-28T20:44:32.730628+00:00",
-      "last_seen": "2026-07-17T17:30:21.988722+00:00"
+      "last_seen": "2026-07-28T02:41:35.898236+00:00"
     },
     "test": {
       "sessions": 1,
@@ -75,9 +75,30 @@
       "total_seconds": 871,
       "first_seen": "2026-07-17T17:18:53.396385+00:00",
       "last_seen": "2026-07-17T17:31:24.434628+00:00"
+    },
+    "_selftest": {
+      "sessions": 1,
+      "touches": 4,
+      "total_seconds": 193,
+      "first_seen": "2026-07-25T18:27:22.752105+00:00",
+      "last_seen": "2026-07-25T18:28:36.233324+00:00"
+    },
+    "injecttest": {
+      "sessions": 2,
+      "touches": 6,
+      "total_seconds": 326,
+      "first_seen": "2026-07-25T18:35:02.870017+00:00",
+      "last_seen": "2026-07-25T19:29:33.756824+00:00"
+    },
+    "inj": {
+      "sessions": 1,
+      "touches": 2,
+      "total_seconds": 120,
+      "first_seen": "2026-07-25T19:31:15.424519+00:00",
+      "last_seen": "2026-07-25T19:31:15.866928+00:00"
     }
   },
-  "event_count": 207,
+  "event_count": 303,
   "first_seen": "2026-06-23T11:17:40.771655+00:00",
-  "last_seen": "2026-07-25T17:42:17.726478+00:00"
+  "last_seen": "2026-07-28T03:48:09.153757+00:00"
 }

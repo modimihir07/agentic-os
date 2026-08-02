@@ -1,34 +1,36 @@
 # Brain Health Report
 
-> Generated: 2026-07-26 14:57 (brain-guardian)
+> Generated: 2026-08-02 15:00 local (~22:00 UTC)
 
 ## Status: needs attention
 
 ### Memory Files
 - memory.md: 248 words (OK, limit 600)
-- active-projects.md: 3 projects (1 stale)
-- log.md: 23 entries (OK)
-- recent-decisions.md: 3 entries (OK, none >30 days flagged)
+- active-projects.md: 3 projects (1 stale — Pendelton-comms-live)
+- log.md: 23 entries (OK, limit 500)
+- recent-decisions.md: 31 lines (OK, nothing >30 days needing archive)
+- audit/audit.log: 373 entries, parses cleanly (no JSONL corruption)
 
 ### Projects
-- Agentic OS: Building Phase 1 — very active (15+ commits in 48h)
-- Kitchen-Inventory: In development on antigravity — repo not cloned locally; code review pending (geminiService.ts: 18 issues, 4 critical)
-- Pendelton-comms-live: **STALE** — last worked 2026-02-28 (~5 months); repo not cloned locally
+- **Agentic OS**: Active — hardening/expansion. Last commit 2026-07-26. 0 commits in 48h. 🔴 18 unpushed commits + 90 dirty files.
+- **Kitchen-Inventory**: Active — on antigravity host, no local clone. geminiService.ts review findings (18 issues, 4 critical) still open.
+- **Pendelton-comms-live**: ⚠️ STALE — no activity since 2026-02-28 (~5 months). Revive or mark dormant.
 
 ### GitHub
-- Agentic OS: 15+ commits in 48h; **17 unpushed commits** on local-hardening-merged; dirty working tree (README.md, business-brain.md)
-- Kitchen-Inventory / Pendelton-comms-live: repos not cloned locally
+- Agentic OS: 0 commits in 48h, **18 unpushed**, 90 dirty entries; `main` diverged (ahead 3 / behind 61)
+- Kitchen-Inventory: repo not cloned locally
+- Pendelton-comms-live: repo not cloned locally
 
 ### Skills
-- 15 skills with new learnings since 2026-06-28
-- 5 skills with eval data (stub-quality scores only)
+- 46 `skill_run` events lifetime; 24 `skill_scored` events
+- 10 skills with learnings.md content; **0 new learnings since 2026-07-30**
+- 9 skills with eval data; scores clustered 45–53 (low signal)
+- 🔴 audit-test-plugin: 5/5 lifetime runs errored, most recently 2026-08-02 19:46 UTC
 
-### ⚠ Alerts
-1. **opencode agent broken** (--ignore-scripts install) — every opencode skill run and kanban dispatch fails; reinstall opencode-ai without --ignore-scripts.
-2. **Score masking**: failed opencode runs still logged success=true / score ~50 — eval scoring hides failures.
-3. **memory-consolidation timed out** via hermes (2026-07-26, 180s) — marked success=false.
-4. **17 unpushed commits** on Agentic OS — push to origin to avoid loss.
-5. Pendelton-comms-live stale >5 months — archive or resume.
-
-### Connected Apps
-- No new integrations logged since last check.
+### Alerts
+1. 🔴 **Unpushed work** — 18 commits + 90 dirty files on `local-hardening-merged`, nothing on remote for 7+ days. Highest data-loss risk.
+2. 🔴 **opencode still broken** — live `opencode run` returns "postinstall script was not run" (installed with `--ignore-scripts`). Fix: `npm i -g opencode-ai` without `--ignore-scripts`. All opencode-routed skill/kanban dispatch fails.
+3. ⚠️ **Eval layer lies** — failed runs recorded as `success: true` with a score. Skill scores untrustworthy until fixed.
+4. ⚠️ **audit-test-plugin** — 100% failure rate; disable or repair.
+5. ⚠️ **Pendelton-comms-live stale 5 months** — decide: revive or mark dormant.
+6. ⚠️ **`main` branch diverged** (ahead 3 / behind 61) — reconcile with `local-hardening-merged`.

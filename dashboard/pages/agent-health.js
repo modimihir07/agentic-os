@@ -30,20 +30,34 @@ async function loadAgents() {
     const container = document.getElementById('agentCards');
     const table = document.getElementById('agentTable');
 
+    if (!agents || agents.length === 0) {
+      if (container) container.innerHTML = '<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">📭</div><div class="empty-state-title">No agents registered</div><div class="empty-state-desc">Add an agent to see runtime metrics here.</div></div></div>';
+      if (table) table.innerHTML = '';
+      return;
+    }
+
     // Card view
     container.innerHTML = agents.map(a => {
       const sc = statusColor(a.status);
+      const safeName = escapeHtml(a.display_name || a.name);
+      const safeDesc = escapeHtml(a.description || 'No description');
       return `
         <div class="card agent-card">
           <div class="agent-card-header">
             <div class="agent-dot ${a.status}" style="width:12px;height:12px"></div>
-            <span style="font-weight:600;font-size:15px">${escapeHtml(a.display_name || a.name)}</span>
+            <span style="font-weight:600;font-size:15px">${safeName}</span>
             ${a.builtin ? '<span class="nav-badge" style="background:var(--accent)">built-in</span>' : '<span class="nav-badge" style="background:var(--green)">custom</span>'}
           </div>
-          <div style="font-size:12px;color:var(--text-secondary);margin:8px 0">${escapeHtml(a.description || 'No description')}</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin:8px 0">${safeDesc}</div>
           <div style="display:flex;gap:8px;align-items:center">
             <span style="font-size:11px;color:${sc.text};text-transform:uppercase;font-weight:600">${a.status}</span>
             <span style="font-size:11px;color:var(--text-muted)">${a.type || 'cli'}</span>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:var(--text-muted);display:flex;gap:10px;flex-wrap:wrap">
+            <span>Runs: ${a.total_runs ?? 0}</span>
+            <span>Success: ${a.successful_runs ?? 0}</span>
+            <span>Failed: ${a.failed_runs ?? 0}</span>
+            <span>Avg: ${(a.avg_response_time ?? 0).toFixed(1)}s</span>
           </div>
           ${!a.builtin ? `<div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="removeAgent('${a.name}')">Remove</button></div>` : ''}
         </div>
@@ -59,32 +73,46 @@ async function loadAgents() {
             <th>Type</th>
             <th>Status</th>
             <th>Source</th>
+            <th>Runs</th>
+            <th>Success</th>
+            <th>Failed</th>
+            <th>Avg</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          ${agents.map(a => `
-            <tr>
-              <td>
-                <div style="display:flex;align-items:center;gap:8px">
-                  <div class="agent-dot ${a.status}" style="width:8px;height:8px"></div>
-                  <span style="font-weight:500">${escapeHtml(a.display_name || a.name)}</span>
-                </div>
-                <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${escapeHtml(a.description || '')}</div>
-              </td>
-              <td style="text-transform:uppercase;font-size:11px">${a.type || 'cli'}</td>
-              <td><span style="color:${statusColor(a.status).text};font-size:11px;text-transform:uppercase;font-weight:600">${a.status}</span></td>
-              <td>${a.builtin ? '<span style="color:var(--text-muted)">built-in</span>' : '<span style="color:var(--green)">custom</span>'}</td>
-              <td>
-                ${!a.builtin ? `<button class="btn btn-ghost btn-sm" onclick="removeAgent('${a.name}')">Remove</button>` : '<span style="color:var(--text-muted);font-size:11px">—</span>'}
-              </td>
-            </tr>
-          `).join('')}
+          ${agents.map(a => {
+            const sc = statusColor(a.status);
+            return `
+              <tr>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div class="agent-dot ${a.status}" style="width:8px;height:8px"></div>
+                    <span style="font-weight:500">${safeName}</span>
+                  </div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${safeDesc}</div>
+                </td>
+                <td style="text-transform:uppercase;font-size:11px">${a.type || 'cli'}</td>
+                <td><span style="color:${sc.text};font-size:11px;text-transform:uppercase;font-weight:600">${a.status}</span></td>
+                <td>${a.builtin ? '<span style="color:var(--text-muted)">built-in</span>' : '<span style="color:var(--green)">custom</span>'}</td>
+                <td>${a.total_runs ?? 0}</td>
+                <td>${a.successful_runs ?? 0}</td>
+                <td>${a.failed_runs ?? 0}</td>
+                <td>${(a.avg_response_time ?? 0).toFixed(1)}s</td>
+                <td>
+                  ${!a.builtin ? `<button class="btn btn-ghost btn-sm" onclick="removeAgent('${a.name}')">Remove</button>` : '<span style="color:var(--text-muted);font-size:11px">—</span>'}
+                </td>
+              </tr>
+            `;
+          }).join('')}
         </tbody>
       </table>
     `;
   } catch (err) {
-    document.getElementById('agentCards').innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error</div><div class="empty-state-desc">${escapeHtml(err.message)}</div></div></div>`;
+    const agentCards = document.getElementById('agentCards');
+    if (agentCards) {
+      agentCards.innerHTML = `<div class="card" style="grid-column:1/-1"><div class="empty-state"><div class="empty-state-icon">⚠</div><div class="empty-state-title">Error loading agents</div><div class="empty-state-desc">${escapeHtml(err.message)}</div><button class="btn btn-primary mt-3" onclick="loadAgents()">Retry</button></div></div>`;
+    }
   }
 }
 

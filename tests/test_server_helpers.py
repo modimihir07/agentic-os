@@ -80,24 +80,28 @@ def test_get_cors_origins_bad_settings_falls_back(server_module):
 @pytest.mark.parametrize("which_result,expected", [(None, "offline"), ("/usr/bin/opencode", "online")])
 def test_check_agent_opencode(server_module, monkeypatch, which_result, expected):
     monkeypatch.setattr(server_module.shutil, "which", lambda name: which_result)
-    assert server_module.check_agent("opencode") == {"name": "opencode", "status": expected}
+    info = server_module.check_agent("opencode")
+    assert info["name"] == "opencode"
+    assert info["status"] == expected
 
 
-def test_check_agent_unknown_is_offline(server_module):
-    assert server_module.check_agent("mystery")["status"] == "offline"
+def test_check_agent_unknown(server_module):
+    info = server_module.check_agent("mystery")
+    assert info["status"] == "unknown"
+    assert info["display_name"] == "mystery"
 
 
 def test_check_agent_gemini_warning_when_not_logged_in(server_module, monkeypatch, tmp_path):
     monkeypatch.setattr(server_module.shutil, "which", lambda name: "/usr/bin/gemini")
     monkeypatch.setattr(server_module.Path, "home", staticmethod(lambda: tmp_path))
-    # No oauth creds file -> installed but not logged in -> warning.
+    # No creds file -> installed but not logged in -> warning.
     assert server_module.check_agent("gemini")["status"] == "warning"
 
 
 def test_check_agent_gemini_online_when_logged_in(server_module, monkeypatch, tmp_path):
     monkeypatch.setattr(server_module.shutil, "which", lambda name: "/usr/bin/gemini")
     monkeypatch.setattr(server_module.Path, "home", staticmethod(lambda: tmp_path))
-    creds = tmp_path / ".gemini" / "oauth_creds.json"
+    creds = tmp_path / ".gemini" / "gemini-credentials.json"
     creds.parent.mkdir(parents=True)
     creds.write_text('{"token": "ya29.abc"}')
     assert server_module.check_agent("gemini")["status"] == "online"

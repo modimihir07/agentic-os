@@ -36,7 +36,9 @@ function renderSkillGrid(skills) {
   }
   container.innerHTML = `<div class="grid grid-3" id="skillGrid">${skills.map(s => {
     const lastScore = s.scores && s.scores.length > 0 ? s.scores[s.scores.length - 1] : null;
-    const avg = lastScore && lastScore.criteria_scores ? (lastScore.criteria_scores.reduce((a, b) => a + b, 0) / lastScore.criteria_scores.length) : null;
+    // Score objects have {date, timestamp, score, agent} — use `score` directly.
+    // `criteria_scores` was never stored by the server; fall back to `score` for robustness.
+    const avg = lastScore ? (lastScore.criteria_scores ? (lastScore.criteria_scores.reduce((a, b) => a + b, 0) / lastScore.criteria_scores.length) : (lastScore.score != null ? lastScore.score / 100 : null)) : null;
     const icons = ['⚡', '🔧', '📝', '🔍', '🔄', '🎯', '📊', '🛠', '💡', '🧪', '📋', '💾', '💰', '🔄', '🎨'];
     const iconIdx = s.name.split('').reduce((a, c) => a + c.charCodeAt(0), 0) % icons.length;
     const icon = icons[iconIdx];

@@ -1,0 +1,2136 @@
+{
+  "run_id": "ci-20260727-204939",
+  "root": "/home/austin/agentic-os",
+  "created_at": "2026-07-27T20:49:40",
+  "max_rounds": 4,
+  "round": 6,
+  "total_files": 339,
+  "queue": {
+    "restore.ps1": {
+      "rel": "restore.ps1",
+      "status": "todo",
+      "weight": 23.5,
+      "reason": "initial sweep"
+    },
+    "start-agentic-os.sh": {
+      "rel": "start-agentic-os.sh",
+      "status": "done",
+      "weight": 30.1,
+      "reason": "initial sweep"
+    },
+    "pytest.ini": {
+      "rel": "pytest.ini",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "requirements.txt": {
+      "rel": "requirements.txt",
+      "status": "todo",
+      "weight": 3.0,
+      "reason": "initial sweep"
+    },
+    ".gitignore": {
+      "rel": ".gitignore",
+      "status": "todo",
+      "weight": 13.0,
+      "reason": "initial sweep"
+    },
+    "README.md": {
+      "rel": "README.md",
+      "status": "todo",
+      "weight": 156.4,
+      "reason": "initial sweep"
+    },
+    "restore.sh": {
+      "rel": "restore.sh",
+      "status": "todo",
+      "weight": 22.4,
+      "reason": "initial sweep"
+    },
+    "install.ps1": {
+      "rel": "install.ps1",
+      "status": "todo",
+      "weight": 53.5,
+      "reason": "initial sweep"
+    },
+    "start.ps1": {
+      "rel": "start.ps1",
+      "status": "todo",
+      "weight": 35.5,
+      "reason": "initial sweep"
+    },
+    ".agentic-os.pid": {
+      "rel": ".agentic-os.pid",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "CHANGELOG.md": {
+      "rel": "CHANGELOG.md",
+      "status": "todo",
+      "weight": 28.8,
+      "reason": "initial sweep"
+    },
+    "server.py": {
+      "rel": "server.py",
+      "status": "done",
+      "weight": 3007.0,
+      "reason": "initial sweep"
+    },
+    "AGENTS.md": {
+      "rel": "AGENTS.md",
+      "status": "doing",
+      "weight": 181.6,
+      "reason": "initial sweep"
+    },
+    "hermes.log": {
+      "rel": "hermes.log",
+      "status": "todo",
+      "weight": 60.5,
+      "reason": "initial sweep"
+    },
+    "Launch-Dashboard.bat": {
+      "rel": "Launch-Dashboard.bat",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "requirements-dev.txt": {
+      "rel": "requirements-dev.txt",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "brain-cli.py": {
+      "rel": "brain-cli.py",
+      "status": "todo",
+      "weight": 56.0,
+      "reason": "initial sweep"
+    },
+    "backup.sh": {
+      "rel": "backup.sh",
+      "status": "todo",
+      "weight": 16.8,
+      "reason": "initial sweep"
+    },
+    "start.bat": {
+      "rel": "start.bat",
+      "status": "todo",
+      "weight": 1.0,
+      "reason": "initial sweep"
+    },
+    "regen_graph_html.py": {
+      "rel": "regen_graph_html.py",
+      "status": "todo",
+      "weight": 53.0,
+      "reason": "initial sweep"
+    },
+    "LICENSE": {
+      "rel": "LICENSE",
+      "status": "todo",
+      "weight": 10.5,
+      "reason": "initial sweep"
+    },
+    "backup.ps1": {
+      "rel": "backup.ps1",
+      "status": "todo",
+      "weight": 21.0,
+      "reason": "initial sweep"
+    },
+    "install.sh": {
+      "rel": "install.sh",
+      "status": "todo",
+      "weight": 58.8,
+      "reason": "initial sweep"
+    },
+    "OPERATIONAL-NOTES.md": {
+      "rel": "OPERATIONAL-NOTES.md",
+      "status": "todo",
+      "weight": 11.2,
+      "reason": "initial sweep"
+    },
+    "start.sh": {
+      "rel": "start.sh",
+      "status": "done",
+      "weight": 72.8,
+      "reason": "initial sweep"
+    },
+    "skills-lock.json": {
+      "rel": "skills-lock.json",
+      "status": "todo",
+      "weight": 38.5,
+      "reason": "initial sweep"
+    },
+    "docs/index.html": {
+      "rel": "docs/index.html",
+      "status": "todo",
+      "weight": 154.8,
+      "reason": "initial sweep"
+    },
+    "docs/README.md": {
+      "rel": "docs/README.md",
+      "status": "doing",
+      "weight": 265.6,
+      "reason": "initial sweep"
+    },
+    "docs/GRAPHIFY_MEMORY.md": {
+      "rel": "docs/GRAPHIFY_MEMORY.md",
+      "status": "todo",
+      "weight": 23.2,
+      "reason": "initial sweep"
+    },
+    "docs/agentic-os-architecture.svg": {
+      "rel": "docs/agentic-os-architecture.svg",
+      "status": "todo",
+      "weight": 111.5,
+      "reason": "initial sweep"
+    },
+    "docs/.nojekyll": {
+      "rel": "docs/.nojekyll",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "docs/google2ccfc2c8679b95ca.html": {
+      "rel": "docs/google2ccfc2c8679b95ca.html",
+      "status": "todo",
+      "weight": 0.6,
+      "reason": "initial sweep"
+    },
+    "docs/robots.txt": {
+      "rel": "docs/robots.txt",
+      "status": "todo",
+      "weight": 1.5,
+      "reason": "initial sweep"
+    },
+    "docs/OS-DRAFT-NOTES.md": {
+      "rel": "docs/OS-DRAFT-NOTES.md",
+      "status": "todo",
+      "weight": 63.2,
+      "reason": "initial sweep"
+    },
+    "docs/sitemap.xml": {
+      "rel": "docs/sitemap.xml",
+      "status": "todo",
+      "weight": 7.5,
+      "reason": "initial sweep"
+    },
+    "dashboard/start-monitor.sh": {
+      "rel": "dashboard/start-monitor.sh",
+      "status": "todo",
+      "weight": 7.0,
+      "reason": "initial sweep"
+    },
+    "dashboard/app.js": {
+      "rel": "dashboard/app.js",
+      "status": "todo",
+      "weight": 83.7,
+      "reason": "initial sweep"
+    },
+    "dashboard/index.html": {
+      "rel": "dashboard/index.html",
+      "status": "todo",
+      "weight": 61.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/test.html": {
+      "rel": "dashboard/test.html",
+      "status": "todo",
+      "weight": 12.0,
+      "reason": "initial sweep"
+    },
+    "dashboard/api.js": {
+      "rel": "dashboard/api.js",
+      "status": "todo",
+      "weight": 96.3,
+      "reason": "initial sweep"
+    },
+    "dashboard/styles.css": {
+      "rel": "dashboard/styles.css",
+      "status": "doing",
+      "weight": 751.5,
+      "reason": "initial sweep"
+    },
+    "dashboard/utils.js": {
+      "rel": "dashboard/utils.js",
+      "status": "todo",
+      "weight": 126.0,
+      "reason": "initial sweep"
+    },
+    "dashboard/AGENT_TIME_MONITOR.md": {
+      "rel": "dashboard/AGENT_TIME_MONITOR.md",
+      "status": "todo",
+      "weight": 26.0,
+      "reason": "initial sweep"
+    },
+    "dashboard/serve_monitor.py": {
+      "rel": "dashboard/serve_monitor.py",
+      "status": "todo",
+      "weight": 163.0,
+      "reason": "initial sweep"
+    },
+    "standards/api-response-format.md": {
+      "rel": "standards/api-response-format.md",
+      "status": "todo",
+      "weight": 11.2,
+      "reason": "initial sweep"
+    },
+    "standards/index.yml": {
+      "rel": "standards/index.yml",
+      "status": "todo",
+      "weight": 5.4,
+      "reason": "initial sweep"
+    },
+    "standards/naming-conventions.md": {
+      "rel": "standards/naming-conventions.md",
+      "status": "todo",
+      "weight": 6.8,
+      "reason": "initial sweep"
+    },
+    "brain/memory.md": {
+      "rel": "brain/memory.md",
+      "status": "todo",
+      "weight": 12.4,
+      "reason": "initial sweep"
+    },
+    "brain/health-report.md": {
+      "rel": "brain/health-report.md",
+      "status": "todo",
+      "weight": 13.2,
+      "reason": "initial sweep"
+    },
+    "brain/log.md": {
+      "rel": "brain/log.md",
+      "status": "todo",
+      "weight": 9.2,
+      "reason": "initial sweep"
+    },
+    "brain/constitution.md": {
+      "rel": "brain/constitution.md",
+      "status": "todo",
+      "weight": 10.4,
+      "reason": "initial sweep"
+    },
+    "brain/business-brain.md": {
+      "rel": "brain/business-brain.md",
+      "status": "todo",
+      "weight": 15.6,
+      "reason": "initial sweep"
+    },
+    "brain/constraints.md": {
+      "rel": "brain/constraints.md",
+      "status": "todo",
+      "weight": 7.2,
+      "reason": "initial sweep"
+    },
+    "brain/active-projects.md": {
+      "rel": "brain/active-projects.md",
+      "status": "todo",
+      "weight": 12.0,
+      "reason": "initial sweep"
+    },
+    "brain/github-activity.md": {
+      "rel": "brain/github-activity.md",
+      "status": "todo",
+      "weight": 10.4,
+      "reason": "initial sweep"
+    },
+    "brain/agent-learnings.md": {
+      "rel": "brain/agent-learnings.md",
+      "status": "todo",
+      "weight": 8.8,
+      "reason": "initial sweep"
+    },
+    "brain/skill-usage.md": {
+      "rel": "brain/skill-usage.md",
+      "status": "todo",
+      "weight": 16.0,
+      "reason": "initial sweep"
+    },
+    "brain/recent-decisions.md": {
+      "rel": "brain/recent-decisions.md",
+      "status": "todo",
+      "weight": 12.4,
+      "reason": "initial sweep"
+    },
+    "brain/identity.md": {
+      "rel": "brain/identity.md",
+      "status": "todo",
+      "weight": 6.8,
+      "reason": "initial sweep"
+    },
+    ".hermes/audit.log": {
+      "rel": ".hermes/audit.log",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "scheduler/scheduler.py": {
+      "rel": "scheduler/scheduler.py",
+      "status": "doing",
+      "weight": 181.0,
+      "reason": "initial sweep"
+    },
+    "scripts/integrity_check.py": {
+      "rel": "scripts/integrity_check.py",
+      "status": "todo",
+      "weight": 156.0,
+      "reason": "initial sweep"
+    },
+    "scripts/analyze_agent_time.py": {
+      "rel": "scripts/analyze_agent_time.py",
+      "status": "doing",
+      "weight": 229.0,
+      "reason": "initial sweep"
+    },
+    "scripts/update-api-docs.py": {
+      "rel": "scripts/update-api-docs.py",
+      "status": "todo",
+      "weight": 89.0,
+      "reason": "initial sweep"
+    },
+    "brain-core/brain_index.db": {
+      "rel": "brain-core/brain_index.db",
+      "status": "doing",
+      "weight": 1568.5,
+      "reason": "initial sweep"
+    },
+    "brain-core/brain_index.py": {
+      "rel": "brain-core/brain_index.py",
+      "status": "doing",
+      "weight": 273.0,
+      "reason": "initial sweep"
+    },
+    "tests/test_server_kanban.py": {
+      "rel": "tests/test_server_kanban.py",
+      "status": "todo",
+      "weight": 158.0,
+      "reason": "initial sweep"
+    },
+    "tests/test_server_helpers.py": {
+      "rel": "tests/test_server_helpers.py",
+      "status": "todo",
+      "weight": 147.0,
+      "reason": "initial sweep"
+    },
+    "tests/test_server_endpoints.py": {
+      "rel": "tests/test_server_endpoints.py",
+      "status": "doing",
+      "weight": 359.0,
+      "reason": "initial sweep"
+    },
+    "tests/test_scheduler.py": {
+      "rel": "tests/test_scheduler.py",
+      "status": "todo",
+      "weight": 65.0,
+      "reason": "initial sweep"
+    },
+    "tests/conftest.py": {
+      "rel": "tests/conftest.py",
+      "status": "todo",
+      "weight": 51.0,
+      "reason": "initial sweep"
+    },
+    "audit/audit.log": {
+      "rel": "audit/audit.log",
+      "status": "todo",
+      "weight": 127.5,
+      "reason": "initial sweep"
+    },
+    "registry/plugins.json": {
+      "rel": "registry/plugins.json",
+      "status": "todo",
+      "weight": 68.5,
+      "reason": "initial sweep"
+    },
+    "prompts/debug-incident.md": {
+      "rel": "prompts/debug-incident.md",
+      "status": "todo",
+      "weight": 10.8,
+      "reason": "initial sweep"
+    },
+    "prompts/standup-email.md": {
+      "rel": "prompts/standup-email.md",
+      "status": "todo",
+      "weight": 9.6,
+      "reason": "initial sweep"
+    },
+    "prompts/system-audit.md": {
+      "rel": "prompts/system-audit.md",
+      "status": "todo",
+      "weight": 5.2,
+      "reason": "initial sweep"
+    },
+    "prompts/draft-blog.md": {
+      "rel": "prompts/draft-blog.md",
+      "status": "todo",
+      "weight": 7.2,
+      "reason": "initial sweep"
+    },
+    "prompts/brainstorm-session.md": {
+      "rel": "prompts/brainstorm-session.md",
+      "status": "todo",
+      "weight": 11.6,
+      "reason": "initial sweep"
+    },
+    "prompts/code-review.md": {
+      "rel": "prompts/code-review.md",
+      "status": "todo",
+      "weight": 5.2,
+      "reason": "initial sweep"
+    },
+    "prompts/daily-standup.md": {
+      "rel": "prompts/daily-standup.md",
+      "status": "todo",
+      "weight": 9.6,
+      "reason": "initial sweep"
+    },
+    "prompts/project-plan.md": {
+      "rel": "prompts/project-plan.md",
+      "status": "todo",
+      "weight": 10.0,
+      "reason": "initial sweep"
+    },
+    "prompts/research-topic.md": {
+      "rel": "prompts/research-topic.md",
+      "status": "todo",
+      "weight": 9.2,
+      "reason": "initial sweep"
+    },
+    "prompts/meeting-notes.md": {
+      "rel": "prompts/meeting-notes.md",
+      "status": "todo",
+      "weight": 11.6,
+      "reason": "initial sweep"
+    },
+    "data/integrations.json": {
+      "rel": "data/integrations.json",
+      "status": "todo",
+      "weight": 5.5,
+      "reason": "initial sweep"
+    },
+    "data/agent-stats.json": {
+      "rel": "data/agent-stats.json",
+      "status": "todo",
+      "weight": 14.5,
+      "reason": "initial sweep"
+    },
+    "data/settings.json": {
+      "rel": "data/settings.json",
+      "status": "todo",
+      "weight": 19.0,
+      "reason": "initial sweep"
+    },
+    "data/chat-history.json": {
+      "rel": "data/chat-history.json",
+      "status": "todo",
+      "weight": 163.0,
+      "reason": "initial sweep"
+    },
+    "data/router-keywords.json": {
+      "rel": "data/router-keywords.json",
+      "status": "todo",
+      "weight": 14.5,
+      "reason": "initial sweep"
+    },
+    "data/cost-history.json": {
+      "rel": "data/cost-history.json",
+      "status": "todo",
+      "weight": 10.5,
+      "reason": "initial sweep"
+    },
+    "data/goals.json": {
+      "rel": "data/goals.json",
+      "status": "todo",
+      "weight": 6.5,
+      "reason": "initial sweep"
+    },
+    "data/agent-time.json": {
+      "rel": "data/agent-time.json",
+      "status": "todo",
+      "weight": 52.0,
+      "reason": "initial sweep"
+    },
+    "data/agent-registry.json": {
+      "rel": "data/agent-registry.json",
+      "status": "todo",
+      "weight": 23.5,
+      "reason": "initial sweep"
+    },
+    "data/agent-routes.json": {
+      "rel": "data/agent-routes.json",
+      "status": "todo",
+      "weight": 21.0,
+      "reason": "initial sweep"
+    },
+    "data/orchestration-runs/relverif-20260726.json": {
+      "rel": "data/orchestration-runs/relverif-20260726.json",
+      "status": "todo",
+      "weight": 9.0,
+      "reason": "initial sweep"
+    },
+    "data/kanban/906a5d23.json": {
+      "rel": "data/kanban/906a5d23.json",
+      "status": "todo",
+      "weight": 6.0,
+      "reason": "initial sweep"
+    },
+    "registry/marketplace/.gitkeep": {
+      "rel": "registry/marketplace/.gitkeep",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "agents/opencode/AGENTS.md": {
+      "rel": "agents/opencode/AGENTS.md",
+      "status": "todo",
+      "weight": 4.8,
+      "reason": "initial sweep"
+    },
+    "agents/opencode/opencode.json": {
+      "rel": "agents/opencode/opencode.json",
+      "status": "todo",
+      "weight": 4.5,
+      "reason": "initial sweep"
+    },
+    "agents/hermes/SOUL.md": {
+      "rel": "agents/hermes/SOUL.md",
+      "status": "todo",
+      "weight": 8.0,
+      "reason": "initial sweep"
+    },
+    "agents/hermes/MEMORY.md": {
+      "rel": "agents/hermes/MEMORY.md",
+      "status": "todo",
+      "weight": 15.2,
+      "reason": "initial sweep"
+    },
+    "agents/hermes/USER.md": {
+      "rel": "agents/hermes/USER.md",
+      "status": "todo",
+      "weight": 6.8,
+      "reason": "initial sweep"
+    },
+    "agents/gemini/GEMINI.md": {
+      "rel": "agents/gemini/GEMINI.md",
+      "status": "todo",
+      "weight": 8.4,
+      "reason": "initial sweep"
+    },
+    "agents/gemini/gemini-extension.json": {
+      "rel": "agents/gemini/gemini-extension.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "scheduler/jobs/devops-audit-job.json": {
+      "rel": "scheduler/jobs/devops-audit-job.json",
+      "status": "todo",
+      "weight": 5.5,
+      "reason": "initial sweep"
+    },
+    "scheduler/jobs/heartbeat-job.json": {
+      "rel": "scheduler/jobs/heartbeat-job.json",
+      "status": "todo",
+      "weight": 5.5,
+      "reason": "initial sweep"
+    },
+    "scheduler/jobs/brain-index-ingest-job.json": {
+      "rel": "scheduler/jobs/brain-index-ingest-job.json",
+      "status": "todo",
+      "weight": 5.0,
+      "reason": "initial sweep"
+    },
+    "scheduler/jobs/memory-consolidation-job.json": {
+      "rel": "scheduler/jobs/memory-consolidation-job.json",
+      "status": "todo",
+      "weight": 5.5,
+      "reason": "initial sweep"
+    },
+    "scheduler/jobs/daily-standup-job.json": {
+      "rel": "scheduler/jobs/daily-standup-job.json",
+      "status": "todo",
+      "weight": 5.0,
+      "reason": "initial sweep"
+    },
+    "scheduler/jobs/test-audit-job.json": {
+      "rel": "scheduler/jobs/test-audit-job.json",
+      "status": "todo",
+      "weight": 5.0,
+      "reason": "initial sweep"
+    },
+    "skills/multi-angle-orchestration/SKILL.md": {
+      "rel": "skills/multi-angle-orchestration/SKILL.md",
+      "status": "todo",
+      "weight": 26.4,
+      "reason": "initial sweep"
+    },
+    "skills/multi-agent-run/SKILL.md": {
+      "rel": "skills/multi-agent-run/SKILL.md",
+      "status": "todo",
+      "weight": 24.0,
+      "reason": "initial sweep"
+    },
+    "skills/cost-analytics/eval.json": {
+      "rel": "skills/cost-analytics/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/cost-analytics/score-history.json": {
+      "rel": "skills/cost-analytics/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/cost-analytics/SKILL.md": {
+      "rel": "skills/cost-analytics/SKILL.md",
+      "status": "todo",
+      "weight": 12.4,
+      "reason": "initial sweep"
+    },
+    "skills/cost-analytics/learnings.md": {
+      "rel": "skills/cost-analytics/learnings.md",
+      "status": "todo",
+      "weight": 6.4,
+      "reason": "initial sweep"
+    },
+    "skills/meeting-minutes/eval.json": {
+      "rel": "skills/meeting-minutes/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/meeting-minutes/score-history.json": {
+      "rel": "skills/meeting-minutes/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/meeting-minutes/SKILL.md": {
+      "rel": "skills/meeting-minutes/SKILL.md",
+      "status": "todo",
+      "weight": 12.0,
+      "reason": "initial sweep"
+    },
+    "skills/meeting-minutes/learnings.md": {
+      "rel": "skills/meeting-minutes/learnings.md",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "skills/tdd-cycle/eval.json": {
+      "rel": "skills/tdd-cycle/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/tdd-cycle/score-history.json": {
+      "rel": "skills/tdd-cycle/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/tdd-cycle/SKILL.md": {
+      "rel": "skills/tdd-cycle/SKILL.md",
+      "status": "todo",
+      "weight": 13.2,
+      "reason": "initial sweep"
+    },
+    "skills/tdd-cycle/learnings.md": {
+      "rel": "skills/tdd-cycle/learnings.md",
+      "status": "todo",
+      "weight": 4.4,
+      "reason": "initial sweep"
+    },
+    "skills/systematic-debug/eval.json": {
+      "rel": "skills/systematic-debug/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/systematic-debug/score-history.json": {
+      "rel": "skills/systematic-debug/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/systematic-debug/SKILL.md": {
+      "rel": "skills/systematic-debug/SKILL.md",
+      "status": "todo",
+      "weight": 14.0,
+      "reason": "initial sweep"
+    },
+    "skills/systematic-debug/learnings.md": {
+      "rel": "skills/systematic-debug/learnings.md",
+      "status": "todo",
+      "weight": 8.4,
+      "reason": "initial sweep"
+    },
+    "skills/goal-planner/eval.json": {
+      "rel": "skills/goal-planner/eval.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/goal-planner/score-history.json": {
+      "rel": "skills/goal-planner/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/goal-planner/SKILL.md": {
+      "rel": "skills/goal-planner/SKILL.md",
+      "status": "todo",
+      "weight": 13.6,
+      "reason": "initial sweep"
+    },
+    "skills/goal-planner/learnings.md": {
+      "rel": "skills/goal-planner/learnings.md",
+      "status": "todo",
+      "weight": 3.6,
+      "reason": "initial sweep"
+    },
+    "skills/memory-consolidation/eval.json": {
+      "rel": "skills/memory-consolidation/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/memory-consolidation/score-history.json": {
+      "rel": "skills/memory-consolidation/score-history.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/memory-consolidation/SKILL.md": {
+      "rel": "skills/memory-consolidation/SKILL.md",
+      "status": "todo",
+      "weight": 12.8,
+      "reason": "initial sweep"
+    },
+    "skills/memory-consolidation/learnings.md": {
+      "rel": "skills/memory-consolidation/learnings.md",
+      "status": "todo",
+      "weight": 26.0,
+      "reason": "initial sweep"
+    },
+    "skills/backup-skill/eval.json": {
+      "rel": "skills/backup-skill/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/backup-skill/score-history.json": {
+      "rel": "skills/backup-skill/score-history.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/backup-skill/SKILL.md": {
+      "rel": "skills/backup-skill/SKILL.md",
+      "status": "todo",
+      "weight": 12.4,
+      "reason": "initial sweep"
+    },
+    "skills/backup-skill/learnings.md": {
+      "rel": "skills/backup-skill/learnings.md",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/test-plugin/eval.json": {
+      "rel": "skills/test-plugin/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/test-plugin/score-history.json": {
+      "rel": "skills/test-plugin/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/test-plugin/SKILL.md": {
+      "rel": "skills/test-plugin/SKILL.md",
+      "status": "todo",
+      "weight": 13.6,
+      "reason": "initial sweep"
+    },
+    "skills/test-plugin/learnings.md": {
+      "rel": "skills/test-plugin/learnings.md",
+      "status": "todo",
+      "weight": 3.6,
+      "reason": "initial sweep"
+    },
+    "skills/devops-audit/eval.json": {
+      "rel": "skills/devops-audit/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/devops-audit/audit-report-2026-05-17.md": {
+      "rel": "skills/devops-audit/audit-report-2026-05-17.md",
+      "status": "todo",
+      "weight": 36.8,
+      "reason": "initial sweep"
+    },
+    "skills/devops-audit/score-history.json": {
+      "rel": "skills/devops-audit/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/devops-audit/SKILL.md": {
+      "rel": "skills/devops-audit/SKILL.md",
+      "status": "todo",
+      "weight": 12.8,
+      "reason": "initial sweep"
+    },
+    "skills/devops-audit/learnings.md": {
+      "rel": "skills/devops-audit/learnings.md",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "skills/daily-standup/eval.json": {
+      "rel": "skills/daily-standup/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/daily-standup/score-history.json": {
+      "rel": "skills/daily-standup/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/daily-standup/SKILL.md": {
+      "rel": "skills/daily-standup/SKILL.md",
+      "status": "todo",
+      "weight": 12.4,
+      "reason": "initial sweep"
+    },
+    "skills/daily-standup/learnings.md": {
+      "rel": "skills/daily-standup/learnings.md",
+      "status": "todo",
+      "weight": 17.6,
+      "reason": "initial sweep"
+    },
+    "skills/brainstorming/eval.json": {
+      "rel": "skills/brainstorming/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/brainstorming/score-history.json": {
+      "rel": "skills/brainstorming/score-history.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/brainstorming/SKILL.md": {
+      "rel": "skills/brainstorming/SKILL.md",
+      "status": "todo",
+      "weight": 13.2,
+      "reason": "initial sweep"
+    },
+    "skills/brainstorming/learnings.md": {
+      "rel": "skills/brainstorming/learnings.md",
+      "status": "todo",
+      "weight": 12.8,
+      "reason": "initial sweep"
+    },
+    "skills/audit-test-plugin/eval.json": {
+      "rel": "skills/audit-test-plugin/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/audit-test-plugin/score-history.json": {
+      "rel": "skills/audit-test-plugin/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/audit-test-plugin/SKILL.md": {
+      "rel": "skills/audit-test-plugin/SKILL.md",
+      "status": "todo",
+      "weight": 13.6,
+      "reason": "initial sweep"
+    },
+    "skills/audit-test-plugin/learnings.md": {
+      "rel": "skills/audit-test-plugin/learnings.md",
+      "status": "todo",
+      "weight": 2.4,
+      "reason": "initial sweep"
+    },
+    "skills/content-draft/eval.json": {
+      "rel": "skills/content-draft/eval.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/content-draft/score-history.json": {
+      "rel": "skills/content-draft/score-history.json",
+      "status": "todo",
+      "weight": 9.5,
+      "reason": "initial sweep"
+    },
+    "skills/content-draft/SKILL.md": {
+      "rel": "skills/content-draft/SKILL.md",
+      "status": "todo",
+      "weight": 13.2,
+      "reason": "initial sweep"
+    },
+    "skills/content-draft/learnings.md": {
+      "rel": "skills/content-draft/learnings.md",
+      "status": "todo",
+      "weight": 11.2,
+      "reason": "initial sweep"
+    },
+    "skills/code-review/eval.json": {
+      "rel": "skills/code-review/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/code-review/score-history.json": {
+      "rel": "skills/code-review/score-history.json",
+      "status": "todo",
+      "weight": 7.0,
+      "reason": "initial sweep"
+    },
+    "skills/code-review/SKILL.md": {
+      "rel": "skills/code-review/SKILL.md",
+      "status": "todo",
+      "weight": 14.8,
+      "reason": "initial sweep"
+    },
+    "skills/code-review/learnings.md": {
+      "rel": "skills/code-review/learnings.md",
+      "status": "todo",
+      "weight": 2.8,
+      "reason": "initial sweep"
+    },
+    "skills/_template/eval.json": {
+      "rel": "skills/_template/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/_template/score-history.json": {
+      "rel": "skills/_template/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/_template/SKILL.md": {
+      "rel": "skills/_template/SKILL.md",
+      "status": "todo",
+      "weight": 13.6,
+      "reason": "initial sweep"
+    },
+    "skills/_template/learnings.md": {
+      "rel": "skills/_template/learnings.md",
+      "status": "todo",
+      "weight": 2.4,
+      "reason": "initial sweep"
+    },
+    "skills/heartbeat/eval.json": {
+      "rel": "skills/heartbeat/eval.json",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    "skills/heartbeat/score-history.json": {
+      "rel": "skills/heartbeat/score-history.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/heartbeat/SKILL.md": {
+      "rel": "skills/heartbeat/SKILL.md",
+      "status": "todo",
+      "weight": 12.8,
+      "reason": "initial sweep"
+    },
+    "skills/heartbeat/learnings.md": {
+      "rel": "skills/heartbeat/learnings.md",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/project-planner/eval.json": {
+      "rel": "skills/project-planner/eval.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/project-planner/score-history.json": {
+      "rel": "skills/project-planner/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/project-planner/SKILL.md": {
+      "rel": "skills/project-planner/SKILL.md",
+      "status": "todo",
+      "weight": 13.2,
+      "reason": "initial sweep"
+    },
+    "skills/project-planner/learnings.md": {
+      "rel": "skills/project-planner/learnings.md",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "skills/research-synthesis/eval.json": {
+      "rel": "skills/research-synthesis/eval.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/research-synthesis/score-history.json": {
+      "rel": "skills/research-synthesis/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/research-synthesis/SKILL.md": {
+      "rel": "skills/research-synthesis/SKILL.md",
+      "status": "todo",
+      "weight": 13.6,
+      "reason": "initial sweep"
+    },
+    "skills/research-synthesis/learnings.md": {
+      "rel": "skills/research-synthesis/learnings.md",
+      "status": "todo",
+      "weight": 2.0,
+      "reason": "initial sweep"
+    },
+    "skills/codebase-inspection-loop/eval.json": {
+      "rel": "skills/codebase-inspection-loop/eval.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/codebase-inspection-loop/loop.py": {
+      "rel": "skills/codebase-inspection-loop/loop.py",
+      "status": "doing",
+      "weight": 336.0,
+      "reason": "initial sweep"
+    },
+    "skills/codebase-inspection-loop/score-history.json": {
+      "rel": "skills/codebase-inspection-loop/score-history.json",
+      "status": "todo",
+      "weight": 0.5,
+      "reason": "initial sweep"
+    },
+    "skills/codebase-inspection-loop/SKILL.md": {
+      "rel": "skills/codebase-inspection-loop/SKILL.md",
+      "status": "todo",
+      "weight": 42.8,
+      "reason": "initial sweep"
+    },
+    "skills/codebase-inspection-loop/learnings.md": {
+      "rel": "skills/codebase-inspection-loop/learnings.md",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    "skills/content-draft/context/2026-07-27-one-line-test.md": {
+      "rel": "skills/content-draft/context/2026-07-27-one-line-test.md",
+      "status": "todo",
+      "weight": 4.8,
+      "reason": "initial sweep"
+    },
+    "brain/journal/2026-06-05.md": {
+      "rel": "brain/journal/2026-06-05.md",
+      "status": "todo",
+      "weight": 0.8,
+      "reason": "initial sweep"
+    },
+    "brain/journal/2026-06-28.md": {
+      "rel": "brain/journal/2026-06-28.md",
+      "status": "todo",
+      "weight": 0.4,
+      "reason": "initial sweep"
+    },
+    "brain/journal/2026-07-05.md": {
+      "rel": "brain/journal/2026-07-05.md",
+      "status": "todo",
+      "weight": 0.4,
+      "reason": "initial sweep"
+    },
+    "brain/journal/2026-06-25.md": {
+      "rel": "brain/journal/2026-06-25.md",
+      "status": "todo",
+      "weight": 0.4,
+      "reason": "initial sweep"
+    },
+    "brain/archive/decisions-2026-05.md": {
+      "rel": "brain/archive/decisions-2026-05.md",
+      "status": "todo",
+      "weight": 3.6,
+      "reason": "initial sweep"
+    },
+    "brain/graph/serve-brain.sh": {
+      "rel": "brain/graph/serve-brain.sh",
+      "status": "todo",
+      "weight": 15.4,
+      "reason": "initial sweep"
+    },
+    "brain/graph/build-central.sh": {
+      "rel": "brain/graph/build-central.sh",
+      "status": "todo",
+      "weight": 34.3,
+      "reason": "initial sweep"
+    },
+    "brain/graph/README.md": {
+      "rel": "brain/graph/README.md",
+      "status": "todo",
+      "weight": 19.6,
+      "reason": "initial sweep"
+    },
+    "brain/graph/serve-brain-wsl.sh": {
+      "rel": "brain/graph/serve-brain-wsl.sh",
+      "status": "todo",
+      "weight": 13.3,
+      "reason": "initial sweep"
+    },
+    "brain/graph/metrics.json": {
+      "rel": "brain/graph/metrics.json",
+      "status": "todo",
+      "weight": 86.5,
+      "reason": "initial sweep"
+    },
+    "brain/graph/learn-loop.sh": {
+      "rel": "brain/graph/learn-loop.sh",
+      "status": "todo",
+      "weight": 78.4,
+      "reason": "initial sweep"
+    },
+    "brain/graph/link-project.sh": {
+      "rel": "brain/graph/link-project.sh",
+      "status": "todo",
+      "weight": 30.8,
+      "reason": "initial sweep"
+    },
+    "brain/graph/keepalive-brain-wsl.sh": {
+      "rel": "brain/graph/keepalive-brain-wsl.sh",
+      "status": "todo",
+      "weight": 12.6,
+      "reason": "initial sweep"
+    },
+    "brain/graph/learnings.md": {
+      "rel": "brain/graph/learnings.md",
+      "status": "todo",
+      "weight": 38.0,
+      "reason": "initial sweep"
+    },
+    "brain/graph/wsl-keepalive.log": {
+      "rel": "brain/graph/wsl-keepalive.log",
+      "status": "todo",
+      "weight": 27.0,
+      "reason": "initial sweep"
+    },
+    "brain/graph/sync-to-windows.sh": {
+      "rel": "brain/graph/sync-to-windows.sh",
+      "status": "todo",
+      "weight": 18.9,
+      "reason": "initial sweep"
+    },
+    "standards/profiles/default/config.yml": {
+      "rel": "standards/profiles/default/config.yml",
+      "status": "todo",
+      "weight": 3.6,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/standards.js": {
+      "rel": "dashboard/pages/standards.js",
+      "status": "todo",
+      "weight": 58.5,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/scheduler.js": {
+      "rel": "dashboard/pages/scheduler.js",
+      "status": "todo",
+      "weight": 89.1,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/memory.js": {
+      "rel": "dashboard/pages/memory.js",
+      "status": "todo",
+      "weight": 60.3,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/agent-insights.js": {
+      "rel": "dashboard/pages/agent-insights.js",
+      "status": "todo",
+      "weight": 173.7,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/skills.js": {
+      "rel": "dashboard/pages/skills.js",
+      "status": "doing",
+      "weight": 301.5,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/goals.js": {
+      "rel": "dashboard/pages/goals.js",
+      "status": "todo",
+      "weight": 158.4,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/journal.js": {
+      "rel": "dashboard/pages/journal.js",
+      "status": "todo",
+      "weight": 149.4,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/session-replay.js": {
+      "rel": "dashboard/pages/session-replay.js",
+      "status": "todo",
+      "weight": 78.3,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/terminal.js": {
+      "rel": "dashboard/pages/terminal.js",
+      "status": "todo",
+      "weight": 142.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/cost.js": {
+      "rel": "dashboard/pages/cost.js",
+      "status": "todo",
+      "weight": 142.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/backups.js": {
+      "rel": "dashboard/pages/backups.js",
+      "status": "todo",
+      "weight": 69.3,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/smart-router.js": {
+      "rel": "dashboard/pages/smart-router.js",
+      "status": "todo",
+      "weight": 153.9,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/dashboard.js": {
+      "rel": "dashboard/pages/dashboard.js",
+      "status": "todo",
+      "weight": 126.9,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/settings.js": {
+      "rel": "dashboard/pages/settings.js",
+      "status": "todo",
+      "weight": 164.7,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/learning-analytics.js": {
+      "rel": "dashboard/pages/learning-analytics.js",
+      "status": "todo",
+      "weight": 92.7,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/kanban.js": {
+      "rel": "dashboard/pages/kanban.js",
+      "status": "doing",
+      "weight": 313.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/prompts.js": {
+      "rel": "dashboard/pages/prompts.js",
+      "status": "todo",
+      "weight": 61.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/audit.js": {
+      "rel": "dashboard/pages/audit.js",
+      "status": "todo",
+      "weight": 76.5,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/orchestration.js": {
+      "rel": "dashboard/pages/orchestration.js",
+      "status": "todo",
+      "weight": 82.8,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/agent-time.js": {
+      "rel": "dashboard/pages/agent-time.js",
+      "status": "todo",
+      "weight": 158.4,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/command-center.js": {
+      "rel": "dashboard/pages/command-center.js",
+      "status": "doing",
+      "weight": 418.5,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/setup-wizard.js": {
+      "rel": "dashboard/pages/setup-wizard.js",
+      "status": "todo",
+      "weight": 115.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/brain-search.js": {
+      "rel": "dashboard/pages/brain-search.js",
+      "status": "todo",
+      "weight": 81.9,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/agent-health.js": {
+      "rel": "dashboard/pages/agent-health.js",
+      "status": "doing",
+      "weight": 198.0,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/chat.js": {
+      "rel": "dashboard/pages/chat.js",
+      "status": "doing",
+      "weight": 223.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/agent-time-monitor.html": {
+      "rel": "dashboard/pages/agent-time-monitor.html",
+      "status": "todo",
+      "weight": 133.2,
+      "reason": "initial sweep"
+    },
+    "dashboard/pages/plugins.js": {
+      "rel": "dashboard/pages/plugins.js",
+      "status": "todo",
+      "weight": 162.9,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/xcode-project-setup/SKILL.md": {
+      "rel": ".agents/skills/xcode-project-setup/SKILL.md",
+      "status": "todo",
+      "weight": 56.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-crashlytics/SKILL.md": {
+      "rel": ".agents/skills/firebase-crashlytics/SKILL.md",
+      "status": "todo",
+      "weight": 16.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/SKILL.md": {
+      "rel": ".agents/skills/firebase-firestore/SKILL.md",
+      "status": "todo",
+      "weight": 35.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-remote-config-basics/SKILL.md": {
+      "rel": ".agents/skills/firebase-remote-config-basics/SKILL.md",
+      "status": "todo",
+      "weight": 49.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-app-hosting-basics/SKILL.md": {
+      "rel": ".agents/skills/firebase-app-hosting-basics/SKILL.md",
+      "status": "todo",
+      "weight": 29.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/LICENSE.txt": {
+      "rel": ".agents/skills/notion-knowledge-capture/LICENSE.txt",
+      "status": "todo",
+      "weight": 3.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/SKILL.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/SKILL.md",
+      "status": "todo",
+      "weight": 22.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/templates.md": {
+      "rel": ".agents/skills/firebase-data-connect/templates.md",
+      "status": "todo",
+      "weight": 127.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/SKILL.md": {
+      "rel": ".agents/skills/firebase-data-connect/SKILL.md",
+      "status": "todo",
+      "weight": 76.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/examples.md": {
+      "rel": ".agents/skills/firebase-data-connect/examples.md",
+      "status": "doing",
+      "weight": 255.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-auth-basics/SKILL.md": {
+      "rel": ".agents/skills/firebase-auth-basics/SKILL.md",
+      "status": "todo",
+      "weight": 47.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-hosting-basics/SKILL.md": {
+      "rel": ".agents/skills/firebase-hosting-basics/SKILL.md",
+      "status": "todo",
+      "weight": 25.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-hosting-basics/learnings.md": {
+      "rel": ".agents/skills/firebase-hosting-basics/learnings.md",
+      "status": "todo",
+      "weight": 2.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-security-rules-auditor/SKILL.md": {
+      "rel": ".agents/skills/firebase-security-rules-auditor/SKILL.md",
+      "status": "todo",
+      "weight": 28.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/SKILL.md": {
+      "rel": ".agents/skills/firebase-basics/SKILL.md",
+      "status": "todo",
+      "weight": 59.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/score-history.json": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/score-history.json",
+      "status": "todo",
+      "weight": 4.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/SKILL.md": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/SKILL.md",
+      "status": "todo",
+      "weight": 66.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/learnings.md": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/learnings.md",
+      "status": "todo",
+      "weight": 5.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/references/usage_patterns_web.md": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/references/usage_patterns_web.md",
+      "status": "todo",
+      "weight": 74.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/references/usage_patterns_android.md": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/references/usage_patterns_android.md",
+      "status": "todo",
+      "weight": 62.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/references/ios_setup.md": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/references/ios_setup.md",
+      "status": "todo",
+      "weight": 62.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-ai-logic-basics/references/flutter_setup.md": {
+      "rel": ".agents/skills/firebase-ai-logic-basics/references/flutter_setup.md",
+      "status": "todo",
+      "weight": 38.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/android_setup.md": {
+      "rel": ".agents/skills/firebase-basics/references/android_setup.md",
+      "status": "todo",
+      "weight": 16.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/firebase-service-init.md": {
+      "rel": ".agents/skills/firebase-basics/references/firebase-service-init.md",
+      "status": "todo",
+      "weight": 8.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/local-env-setup.md": {
+      "rel": ".agents/skills/firebase-basics/references/local-env-setup.md",
+      "status": "todo",
+      "weight": 32.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/ios_setup.md": {
+      "rel": ".agents/skills/firebase-basics/references/ios_setup.md",
+      "status": "todo",
+      "weight": 45.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/web_setup.md": {
+      "rel": ".agents/skills/firebase-basics/references/web_setup.md",
+      "status": "todo",
+      "weight": 30.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/firebase-cli-guide.md": {
+      "rel": ".agents/skills/firebase-basics/references/firebase-cli-guide.md",
+      "status": "todo",
+      "weight": 7.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/flutter_setup.md": {
+      "rel": ".agents/skills/firebase-basics/references/flutter_setup.md",
+      "status": "todo",
+      "weight": 57.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/refresh/claude.md": {
+      "rel": ".agents/skills/firebase-basics/references/refresh/claude.md",
+      "status": "todo",
+      "weight": 4.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/refresh/gemini-cli.md": {
+      "rel": ".agents/skills/firebase-basics/references/refresh/gemini-cli.md",
+      "status": "todo",
+      "weight": 5.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/refresh/android_studio.md": {
+      "rel": ".agents/skills/firebase-basics/references/refresh/android_studio.md",
+      "status": "todo",
+      "weight": 16.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/refresh/antigravity.md": {
+      "rel": ".agents/skills/firebase-basics/references/refresh/antigravity.md",
+      "status": "todo",
+      "weight": 25.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/refresh/other-agents.md": {
+      "rel": ".agents/skills/firebase-basics/references/refresh/other-agents.md",
+      "status": "todo",
+      "weight": 26.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/other_agents.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/other_agents.md",
+      "status": "todo",
+      "weight": 39.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/cursor.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/cursor.md",
+      "status": "todo",
+      "weight": 37.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/github_copilot.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/github_copilot.md",
+      "status": "todo",
+      "weight": 41.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/android_studio.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/android_studio.md",
+      "status": "todo",
+      "weight": 9.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/gemini_cli.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/gemini_cli.md",
+      "status": "todo",
+      "weight": 21.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/antigravity.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/antigravity.md",
+      "status": "todo",
+      "weight": 39.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-basics/references/setup/claude_code.md": {
+      "rel": ".agents/skills/firebase-basics/references/setup/claude_code.md",
+      "status": "todo",
+      "weight": 18.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-hosting-basics/references/deploying.md": {
+      "rel": ".agents/skills/firebase-hosting-basics/references/deploying.md",
+      "status": "todo",
+      "weight": 19.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-hosting-basics/references/configuration.md": {
+      "rel": ".agents/skills/firebase-hosting-basics/references/configuration.md",
+      "status": "todo",
+      "weight": 46.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-auth-basics/references/client_sdk_android.md": {
+      "rel": ".agents/skills/firebase-auth-basics/references/client_sdk_android.md",
+      "status": "todo",
+      "weight": 64.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-auth-basics/references/security_rules.md": {
+      "rel": ".agents/skills/firebase-auth-basics/references/security_rules.md",
+      "status": "todo",
+      "weight": 19.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-auth-basics/references/client_sdk_web.md": {
+      "rel": ".agents/skills/firebase-auth-basics/references/client_sdk_web.md",
+      "status": "todo",
+      "weight": 120.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-auth-basics/references/ios_setup.md": {
+      "rel": ".agents/skills/firebase-auth-basics/references/ios_setup.md",
+      "status": "todo",
+      "weight": 34.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-auth-basics/references/flutter_setup.md": {
+      "rel": ".agents/skills/firebase-auth-basics/references/flutter_setup.md",
+      "status": "todo",
+      "weight": 59.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/operations.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/operations.md",
+      "status": "todo",
+      "weight": 154.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/sdk_android.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/sdk_android.md",
+      "status": "todo",
+      "weight": 50.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/sdk_admin_node.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/sdk_admin_node.md",
+      "status": "todo",
+      "weight": 56.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/native_sql.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/native_sql.md",
+      "status": "todo",
+      "weight": 68.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/sdk_ios.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/sdk_ios.md",
+      "status": "todo",
+      "weight": 62.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/search.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/search.md",
+      "status": "todo",
+      "weight": 105.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/schema.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/schema.md",
+      "status": "todo",
+      "weight": 116.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/sdk_web.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/sdk_web.md",
+      "status": "todo",
+      "weight": 58.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/cloud_functions.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/cloud_functions.md",
+      "status": "todo",
+      "weight": 73.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/config.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/config.md",
+      "status": "todo",
+      "weight": 108.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/sdk_flutter.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/sdk_flutter.md",
+      "status": "todo",
+      "weight": 53.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/data_seeding.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/data_seeding.md",
+      "status": "todo",
+      "weight": 74.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/security.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/security.md",
+      "status": "todo",
+      "weight": 118.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-data-connect/reference/realtime.md": {
+      "rel": ".agents/skills/firebase-data-connect/reference/realtime.md",
+      "status": "todo",
+      "weight": 84.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/evaluations/README.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/evaluations/README.md",
+      "status": "todo",
+      "weight": 38.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/evaluations/conversation-to-wiki.json": {
+      "rel": ".agents/skills/notion-knowledge-capture/evaluations/conversation-to-wiki.json",
+      "status": "todo",
+      "weight": 15.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/evaluations/decision-record.json": {
+      "rel": ".agents/skills/notion-knowledge-capture/evaluations/decision-record.json",
+      "status": "todo",
+      "weight": 15.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/documentation-database.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/documentation-database.md",
+      "status": "todo",
+      "weight": 37.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/learning-database.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/learning-database.md",
+      "status": "todo",
+      "weight": 14.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/team-wiki-database.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/team-wiki-database.md",
+      "status": "todo",
+      "weight": 10.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/database-best-practices.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/database-best-practices.md",
+      "status": "todo",
+      "weight": 44.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/faq-database.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/faq-database.md",
+      "status": "todo",
+      "weight": 22.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/decision-log-database.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/decision-log-database.md",
+      "status": "todo",
+      "weight": 23.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/reference/how-to-guide-database.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/reference/how-to-guide-database.md",
+      "status": "todo",
+      "weight": 15.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/assets/notion-small.svg": {
+      "rel": ".agents/skills/notion-knowledge-capture/assets/notion-small.svg",
+      "status": "todo",
+      "weight": 5.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/assets/notion.png": {
+      "rel": ".agents/skills/notion-knowledge-capture/assets/notion.png",
+      "status": "todo",
+      "weight": 38.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/agents/openai.yaml": {
+      "rel": ".agents/skills/notion-knowledge-capture/agents/openai.yaml",
+      "status": "todo",
+      "weight": 8.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/examples/how-to-guide.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/examples/how-to-guide.md",
+      "status": "todo",
+      "weight": 47.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/examples/conversation-to-faq.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/examples/conversation-to-faq.md",
+      "status": "todo",
+      "weight": 90.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/notion-knowledge-capture/examples/decision-capture.md": {
+      "rel": ".agents/skills/notion-knowledge-capture/examples/decision-capture.md",
+      "status": "todo",
+      "weight": 50.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-app-hosting-basics/references/emulation.md": {
+      "rel": ".agents/skills/firebase-app-hosting-basics/references/emulation.md",
+      "status": "todo",
+      "weight": 23.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-app-hosting-basics/references/cli_commands.md": {
+      "rel": ".agents/skills/firebase-app-hosting-basics/references/cli_commands.md",
+      "status": "todo",
+      "weight": 34.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-app-hosting-basics/references/configuration.md": {
+      "rel": ".agents/skills/firebase-app-hosting-basics/references/configuration.md",
+      "status": "todo",
+      "weight": 23.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-remote-config-basics/references/android_setup.md": {
+      "rel": ".agents/skills/firebase-remote-config-basics/references/android_setup.md",
+      "status": "todo",
+      "weight": 36.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-remote-config-basics/references/ios_setup.md": {
+      "rel": ".agents/skills/firebase-remote-config-basics/references/ios_setup.md",
+      "status": "todo",
+      "weight": 35.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/security_rules.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/security_rules.md",
+      "status": "doing",
+      "weight": 230.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/indexes.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/indexes.md",
+      "status": "todo",
+      "weight": 45.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/android_sdk_usage.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/android_sdk_usage.md",
+      "status": "todo",
+      "weight": 77.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/ios_setup.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/ios_setup.md",
+      "status": "todo",
+      "weight": 69.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/flutter_setup.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/flutter_setup.md",
+      "status": "todo",
+      "weight": 70.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/provisioning.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/provisioning.md",
+      "status": "todo",
+      "weight": 44.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/standard/web_sdk_usage.md": {
+      "rel": ".agents/skills/firebase-firestore/references/standard/web_sdk_usage.md",
+      "status": "todo",
+      "weight": 76.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/python_sdk_usage.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/python_sdk_usage.md",
+      "status": "todo",
+      "weight": 55.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/security_rules.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/security_rules.md",
+      "status": "doing",
+      "weight": 230.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/data_model.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/data_model.md",
+      "status": "todo",
+      "weight": 26.4,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/indexes.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/indexes.md",
+      "status": "todo",
+      "weight": 54.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/android_sdk_usage.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/android_sdk_usage.md",
+      "status": "todo",
+      "weight": 92.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/ios_setup.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/ios_setup.md",
+      "status": "todo",
+      "weight": 75.6,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/flutter_setup.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/flutter_setup.md",
+      "status": "todo",
+      "weight": 72.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/provisioning.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/provisioning.md",
+      "status": "todo",
+      "weight": 47.2,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-firestore/references/enterprise/web_sdk_usage.md": {
+      "rel": ".agents/skills/firebase-firestore/references/enterprise/web_sdk_usage.md",
+      "status": "todo",
+      "weight": 50.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-crashlytics/references/android_setup.md": {
+      "rel": ".agents/skills/firebase-crashlytics/references/android_setup.md",
+      "status": "todo",
+      "weight": 60.8,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/firebase-crashlytics/references/ios_setup.md": {
+      "rel": ".agents/skills/firebase-crashlytics/references/ios_setup.md",
+      "status": "todo",
+      "weight": 46.0,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/.gitignore": {
+      "rel": ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/.gitignore",
+      "status": "todo",
+      "weight": 4.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.swift": {
+      "rel": ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.swift",
+      "status": "todo",
+      "weight": 8.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.resolved": {
+      "rel": ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Package.resolved",
+      "status": "todo",
+      "weight": 20.5,
+      "reason": "initial sweep"
+    },
+    ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Sources/main.swift": {
+      "rel": ".agents/skills/xcode-project-setup/scripts/xcode_spm_setup/Sources/main.swift",
+      "status": "todo",
+      "weight": 116.0,
+      "reason": "initial sweep"
+    }
+  },
+  "findings": [
+    {
+      "file": "server.py",
+      "round": 1,
+      "severity": "high",
+      "summary": "Hardcoded port 8080 in two handlers; should read from settings.json",
+      "refs": [
+        "server.py:102",
+        "server.py:330"
+      ]
+    },
+    {
+      "file": "start-agentic-os.sh",
+      "round": 2,
+      "severity": "medium",
+      "summary": "Port sourced from settings.json now (good), but no healthcheck before marking ready",
+      "refs": [
+        "start-agentic-os.sh:21"
+      ]
+    },
+    {
+      "file": "start.sh",
+      "round": 2,
+      "severity": "low",
+      "summary": "Falls back to hardcoded 8080 if settings missing",
+      "refs": [
+        "start.sh:8"
+      ]
+    }
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "inspecting": [
+        "server.py",
+        "brain-core/brain_index.db",
+        "dashboard/styles.css"
+      ],
+      "pending_after": 336,
+      "done": 0
+    },
+    {
+      "round": 2,
+      "inspecting": [
+        "dashboard/pages/command-center.js",
+        "tests/test_server_endpoints.py",
+        "skills/codebase-inspection-loop/loop.py"
+      ],
+      "pending_after": 333,
+      "done": 1
+    },
+    {
+      "round": 3,
+      "inspecting": [
+        "dashboard/pages/kanban.js",
+        "dashboard/pages/skills.js",
+        "brain-core/brain_index.py"
+      ],
+      "pending_after": 328,
+      "done": 3
+    },
+    {
+      "round": 4,
+      "inspecting": [
+        "docs/README.md",
+        ".agents/skills/firebase-data-connect/examples.md",
+        ".agents/skills/firebase-firestore/references/standard/security_rules.md"
+      ],
+      "pending_after": 325,
+      "done": 3
+    },
+    {
+      "round": 5,
+      "inspecting": [
+        ".agents/skills/firebase-firestore/references/enterprise/security_rules.md",
+        "scripts/analyze_agent_time.py",
+        "dashboard/pages/chat.js"
+      ],
+      "pending_after": 322,
+      "done": 3
+    },
+    {
+      "round": 6,
+      "inspecting": [
+        "dashboard/pages/agent-health.js",
+        "AGENTS.md",
+        "scheduler/scheduler.py"
+      ],
+      "pending_after": 319,
+      "done": 3
+    }
+  ]
+}

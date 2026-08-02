@@ -140,6 +140,19 @@ def test_dispatch_failure_blocks_task(client, sync_threads, monkeypatch):
     assert "not installed" in task["block_reason"]
 
 
+def test_create_with_custom_registered_agent_dispatches(client, sync_threads, monkeypatch):
+    # Dispatch validation follows the live registry, not a hardcoded list —
+    # custom agents (e.g. codex, jarvis) must be dispatchable too.
+    sync_threads.AGENT_REGISTRY_FILE.write_text(json.dumps({
+        "jarvis": {"name": "jarvis", "type": "cli", "binary": "jarvis",
+                   "run_args": ["jarvis", "{message}"]},
+    }))
+    monkeypatch.setattr(sync_threads, "execute_agent", lambda agent, prompt: "jarvis did it")
+    task = _create(client, title="Do work", assignee="jarvis")
+    assert task["status"] == "done"
+    assert any("jarvis" in c["message"] for c in task["comments"])
+
+
 def test_bulk_dispatch_endpoint(client, sync_threads, monkeypatch):
     monkeypatch.setattr(sync_threads, "execute_agent", lambda agent, prompt: "ok done")
 

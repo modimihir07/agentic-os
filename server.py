@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -30,10 +30,10 @@ from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).parent.resolve()
 
-# Agents supported across chat, routing, health, and kanban dispatch.
-AGENTS = ["opencode", "hermes", "gemini"]
+# Agents are defined by the registry (BUILTIN_AGENTS + data/agent-registry.json);
+# chat, routing, health, and kanban dispatch all validate against it.
 
-app = FastAPI(title="Agentic OS", version="1.1.0")
+app = FastAPI(title="Agentic OS — Austin", version="1.1.0")
 
 # Load OpenRouter API key from Hermes .env
 HERMES_ENV = Path.home() / ".hermes" / ".env"
@@ -221,6 +221,76 @@ def record_brain_learning(source: str, source_path: str, title: str,
         print(f"[brain-index] learning upsert failed ({source}/{source_path}): {e}")
         return False
 
+
+def get_learning_memory_path() -> Path:
+    """Resolve the central learning-memory file (directable via settings).
+
+    The hook writes a note to this file after EVERY agent task
+    (skill run or free-text chat, success or failure) so learning
+    accumulates in one place on this device. Point ``settings.json
+    -> learning_memory`` at your central memory file to redirect it;
+    defaults to ``brain/agent-learnings.md`` when unset.
+    """
+    try:
+        sf = BASE_DIR / "data" / "settings.json"
+        if sf.exists():
+            cfg = json.loads(sf.read_text(encoding="utf-8"))
+            rel = cfg.get("learning_memory")
+            if rel:
+                p = Path(rel)
+                return p if p.is_absolute() else (BASE_DIR / p)
+    except Exception:
+        pass
+    return BASE_DIR / "brain" / "agent-learnings.md"
+
+def record_task_learning(agent: str, task: str, response_text: str,
+                             skill_name: str | None = None) -> None:
+    """System-wide learning hook. Called after EVERY agent task so it
+    covers all current and future agents (both the chat path and the
+    skill-run path funnel through it).
+
+    - Always appends a dated note to the CENTRAL learning memory
+      (get_learning_memory_path()), so learning is never lost.
+    - If a skill ran (skill_name set), also appends to that skill's
+      skills/<name>/learnings.md (reuses the existing pattern).
+    - Failures are recorded too (prefixed FAILED: with the reason) --
+      that is where the highest-value learning lives.
+    Best-effort: a write failure is logged, never raised.
+    """
+    ts = get_timestamp()[:19].replace("T", " ")
+    failed = is_error_response(response_text)
+    status = "FAILED" if failed else "done"
+    note = (
+        f"\n## {ts} · {agent} · {status}\n"
+        f"- Task: {task[:200]}\n"
+    )
+    if failed:
+        reason = (response_text or "").strip().replace("\n", " ")[:280]
+        note += f"- Why it failed: {reason}\n"
+        note += "- Do NOT repeat this approach unchanged.\n"
+    else:
+        excerpt = (response_text or "").strip().replace("\n", " ")[:280]
+        note += f"- Outcome: {excerpt}\n"
+    note += "\n"
+
+    # 1) Central memory (always). Create if missing; append if present.
+    try:
+        mem = get_learning_memory_path()
+        mem.parent.mkdir(parents=True, exist_ok=True)
+        existing = mem.read_text(encoding="utf-8", errors="replace") if mem.exists() else ""
+        mem.write_text(existing + note)
+    except Exception as e:
+        print(f"[learning] central memory write failed: {e}")
+
+    # 2) The skill's own learnings.md (only when a skill ran).
+    if skill_name:
+        try:
+            sp = resolve_skill_dir(skill_name) / "learnings.md"
+            sp.parent.mkdir(parents=True, exist_ok=True)
+            existing_sp = sp.read_text(encoding="utf-8", errors="replace") if sp.exists() else ""
+            sp.write_text(existing_sp + note)
+        except Exception as e:
+            print(f"[learning] skill {skill_name} learnings write failed: {e}")
 
 
 # ─── Agent Stats (real, persisted) ──────────────────────────────
@@ -482,7 +552,6 @@ def check_agent(name: str) -> dict:
             # value ("; rm -rf ~") would otherwise execute arbitrary shell.
             check_cmd = agent.get("check_command", "")
             if check_cmd:
-                import shlex
                 try:
                     cmd = shlex.split(check_cmd)
                     result = subprocess.run(
@@ -598,7 +667,88 @@ def get_status():
         "uptime": time.time(),
     }
 
-# ─── Routes: Brain ────────────────────────────────────────────────
+@app.get("/api/healthz")
+def healthz():
+    return {"status": "ok"}
+
+@app.get("/api/readyz")
+def readyz():
+    registry = load_agent_registry()
+    try:
+        agents = [check_agent(name) for name in registry]
+        skills_count = len(list_dir(BASE_DIR / "skills"))
+    except Exception as e:
+        raise HTTPException(503, f"not ready: {e}")
+    return {"ready": True, "agents": agents, "skills_count": skills_count}
+
+@app.get("/api/system")
+def get_system():
+    """Real hardware metrics (CPU / RAM / Disk / GPU). No simulated values.
+
+    - CPU% and RAM via psutil (reads /proc).
+    - Disk via psutil.disk_usage on the mount holding this repo.
+    - GPU via nvidia-smi when present (WSL exposes the Windows host GPU);
+      otherwise ``gpu`` is null and the UI shows N/A.
+    """
+    out = {}
+    # CPU
+    try:
+        import psutil
+        out["cpu"] = {"percent": round(psutil.cpu_percent(interval=0.2), 1)}
+    except Exception as e:
+        out["cpu"] = {"percent": None, "error": str(e)}
+
+    # RAM
+    try:
+        import psutil
+        vm = psutil.virtual_memory()
+        out["ram"] = {
+            "percent": round(vm.percent, 1),
+            "used_gb": round(vm.used / 1e9, 1),
+            "total_gb": round(vm.total / 1e9, 1),
+        }
+    except Exception as e:
+        out["ram"] = {"percent": None, "error": str(e)}
+
+    # Disk (mount holding this project)
+    try:
+        import psutil
+        du = psutil.disk_usage(str(BASE_DIR))
+        out["disk"] = {
+            "percent": round(du.percent, 1),
+            "used_gb": round(du.used / 1e9, 1),
+            "total_gb": round(du.total / 1e9, 1),
+            "free_gb": round(du.free / 1e9, 1),
+        }
+    except Exception as e:
+        out["disk"] = {"percent": None, "error": str(e)}
+
+    # GPU (best-effort; null when no nvidia-smi / no GPU)
+    gpu = None
+    smi = shutil.which("nvidia-smi") or "/usr/lib/wsl/lib/nvidia-smi"
+    if smi and os.path.exists(smi):
+        try:
+            res = subprocess.run(
+                [smi, "--query-gpu=name,utilization.gpu,memory.used,memory.total",
+                 "--format=csv,noheader,nounits"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                parts = [p.strip() for p in res.stdout.strip().split(",")]
+                if len(parts) >= 4:
+                    gpu = {
+                        "name": parts[0],
+                        "util_percent": float(parts[1]) if parts[1] else None,
+                        "mem_used_mb": float(parts[2]) if parts[2] else None,
+                        "mem_total_mb": float(parts[3]) if parts[3] else None,
+                    }
+        except Exception as e:
+            gpu = {"error": str(e)}
+    out["gpu"] = gpu
+
+    return out
+
+
 
 @app.get("/api/brain")
 def list_brain():
@@ -914,6 +1064,10 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
         "output_preview": response_text[:100],
     })
 
+    # System-wide learning hook: capture every skill run (success or
+    # failure) into central memory AND this skill's learnings.md.
+    record_task_learning(agent_choice, name, response_text, skill_name=name)
+
     return {
         "status": "completed",
         "run_id": run_id,
@@ -1196,7 +1350,6 @@ def install_plugin(data: dict):
 
     # If repo_url provided, clone it
     if repo_url:
-        import subprocess
         if plugin_dir.exists():
             # Pull latest if already cloned
             subprocess.run(["git", "pull"], cwd=str(plugin_dir), capture_output=True)
@@ -1205,7 +1358,6 @@ def install_plugin(data: dict):
 
     # If no repo_url, create from template
     elif not plugin_dir.exists():
-        import shutil
         template_dir = BASE_DIR / "skills" / "_template"
         shutil.copytree(template_dir, plugin_dir)
 
@@ -1216,7 +1368,6 @@ def install_plugin(data: dict):
     plugin_type = "skill"
     if skill_md.exists():
         content = skill_md.read_text()
-        import re
         ver_match = re.search(r'^version:\s*(.+)$', content, re.MULTILINE)
         desc_match = re.search(r'^description:\s*(.+)$', content, re.MULTILINE)
         type_match = re.search(r'^type:\s*(.+)$', content, re.MULTILINE)
@@ -1451,8 +1602,14 @@ def execute_agent(agent: str, message: str) -> str:
     _ok = True
     try:
         if agent == "opencode":
+            # Honor the agent's configured timeout from the registry instead of a
+            # hardcoded 30s -- real coding tasks routinely exceed that and were
+            # timing out mid-task. Fall back to 120s when unset or null.
+            _reg = load_agent_registry()
+            _ocfg = _reg.get("opencode", {})
+            _otimeout = int(_ocfg.get("timeout") or 120)
             try:
-                code, out, err = run_cli(["opencode", "run", "--format", "json", message], timeout=30)
+                code, out, err = run_cli(["opencode", "run", "--format", "json", message], timeout=_otimeout)
             except subprocess.TimeoutExpired:
                 return f"⏱ Agent 'opencode' timed out.\n\nOpenCode's model is taking too long. Try running `opencode run \"{message[:60]}\"` directly in your terminal.\n\n**Message:** {message[:100]}"
             if code == 0:
@@ -1521,6 +1678,11 @@ def execute_agent(agent: str, message: str) -> str:
             return "Gemini CLI did not return a response."
 
         else:
+            # Custom agents registered in data/agent-registry.json run through
+            # the registry-driven executor (cli/http/mcp) instead of a
+            # hardcoded branch here.
+            if agent in load_agent_registry():
+                return execute_agent_dynamic(agent, message)
             return f"Unknown agent: {agent}"
     except subprocess.TimeoutExpired:
         return f"⏱ Agent '{agent}' timed out.\n\nRun `{agent} --help` in your terminal for CLI usage.\n\n**Message:** {message[:100]}"
@@ -1559,6 +1721,9 @@ def chat(req: ChatRequest):
     save_chat_message(agent_msg)
 
     append_audit({"action": "chat_message", "agent": agent, "msg_preview": req.message[:50]})
+    # System-wide learning hook: capture every task (success or failure)
+    # into the central memory (+ the skill's learnings when applicable).
+    record_task_learning(agent, req.message, response_text)
 
     return {"status": "ok", "response": agent_msg}
 
@@ -1636,11 +1801,16 @@ class PtySession:
 
 @app.websocket("/ws/terminal")
 async def ws_terminal(websocket: WebSocket):
-    # CORSMiddleware does not protect WebSocket handshakes, so this endpoint - which spawns a
-    # full interactive shell - must check the Origin header itself, or any webpage could open
-    # this socket and get command execution on the machine running the dashboard.
-    origin = websocket.headers.get("origin")
-    if origin not in get_cors_origins():
+    # Accept local dashboard WebSockets robustly.
+    origin = (websocket.headers.get("origin") or "").lower()
+    allowed = get_cors_origins()
+    local_ok = (
+        origin == ""
+        or origin in allowed
+        or origin.startswith("http://127.0.0.1")
+        or origin.startswith("http://localhost")
+    )
+    if not local_ok:
         await websocket.close(code=1008)
         return
     await websocket.accept()
@@ -1781,7 +1951,9 @@ def save_kanban_task(task: dict):
     ensure_dir(KANBAN_DIR)
     kanban_task_path(task["id"]).write_text(json.dumps(task, indent=2))
 
-KANBAN_AGENTS = set(AGENTS)
+def is_dispatchable_agent(name) -> bool:
+    """An assignee is dispatchable when it's a registered agent."""
+    return bool(name) and name in load_agent_registry()
 
 def dispatch_kanban_task(task_id: str):
     """Move a task to in_progress and hand it to its assignee agent in the background."""
@@ -1791,7 +1963,7 @@ def dispatch_kanban_task(task_id: str):
     task = json.loads(path.read_text())
     if task.get("status") in ("in_progress", "done"):
         return
-    if task.get("assignee") not in KANBAN_AGENTS:
+    if not is_dispatchable_agent(task.get("assignee")):
         return
     task["status"] = "in_progress"
     task["updated"] = get_timestamp()
@@ -1874,15 +2046,6 @@ def kanban_get_task(task_id: str):
         raise HTTPException(404, "Task not found")
     return json.loads(path.read_text())
 
-@app.delete("/api/kanban/tasks/{task_id}")
-def kanban_delete_task(task_id: str):
-    path = kanban_task_path(task_id)
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    path.unlink()
-    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
-    return {"status": "deleted", "task_id": task_id}
-
 @app.post("/api/kanban/tasks")
 def kanban_create_task(data: KanbanTaskCreate):
     try:
@@ -1900,7 +2063,7 @@ def kanban_create_task(data: KanbanTaskCreate):
         }
         save_kanban_task(task)
         append_audit({"action": "kanban_task_created", "title": data.title})
-        if task["assignee"] in KANBAN_AGENTS:
+        if is_dispatchable_agent(task["assignee"]):
             dispatch_kanban_task(task["id"])
             task = json.loads(kanban_task_path(task["id"]).read_text())
         return task
@@ -1921,10 +2084,31 @@ def kanban_update_task(task_id: str, data: KanbanTaskUpdate):
     task["updated"] = get_timestamp()
     save_kanban_task(task)
     append_audit({"action": "kanban_task_updated", "task_id": task_id})
-    if assignee_changed and task["assignee"] in KANBAN_AGENTS:
+    if assignee_changed and is_dispatchable_agent(task["assignee"]):
         dispatch_kanban_task(task_id)
         task = json.loads(path.read_text())
     return task
+
+@app.delete("/api/kanban/tasks/{task_id}")
+def kanban_delete_task(task_id: str):
+    path = kanban_task_path(task_id)
+    if not path.exists():
+        raise HTTPException(404, "Task not found")
+    try:
+        path.unlink()
+    except OSError as e:
+        raise HTTPException(500, f"Failed to delete task file: {e}")
+    # Remove any links that referenced the deleted task so other tasks
+    # don't keep dangling parent/child pointers to it.
+    for other in load_kanban_tasks():
+        links = other.get("links") or []
+        if any(l.get("parent") == task_id or l.get("child") == task_id for l in links):
+            other["links"] = [l for l in links
+                              if l.get("parent") != task_id and l.get("child") != task_id]
+            other["updated"] = get_timestamp()
+            save_kanban_task(other)
+    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
+    return {"status": "deleted", "task_id": task_id}
 
 @app.post("/api/kanban/tasks/{task_id}/dispatch")
 def kanban_dispatch_task(task_id: str):
@@ -1932,8 +2116,8 @@ def kanban_dispatch_task(task_id: str):
     if not path.exists():
         raise HTTPException(404, "Task not found")
     task = json.loads(path.read_text())
-    if task.get("assignee") not in KANBAN_AGENTS:
-        raise HTTPException(400, "Task must be assigned to opencode, hermes, or gemini to dispatch")
+    if not is_dispatchable_agent(task.get("assignee")):
+        raise HTTPException(400, "Task must be assigned to a registered agent to dispatch")
     dispatch_kanban_task(task_id)
     return {"status": "dispatched", "task_id": task_id}
 
@@ -2021,20 +2205,11 @@ def kanban_remove_link(parent_id: str = Query(...), child_id: str = Query(...)):
             save_kanban_task(t)
     return {"status": "unlinked"}
 
-@app.delete("/api/kanban/tasks/{task_id}")
-def kanban_delete_task(task_id: str):
-    path = KANBAN_DIR / f"{task_id}.json"
-    if not path.exists():
-        raise HTTPException(404, "Task not found")
-    path.unlink()
-    append_audit({"action": "kanban_task_deleted", "task_id": task_id})
-    return {"status": "deleted"}
-
 @app.post("/api/kanban/dispatch")
 def kanban_dispatch():
     dispatched = []
     for task in load_kanban_tasks():
-        if task.get("status") in ("todo", "ready") and task.get("assignee") in KANBAN_AGENTS:
+        if task.get("status") in ("todo", "ready") and is_dispatchable_agent(task.get("assignee")):
             dispatch_kanban_task(task["id"])
             dispatched.append(task["id"])
     append_audit({"action": "kanban_dispatch_triggered", "task_ids": dispatched})
@@ -2279,11 +2454,20 @@ class AgentRegisterRequest(BaseModel):
 
 @app.get("/api/agents")
 def list_agents():
-    """List all registered agents (built-in + custom)."""
+    """List all registered agents (built-in + custom), including runtime stats."""
     registry = load_agent_registry()
+    stats = load_agent_stats()
     agents = []
     for name, agent in registry.items():
         info = check_agent(name)
+        s = stats.get(name, {})
+        total = s.get("total_runs", 0)
+        info["total_runs"] = total
+        info["successful_runs"] = s.get("successful_runs", 0)
+        info["failed_runs"] = s.get("failed_runs", 0)
+        info["success_rate"] = round(100.0 * s.get("successful_runs", 0) / total, 1) if total else 0.0
+        info["avg_response_time"] = s.get("avg_response_time", 0.0)
+        info["last_seen"] = s.get("last_seen", "")
         agents.append(info)
     return {"agents": agents}
 
@@ -2425,8 +2609,14 @@ def get_skill_analytics():
         for d in iter_skill_dirs():
             scores = read_json(d / "score-history.json", [])
             avg_score = sum(s.get("score", 0) for s in scores) / len(scores) if scores else 0
+            best_score = max((s.get("score", 0) for s in scores), default=0) if scores else 0
             analytics.append({
                 "name": d.name,
+                # Frontend contract (learning-analytics.js) expects these keys:
+                "score": round(avg_score, 1),
+                "evals": len(scores),
+                "best": round(best_score, 1),
+                # Backwards-compatible extras:
                 "total_runs": len(scores),
                 "avg_score": round(avg_score, 1),
                 "last_score": scores[-1].get("score", 0) if scores else 0,
@@ -2439,18 +2629,17 @@ def get_skill_analytics():
 @app.get("/api/analytics/trends")
 def get_trend_analytics():
     try:
-        trends = []
+        # Frontend contract (learning-analytics.js) expects an OBJECT
+        # {name: [score, ...]}, consumed via Object.entries(trends) and
+        # (history || []).slice(-10). Return that shape, not a list.
+        trends = {}
         for d in iter_skill_dirs():
             scores = read_json(d / "score-history.json", [])
             if scores:
-                trends.append({
-                    "name": d.name,
-                    "scores": [s.get("score", 0) for s in scores[-10:]],
-                    "labels": [s.get("date", "") for s in scores[-10:]],
-                })
+                trends[d.name] = [s.get("score", 0) for s in scores[-10:]]
         return {"trends": trends}
     except Exception as e:
-        return {"trends": [], "error": str(e)}
+        return {"trends": {}, "error": str(e)}
 
 # ─── Routes: Session Replay (2 endpoints) ───────────────────────
 
@@ -2524,15 +2713,26 @@ import signal
 
 # ─── Routes: Dashboard Static Files ──────────────────────────────
 
+class NoCacheStaticFiles(StaticFiles):
+    """StaticFiles that tells browsers not to cache, so dashboard JS/CSS
+    edits take effect on reload instead of serving a stale cached copy."""
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        if "Cache-Control" not in response.headers:
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
 dashboard_dir = BASE_DIR / "dashboard"
 if dashboard_dir.exists():
-    app.mount("/dashboard", StaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
+    app.mount("/dashboard", NoCacheStaticFiles(directory=str(dashboard_dir), html=True), name="dashboard")
 
 # graphify knowledge-graph output (built by `graphify . --code-only`).
 # Served so dashboard pages can link/open the interactive graph.
 graphify_dir = BASE_DIR / "graphify-out"
 if graphify_dir.exists():
-    app.mount("/graphify-out", StaticFiles(directory=str(graphify_dir)), name="graphify-out")
+    app.mount("/graphify-out", NoCacheStaticFiles(directory=str(graphify_dir)), name="graphify-out")
 
 # Central Agentic-OS brain graph (merged cross-project knowledge graph).
 # Built by brain/graph/build-central.sh; queryable live via brain/graph/serve-brain.sh (MCP :8090).
@@ -2573,7 +2773,6 @@ AGENT_TIME_ANALYZER = BASE_DIR / "scripts" / "analyze_agent_time.py"
 
 def _recompute_agent_time() -> dict:
     """Run the analyzer to (re)generate data/agent-time.json. Returns report."""
-    import subprocess
     try:
         subprocess.run(
             [sys.executable, str(AGENT_TIME_ANALYZER)],

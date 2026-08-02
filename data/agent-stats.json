@@ -1,1 +1,38 @@
-{}
+{
+  "opencode": {
+    "total_runs": 31,
+    "successful_runs": 29,
+    "failed_runs": 2,
+    "first_seen": "2026-07-25T22:48:56.490238+00:00",
+    "last_seen": "2026-08-02T19:46:40.167903+00:00",
+    "total_time": 125.38306546211243,
+    "avg_response_time": 4.045
+  },
+  "hermes": {
+    "total_runs": 17,
+    "successful_runs": 15,
+    "failed_runs": 2,
+    "first_seen": "2026-07-26T00:58:26.301191+00:00",
+    "last_seen": "2026-08-02T00:27:54.864727+00:00",
+    "total_time": 336.97000193595886,
+    "avg_response_time": 19.822
+  },
+  "kilocode": {
+    "total_runs": 2,
+    "successful_runs": 1,
+    "failed_runs": 1,
+    "first_seen": "2026-07-28T02:41:35.897641+00:00",
+    "last_seen": "2026-07-30T10:00:55.670378+00:00",
+    "total_time": 0.0,
+    "avg_response_time": 0.0
+  },
+  "gemini": {
+    "total_runs": 6,
+    "successful_runs": 6,
+    "failed_runs": 0,
+    "first_seen": "2026-07-30T00:11:38.232390+00:00",
+    "last_seen": "2026-07-30T00:15:59.209712+00:00",
+    "total_time": 4.0531158447265625e-06,
+    "avg_response_time": 0.0
+  }
+}

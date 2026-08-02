@@ -1449,3 +1449,55 @@ pre {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* ─── Command Center ─────────────────────────────────────────── */
+.cc-agent-rows { display: flex; flex-direction: column; gap: 6px; }
+.cc-agent-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color .15s, box-shadow .15s;
+}
+.cc-agent-row:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
+
+.cc-tip-row { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-muted); }
+.cc-tip b { color: var(--accent); }
+.mono, .mono { font-family: var(--font-mono, ui-monospace, monospace); color: var(--accent); }
+
+.cc-log {
+  background: #06090d;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  height: 240px;
+  overflow: auto;
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cc-log-line { display: flex; gap: 8px; }
+.cc-time { color: var(--text-muted); flex: 0 0 auto; }
+.cc-msg { color: var(--text); }
+.cc-log-line.info .cc-msg { color: var(--accent); }
+.cc-log-line.ok .cc-msg { color: var(--green); }
+.cc-log-line.warn .cc-msg { color: var(--yellow); }
+.cc-log-line.err .cc-msg { color: var(--red); }
+.cc-log-line.sys .cc-msg { color: var(--text-muted); }
+
+.cc-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cc-metric { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+.cc-metric-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; }
+.cc-metric-value { font-size: 20px; font-weight: 700; color: var(--text); margin: 4px 0 8px; }
+.cc-bar { height: 6px; background: #06090d; border-radius: 999px; overflow: hidden; }
+.cc-fill { height: 100%; width: 0%; border-radius: 999px; transition: width .4s ease; }
+.cc-metric-sub { font-size: 11px; color: var(--text-muted); margin: -4px 0 8px; }
+
+.cc-jobs { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.cc-job {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 9px; padding: 8px 11px; font-size: 12.5px;
+}

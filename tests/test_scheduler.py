@@ -23,14 +23,22 @@ def scheduler_module(tmp_path, monkeypatch):
     return sched
 
 
-def test_run_skill_appends_audit(scheduler_module, capsys):
-    scheduler_module.run_skill("heartbeat")
+def test_run_job_appends_audit(scheduler_module, monkeypatch, capsys):
+    # run_skill was replaced by run_job, which invokes skills through the
+    # live server API — stub that HTTP call out for a hermetic test.
+    monkeypatch.setattr(
+        scheduler_module, "run_skill_via_api",
+        lambda skill, agent="auto": {"ok": True, "data": {"result": "done"}},
+    )
+    scheduler_module.run_job({"name": "Heartbeat", "skill": "heartbeat"})
     audit_file = scheduler_module.BASE_DIR.parent / "audit" / "audit.log"
-    entry = json.loads(audit_file.read_text().strip())
-    assert entry["action"] == "scheduler_run"
-    assert entry["skill"] == "heartbeat"
-    assert "timestamp" in entry
-    assert "Ran skill: heartbeat" in capsys.readouterr().out
+    entries = [json.loads(line) for line in audit_file.read_text().strip().splitlines()]
+    assert entries[0]["action"] == "scheduler_run"
+    assert entries[0]["skill"] == "heartbeat"
+    assert entries[0]["stage"] == "start"
+    assert entries[-1]["stage"] == "done"
+    assert "timestamp" in entries[0]
+    assert "Firing job 'Heartbeat'" in capsys.readouterr().out
 
 
 def test_load_jobs_registers_enabled(scheduler_module):

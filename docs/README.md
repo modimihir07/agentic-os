@@ -90,6 +90,7 @@ cd ~/agentic-os
 | Goals | `#goals` | Project targets with progress tracking |
 | Journal | `#journal` | Daily entries with search |
 | Agent Health | `#agent-health` | Agent monitoring + registration |
+| Command Center | `#command-center` | Unified dispatcher: command console, live agent status, real system metrics, execution + event streams |
 | Smart Router | `#smart-router` | Task routing intelligence |
 | Learning Analytics | `#learning-analytics` | Skill eval scores and trends |
 | Session Replay | `#session-replay` | Conversation history playback |
@@ -123,6 +124,33 @@ The terminal provides a full bash shell in the browser using xterm.js connected 
 **Security:** The terminal runs as the server process user. Only accessible from localhost by default.
 
 ---
+
+## Command Center
+
+Route: `#command-center` (sidebar → Monitoring → Command Center).
+
+A unified dispatch + live-console page that combines real OS surfaces with a command console.
+
+**What it shows (all live, no mocked data):**
+- **Command Console** — a textarea + command language. Commands:
+  - `/help` — list available commands
+  - `/status` — refresh + print per-agent state
+  - `/run <task>` — dispatch a task to the selected agent via `POST /api/chat`
+  - `/wake` — re-run agent health checks (refresh registry)
+  - `/reset` — clear the console + event streams
+  - `/clear` — clear just the execution log
+  - *anything else* — sent to the selected agent as a free-text message
+  - `Ctrl/Cmd+Enter` runs the current command.
+- **Command Target** — dropdown of the live agent registry (`/api/agents`); click any agent row in the status panel to target it.
+- **Agent Status** — live registry from `/api/agents` (name, type, online/warning/offline dot, built-in flag).
+- **System** — real metrics: agents online (from registry), `skills_count` (from `/api/status`), scheduled jobs (from `/api/scheduler/jobs`), and system health. Session uptime ticks live.
+- **Execution Log** + **Event Stream** — color-coded (`info`/`ok`/`warn`/`err`/`sys`) feeds of console I/O and system events.
+
+**Implementation:** `dashboard/pages/command-center.js` (renders into `#pageContent` following the standard page pattern — `renderCommandCenter()`, uses the shared `api` client, `statusColor`, `escapeHtml`, `showToast`). Styles in `dashboard/styles.css` under `.cc-*`. Wired into the sidebar in `dashboard/index.html` and titled in `dashboard/utils.js` (`PAGE_TITLES`).
+
+**Notes / open items:**
+- Dispatch uses `/api/chat` (same path as AI Chat) — there is no separate "command execution" endpoint; see API Reference.
+- The `/run` command is fire-and-forget to the agent's CLI; there is no structured job record per console run (scheduler jobs are separate). A future iteration could record console runs into the audit trail.
 
 ## Agent System
 

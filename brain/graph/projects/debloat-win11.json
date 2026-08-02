@@ -1,0 +1,617 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "Debloat-Win11-Maintain.ps1",
+      "file_type": "code",
+      "source_file": "Debloat-Win11-Maintain.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "debloat_win11_maintain",
+      "community": 1,
+      "norm_label": "debloat-win11-maintain.ps1"
+    },
+    {
+      "label": "Write-MaintainLog()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11-Maintain.ps1",
+      "source_location": "L15",
+      "_origin": "ast",
+      "id": "debloat_win11_maintain_write_maintainlog",
+      "community": 1,
+      "norm_label": "write-maintainlog()"
+    },
+    {
+      "label": "Set-RegMaintain()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11-Maintain.ps1",
+      "source_location": "L29",
+      "_origin": "ast",
+      "id": "debloat_win11_maintain_set_regmaintain",
+      "community": 1,
+      "norm_label": "set-regmaintain()"
+    },
+    {
+      "label": "Debloat-Win11.ps1",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "debloat_win11",
+      "community": 0,
+      "norm_label": "debloat-win11.ps1"
+    },
+    {
+      "label": "Write-Rationale()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L128",
+      "_origin": "ast",
+      "id": "debloat_win11_write_rationale",
+      "community": 2,
+      "norm_label": "write-rationale()"
+    },
+    {
+      "label": "Test-PhaseEnabled()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L626",
+      "_origin": "ast",
+      "id": "debloat_win11_test_phaseenabled",
+      "community": 0,
+      "norm_label": "test-phaseenabled()"
+    },
+    {
+      "label": "Update-Phase()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L650",
+      "_origin": "ast",
+      "id": "debloat_win11_update_phase",
+      "community": 0,
+      "norm_label": "update-phase()"
+    },
+    {
+      "label": "Write-Log()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L701",
+      "_origin": "ast",
+      "id": "debloat_win11_write_log",
+      "community": 2,
+      "norm_label": "write-log()"
+    },
+    {
+      "label": "Set-Reg()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L731",
+      "_origin": "ast",
+      "id": "debloat_win11_set_reg",
+      "community": 0,
+      "norm_label": "set-reg()"
+    },
+    {
+      "label": "Remove-AppxDryRun()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L760",
+      "_origin": "ast",
+      "id": "debloat_win11_remove_appxdryrun",
+      "community": 0,
+      "norm_label": "remove-appxdryrun()"
+    },
+    {
+      "label": "Disable-ServiceDryRun()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L790",
+      "_origin": "ast",
+      "id": "debloat_win11_disable_servicedryrun",
+      "community": 0,
+      "norm_label": "disable-servicedryrun()"
+    },
+    {
+      "label": "Disable-TaskDryRun()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L806",
+      "_origin": "ast",
+      "id": "debloat_win11_disable_taskdryrun",
+      "community": 0,
+      "norm_label": "disable-taskdryrun()"
+    },
+    {
+      "label": "ConvertTo-HtmlCell()",
+      "file_type": "code",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L1512",
+      "_origin": "ast",
+      "id": "debloat_win11_convertto_htmlcell",
+      "community": 0,
+      "norm_label": "convertto-htmlcell()"
+    },
+    {
+      "label": "Detect-Debloat.ps1",
+      "file_type": "code",
+      "source_file": "Detect-Debloat.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "detect_debloat",
+      "community": 7,
+      "norm_label": "detect-debloat.ps1"
+    },
+    {
+      "label": "Detect-Drift.ps1",
+      "file_type": "code",
+      "source_file": "Detect-Drift.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "detect_drift",
+      "community": 8,
+      "norm_label": "detect-drift.ps1"
+    },
+    {
+      "label": "AppX.ps1",
+      "file_type": "code",
+      "source_file": "Modules/AppX.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_appx",
+      "community": 9,
+      "norm_label": "appx.ps1"
+    },
+    {
+      "label": "Edge.ps1",
+      "file_type": "code",
+      "source_file": "Modules/Edge.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_edge",
+      "community": 3,
+      "norm_label": "edge.ps1"
+    },
+    {
+      "label": "Get-MaxBookmarkId()",
+      "file_type": "code",
+      "source_file": "Modules/Edge.ps1",
+      "source_location": "L151",
+      "_origin": "ast",
+      "id": "modules_edge_get_maxbookmarkid",
+      "community": 3,
+      "norm_label": "get-maxbookmarkid()"
+    },
+    {
+      "label": "Firewall.ps1",
+      "file_type": "code",
+      "source_file": "Modules/Firewall.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_firewall",
+      "community": 10,
+      "norm_label": "firewall.ps1"
+    },
+    {
+      "label": "HkcuTweaks.psd1",
+      "file_type": "code",
+      "source_file": "Modules/HkcuTweaks.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_hkcutweaks",
+      "community": 11,
+      "norm_label": "hkcutweaks.psd1"
+    },
+    {
+      "label": "OEM.ps1",
+      "file_type": "code",
+      "source_file": "Modules/OEM.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_oem",
+      "community": 4,
+      "norm_label": "oem.ps1"
+    },
+    {
+      "label": "Test-OemTarget()",
+      "file_type": "code",
+      "source_file": "Modules/OEM.ps1",
+      "source_location": "L17",
+      "_origin": "ast",
+      "id": "modules_oem_test_oemtarget",
+      "community": 4,
+      "norm_label": "test-oemtarget()"
+    },
+    {
+      "label": "Office.ps1",
+      "file_type": "code",
+      "source_file": "Modules/Office.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_office",
+      "community": 12,
+      "norm_label": "office.ps1"
+    },
+    {
+      "label": "OneDrive.ps1",
+      "file_type": "code",
+      "source_file": "Modules/OneDrive.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_onedrive",
+      "community": 13,
+      "norm_label": "onedrive.ps1"
+    },
+    {
+      "label": "Privacy.ps1",
+      "file_type": "code",
+      "source_file": "Modules/Privacy.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_privacy",
+      "community": 14,
+      "norm_label": "privacy.ps1"
+    },
+    {
+      "label": "Services.ps1",
+      "file_type": "code",
+      "source_file": "Modules/Services.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_services",
+      "community": 15,
+      "norm_label": "services.ps1"
+    },
+    {
+      "label": "SystemTweaks.ps1",
+      "file_type": "code",
+      "source_file": "Modules/SystemTweaks.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_systemtweaks",
+      "community": 16,
+      "norm_label": "systemtweaks.ps1"
+    },
+    {
+      "label": "SystemTweaks_Perf.ps1",
+      "file_type": "code",
+      "source_file": "Modules/SystemTweaks_Perf.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_systemtweaks_perf",
+      "community": 17,
+      "norm_label": "systemtweaks_perf.ps1"
+    },
+    {
+      "label": "SystemTweaks_Privacy.ps1",
+      "file_type": "code",
+      "source_file": "Modules/SystemTweaks_Privacy.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_systemtweaks_privacy",
+      "community": 18,
+      "norm_label": "systemtweaks_privacy.ps1"
+    },
+    {
+      "label": "SystemTweaks_System.ps1",
+      "file_type": "code",
+      "source_file": "Modules/SystemTweaks_System.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_systemtweaks_system",
+      "community": 19,
+      "norm_label": "systemtweaks_system.ps1"
+    },
+    {
+      "label": "SystemTweaks_UI.ps1",
+      "file_type": "code",
+      "source_file": "Modules/SystemTweaks_UI.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_systemtweaks_ui",
+      "community": 20,
+      "norm_label": "systemtweaks_ui.ps1"
+    },
+    {
+      "label": "WindowsAiPolicies.psd1",
+      "file_type": "code",
+      "source_file": "Modules/WindowsAiPolicies.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "modules_windowsaipolicies",
+      "community": 21,
+      "norm_label": "windowsaipolicies.psd1"
+    },
+    {
+      "label": "PSScriptAnalyzerSettings.psd1",
+      "file_type": "code",
+      "source_file": "PSScriptAnalyzerSettings.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "psscriptanalyzersettings",
+      "community": 27,
+      "norm_label": "psscriptanalyzersettings.psd1"
+    },
+    {
+      "label": "Remediate-Drift.ps1",
+      "file_type": "code",
+      "source_file": "Remediate-Drift.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "remediate_drift",
+      "community": 5,
+      "norm_label": "remediate-drift.ps1"
+    },
+    {
+      "label": "Set-RegRemediate()",
+      "file_type": "code",
+      "source_file": "Remediate-Drift.ps1",
+      "source_location": "L14",
+      "_origin": "ast",
+      "id": "remediate_drift_set_regremediate",
+      "community": 5,
+      "norm_label": "set-regremediate()"
+    },
+    {
+      "label": "debloat.example.psd1",
+      "file_type": "code",
+      "source_file": "debloat.example.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "debloat_example",
+      "community": 6,
+      "norm_label": "debloat.example.psd1"
+    },
+    {
+      "label": "corporate.psd1",
+      "file_type": "code",
+      "source_file": "presets/corporate.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "presets_corporate",
+      "community": 22,
+      "norm_label": "corporate.psd1"
+    },
+    {
+      "label": "developer.psd1",
+      "file_type": "code",
+      "source_file": "presets/developer.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "presets_developer",
+      "community": 23,
+      "norm_label": "developer.psd1"
+    },
+    {
+      "label": "kiosk.psd1",
+      "file_type": "code",
+      "source_file": "presets/kiosk.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "presets_kiosk",
+      "community": 24,
+      "norm_label": "kiosk.psd1"
+    },
+    {
+      "label": "medical.psd1",
+      "file_type": "code",
+      "source_file": "presets/medical.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "presets_medical",
+      "community": 25,
+      "norm_label": "medical.psd1"
+    },
+    {
+      "label": "security.psd1",
+      "file_type": "code",
+      "source_file": "presets/security.psd1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "presets_security",
+      "community": 26,
+      "norm_label": "security.psd1"
+    },
+    {
+      "label": "Debloat-Win11.Tests.ps1",
+      "file_type": "code",
+      "source_file": "tests/Debloat-Win11.Tests.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "tests_debloat_win11_tests",
+      "community": 28,
+      "norm_label": "debloat-win11.tests.ps1"
+    },
+    {
+      "label": "Invoke-StaticAnalysis.ps1",
+      "file_type": "code",
+      "source_file": "tools/Invoke-StaticAnalysis.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "tools_invoke_staticanalysis",
+      "community": 29,
+      "norm_label": "invoke-staticanalysis.ps1"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11-Maintain.ps1",
+      "source_location": "L29",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11_maintain",
+      "target": "debloat_win11_maintain_set_regmaintain",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11-Maintain.ps1",
+      "source_location": "L15",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11_maintain",
+      "target": "debloat_win11_maintain_write_maintainlog",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11-Maintain.ps1",
+      "source_location": "L35",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11_maintain_set_regmaintain",
+      "target": "debloat_win11_maintain_write_maintainlog",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L1512",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_convertto_htmlcell",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L790",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_disable_servicedryrun",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L806",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_disable_taskdryrun",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L760",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_remove_appxdryrun",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L731",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_set_reg",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L626",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_test_phaseenabled",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L650",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_update_phase",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L701",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_write_log",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L128",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11",
+      "target": "debloat_win11_write_rationale",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "Debloat-Win11.ps1",
+      "source_location": "L131",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "debloat_win11_write_rationale",
+      "target": "debloat_win11_write_log",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Modules/Edge.ps1",
+      "source_location": "L151",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "modules_edge",
+      "target": "modules_edge_get_maxbookmarkid",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Modules/OEM.ps1",
+      "source_location": "L17",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "modules_oem",
+      "target": "modules_oem_test_oemtarget",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "Remediate-Drift.ps1",
+      "source_location": "L14",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "remediate_drift",
+      "target": "remediate_drift_set_regremediate",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": [],
+  "built_at_commit": "58ad9a067444e80d05bef6d0901a1f17067a911b"
+}
