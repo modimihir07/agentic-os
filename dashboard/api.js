@@ -125,4 +125,23 @@ const api = {
   getMemoryGraph: () => api.get('/api/memory/graph'),
   // v0.4.0: Code Diff Viewer
   getDiff: (file, ref = 'HEAD') => api.get(`/api/diff?file=${encodeURIComponent(file)}&ref=${encodeURIComponent(ref)}`),
+  // Agent Avatar Playground (uses the separate Profile Hub admin token)
+  playgroundRequest: async (path, options = {}) => {
+    const headers = { ...(options.headers || {}), 'X-Agentic-OS-Admin': sessionStorage.getItem('agenticOsProfileAdminToken') || '' };
+    if (options.body) headers['Content-Type'] = 'application/json';
+    const response = await fetch(path, { ...options, headers });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const error = new Error(payload.detail || `Request failed: ${response.status}`);
+      error.status = response.status;
+      throw error;
+    }
+    return payload;
+  },
+  getPlaygroundCatalog: () => api.playgroundRequest('/api/playground/catalog'),
+  getPlaygroundAgents: () => api.playgroundRequest('/api/playground/agents'),
+  getPlaygroundAgent: (name) => api.playgroundRequest(`/api/playground/agents/${encodeURIComponent(name)}`),
+  previewPlaygroundAgent: (draft) => api.playgroundRequest('/api/playground/preview', { method: 'POST', body: JSON.stringify(draft) }),
+  spawnPlaygroundAgent: (draft) => api.playgroundRequest('/api/playground/spawn', { method: 'POST', body: JSON.stringify(draft) }),
+  updatePlaygroundAppearance: (name, appearance) => api.playgroundRequest(`/api/playground/agents/${encodeURIComponent(name)}/appearance`, { method: 'PATCH', body: JSON.stringify(appearance) }),
 };

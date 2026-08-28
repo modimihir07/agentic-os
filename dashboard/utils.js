@@ -119,6 +119,7 @@ const PAGE_TITLES = {
   skills: { title: 'Skills Hub', breadcrumb: 'Browse & execute skills' },
   memory: { title: 'Memory', breadcrumb: 'Shared brain context' },
   profiles: { title: 'Hermes Profiles', breadcrumb: 'Identity control plane' },
+  'agent-playground': { title: 'Agent Playground', breadcrumb: 'Design, equip & spawn' },
   scheduler: { title: 'Scheduler', breadcrumb: 'Automated workflows' },
   audit: { title: 'Audit Log', breadcrumb: 'System activity trail' },
   cost: { title: 'Cost Analytics', breadcrumb: 'Usage & spending' },

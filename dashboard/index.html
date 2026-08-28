@@ -12,7 +12,7 @@
 <meta name="theme-color" content="#6c5ce7">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=0.4.0">
+<link rel="stylesheet" href="styles.css?v=0.5.0">
 </head>
 <body>
   <div id="topLoadingBar"></div>
@@ -43,6 +43,7 @@
       <a href="#skills" class="nav-item" data-page="skills"><span class="nav-icon">⚡</span><span class="nav-label">Skills</span><span class="nav-badge" id="skillCount">0</span></a>
       <a href="#memory" class="nav-item" data-page="memory"><span class="nav-icon">🧠</span><span class="nav-label">Memory</span></a>
       <a href="#profiles" class="nav-item" data-page="profiles"><span class="nav-icon">👤</span><span class="nav-label">Profiles</span></a>
+      <a href="#agent-playground" class="nav-item" data-page="agent-playground"><span class="nav-icon">🧬</span><span class="nav-label">Agent Playground</span><span class="nav-badge">NEW</span></a>
       <a href="#scheduler" class="nav-item" data-page="scheduler"><span class="nav-icon">⏱</span><span class="nav-label">Scheduler</span></a>
       <a href="#audit" class="nav-item" data-page="audit"><span class="nav-icon">📋</span><span class="nav-label">Audit</span></a>
       <div class="sidebar-section"><div class="sidebar-section-label">Workflow</div></div>
@@ -100,13 +101,14 @@
     <a href="#dashboard" class="bottom-nav-item" data-page="dashboard"><span class="bottom-nav-icon">◉</span><span class="bottom-nav-label">Home</span></a>
     <a href="#skills" class="bottom-nav-item" data-page="skills"><span class="bottom-nav-icon">⚡</span><span class="bottom-nav-label">Skills</span></a>
     <a href="#profiles" class="bottom-nav-item" data-page="profiles"><span class="bottom-nav-icon">👤</span><span class="bottom-nav-label">Profiles</span></a>
+    <a href="#agent-playground" class="bottom-nav-item" data-page="agent-playground"><span class="bottom-nav-icon">🧬</span><span class="bottom-nav-label">Create</span></a>
     <a href="#kanban" class="bottom-nav-item" data-page="kanban"><span class="bottom-nav-icon">📌</span><span class="bottom-nav-label">Board</span></a>
     <a href="#errors" class="bottom-nav-item" data-page="errors"><span class="bottom-nav-icon">⚠</span><span class="bottom-nav-label">Errors</span></a>
   </nav>
 
-  <script src="utils.js?v=0.4.2"></script>
-  <script src="api.js?v=0.4.2"></script>
-  <script src="app.js?v=0.4.2"></script>
+  <script src="utils.js?v=0.5.0"></script>
+  <script src="api.js?v=0.5.0"></script>
+  <script src="app.js?v=0.5.0"></script>
   <script>
     // Purge any stale service workers/caches from earlier sessions (v0.4.1)
     (function purgeStaleSW() {
