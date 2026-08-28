@@ -45,6 +45,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Agentic OS", version="0.4.0", lifespan=lifespan)
 
+# Optional protected control plane for real Hermes profiles.
+from profile_hub import router as profile_hub_router
+app.include_router(profile_hub_router)
+
 # Load OpenRouter API key from Hermes .env
 HERMES_ENV = Path.home() / ".hermes" / ".env"
 if HERMES_ENV.exists():
@@ -879,7 +883,7 @@ def execute_agent(agent: str, message: str) -> str:
 
         elif agent == "hermes":
             try:
-                code, out, err = run_cli(["hermes", "chat", "-q", message], timeout=180)
+                code, out, err = run_cli(["hermes", "-p", os.getenv("AGENTIC_OS_HERMES_PROFILE", "agentic-os"), "chat", "-q", message], timeout=180)
             except subprocess.TimeoutExpired:
                 return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
             if code == 0:

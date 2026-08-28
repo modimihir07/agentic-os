@@ -3,7 +3,12 @@ function showToast(message, type = 'info') {
   const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  toast.innerHTML = `<span class="toast-icon">${icons[type] || icons.info}</span><span>${message}</span>`;
+  const icon = document.createElement('span');
+  icon.className = 'toast-icon';
+  icon.textContent = icons[type] || icons.info;
+  const text = document.createElement('span');
+  text.textContent = String(message);
+  toast.append(icon, text);
   container.appendChild(toast);
   setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateX(20px)'; setTimeout(() => toast.remove(), 300); }, 3500);
 }
@@ -113,6 +118,7 @@ const PAGE_TITLES = {
   dashboard: { title: 'Dashboard', breadcrumb: 'Overview' },
   skills: { title: 'Skills Hub', breadcrumb: 'Browse & execute skills' },
   memory: { title: 'Memory', breadcrumb: 'Shared brain context' },
+  profiles: { title: 'Hermes Profiles', breadcrumb: 'Identity control plane' },
   scheduler: { title: 'Scheduler', breadcrumb: 'Automated workflows' },
   audit: { title: 'Audit Log', breadcrumb: 'System activity trail' },
   cost: { title: 'Cost Analytics', breadcrumb: 'Usage & spending' },

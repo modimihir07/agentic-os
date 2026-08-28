@@ -1436,3 +1436,29 @@ pre {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* Hermes Profiles */
+.profiles-gate { width: min(480px, 100%); margin: 8vh auto; text-align: center; }
+.profiles-form { display: grid; gap: 10px; margin-top: 18px; text-align: left; }
+.profiles-header, .profiles-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; margin-bottom: 14px; }
+.profiles-toolbar, .profiles-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.profiles-status { min-height: 22px; margin: 6px 0 12px; color: var(--text-secondary); font-size: 12px; }
+.profiles-error { color: var(--red); }
+.profiles-layout { display: grid; grid-template-columns: minmax(250px, .75fr) minmax(0, 1.25fr); gap: 18px; }
+.profiles-list { display: grid; gap: 8px; max-height: 68vh; overflow: auto; }
+.profiles-list-item { display: grid; gap: 5px; width: 100%; padding: 12px; text-align: left; color: var(--text-primary); background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; }
+.profiles-list-item span { color: var(--text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.profiles-list-item small { color: var(--text-muted); }
+.profiles-list-item:hover, .profiles-list-item.active { border-color: var(--accent); background: var(--accent-glow); }
+.profiles-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 18px 0; }
+.profiles-meta > div { padding: 10px; background: var(--bg-input); border-radius: var(--radius-sm); }
+.profiles-meta dt { color: var(--text-muted); font-size: 10px; text-transform: uppercase; }
+.profiles-meta dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.profiles-actions { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
+@media (max-width: 768px) {
+  .bottom-nav-item { flex: 1; min-width: 0; padding-inline: 2px; }
+  .profiles-layout { grid-template-columns: 1fr; }
+  .profiles-header, .profiles-detail-head { flex-direction: column; }
+  .profiles-meta { grid-template-columns: 1fr; }
+  .profiles-toolbar .btn, .profiles-actions .btn { flex: 1 1 42%; }
+}
