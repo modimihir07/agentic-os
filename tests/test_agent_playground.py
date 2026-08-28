@@ -6,6 +6,7 @@ import sys
 import urllib.error
 import urllib.request
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -49,6 +50,7 @@ class AgentPlaygroundTests(unittest.TestCase):
             " desc=args[args.index('--description')+1] if '--description' in args else ''\n"
             " (target/'profile.yaml').write_text('name: '+name+'\\ndescription: '+json.dumps(desc)+'\\n')\n"
             " (target/'.env').write_text('OPENAI_API_KEY=test-placeholder-key\\n')\n"
+            " if name.startswith('create-race'): sys.exit(8)\n"
             "elif action=='show':\n"
             " name=args[2]; target=home(name)\n"
             " if not target.is_dir(): sys.exit(2)\n"
@@ -139,6 +141,41 @@ class AgentPlaygroundTests(unittest.TestCase):
         self.assertEqual(self.request("POST", "/api/playground/preview", draft)[0], 400)
         draft["equipped_skills"] = ["research/not-real"]
         self.assertEqual(self.request("POST", "/api/playground/preview", draft)[0], 400)
+
+    def test_preview_rejects_unhashable_skill_items_with_400(self):
+        draft = self.valid_draft()
+        draft["equipped_skills"] = [{}]
+        status, _ = self.request("POST", "/api/playground/preview", draft)
+        self.assertEqual(status, 400)
+
+    def test_failed_create_never_deletes_a_concurrent_profile(self):
+        name = "create-race-agent"
+        target = self.hermes_home / "profiles" / name
+        shutil.rmtree(target, ignore_errors=True)
+        self.addCleanup(shutil.rmtree, target, True)
+        status, response = self.request("POST", "/api/playground/spawn", self.valid_draft(name))
+        self.assertEqual(status, 409)
+        self.assertTrue((target / "profile.yaml").is_file())
+        self.assertIn("not modified", response["detail"].lower())
+
+    def test_success_audit_failure_rolls_back_created_profile(self):
+        import playground
+
+        name = "audit-failure-agent"
+        target = self.hermes_home / "profiles" / name
+        shutil.rmtree(target, ignore_errors=True)
+        original_audit = playground._audit
+
+        def audit_with_failure(action, profile, result):
+            if action == "playground_spawn" and result == "success":
+                raise OSError("simulated audit failure")
+            return original_audit(action, profile, result)
+
+        with mock.patch.object(playground, "_audit", side_effect=audit_with_failure):
+            status, response = self.request("POST", "/api/playground/spawn", self.valid_draft(name))
+        self.assertEqual(status, 502)
+        self.assertFalse(target.exists())
+        self.assertIn("rolled back", response["detail"].lower())
 
     def test_spawn_creates_isolated_profile_and_room(self):
         name = "spawned-luma"
@@ -243,6 +280,9 @@ class AgentPlaygroundTests(unittest.TestCase):
             self.assertIn(marker, script)
         self.assertIn("api.previewPlaygroundAgent", script)
         self.assertIn("api.spawnPlaygroundAgent", script)
+        self.assertIn("/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/", script)
+        backend = (Path(__file__).parents[1] / "playground.py").read_text()
+        self.assertIn("fcntl.flock", backend)
 
 
 if __name__ == "__main__":

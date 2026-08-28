@@ -1,12 +1,14 @@
 """Safe, game-inspired agent creation playground."""
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
 import shutil
 import stat
 import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -147,10 +149,14 @@ def _validate_draft(body: Any) -> dict[str, Any]:
         raise HTTPException(400, "Invalid boundaries")
     boundaries = [_clean_text(item, "boundary", 3, 300) for item in boundaries_raw]
     skills_raw = body.get("equipped_skills")
-    if not isinstance(skills_raw, list) or len(skills_raw) > 3 or len(set(skills_raw)) != len(skills_raw):
+    if not isinstance(skills_raw, list) or len(skills_raw) > 3:
+        raise HTTPException(400, "Select up to three unique skills")
+    if any(not isinstance(item, str) for item in skills_raw):
+        raise HTTPException(400, "Unknown or unavailable skill")
+    if len(set(skills_raw)) != len(skills_raw):
         raise HTTPException(400, "Select up to three unique skills")
     available = _catalog_map()
-    if any(not isinstance(item, str) or item not in available for item in skills_raw):
+    if any(item not in available for item in skills_raw):
         raise HTTPException(400, "Unknown or unavailable skill")
     return {
         "name": name, "display_name": display_name, "archetype": archetype,
@@ -375,6 +381,20 @@ def _copy_skill(skill_id: str, target_home: Path) -> None:
             shutil.rmtree(stage)
 
 
+@contextmanager
+def _profile_process_lock():
+    """Serialize Playground profile mutations across server workers."""
+    lock_path = _root() / ".agent-playground.lock"
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+
+
 def _rollback_profile(name: str, target: Path) -> bool:
     try:
         if target.exists() or target.is_symlink():
@@ -418,14 +438,16 @@ def get_agent(name: str) -> dict[str, Any]:
 def spawn_agent(body: Any = Body(...)) -> dict[str, Any]:
     draft = _validate_draft(body)
     name = draft["name"]
-    with LOCK:
+    with LOCK, _profile_process_lock():
         target = _home(name, must_exist=False)
         if target.exists() or target.is_symlink():
             raise HTTPException(409, "Profile already exists")
         _audit("playground_spawn", name, "started")
+        created_by_us = False
         try:
             preview = _preview(draft)
             _run(["profile", "create", name, "--no-skills", "--description", preview["routing_description"]], timeout=120)
+            created_by_us = True
             target = _home(name)
             _purge_generated_credentials(target)
             # New agents never inherit or auto-start messaging. Fail closed if Hermes cannot stop it.
@@ -444,7 +466,19 @@ def spawn_agent(body: Any = Body(...)) -> dict[str, Any]:
             room = _room(name)
             if room["agent"]["health"] != "ok" or room["agent"]["gateway"] != "stopped" or room["metadata"] is None:
                 raise OSError("Spawn verification failed")
+            # Auditing is part of the transaction: an unaudited profile is not committed.
+            _audit("playground_spawn", name, "success")
         except Exception as exc:
+            if not created_by_us:
+                try:
+                    _audit("playground_spawn", name, "failed")
+                except Exception:
+                    pass
+                if target.exists() or target.is_symlink():
+                    raise HTTPException(409, "A concurrent profile appeared and was not modified") from exc
+                if isinstance(exc, HTTPException):
+                    raise
+                raise HTTPException(502, "Agent spawn failed before profile ownership was established") from exc
             rolled_back = _rollback_profile(name, target)
             try:
                 _audit("playground_spawn", name, "failed" if rolled_back else "rollback_failed")
@@ -455,7 +489,6 @@ def spawn_agent(body: Any = Body(...)) -> dict[str, Any]:
             if isinstance(exc, HTTPException):
                 raise
             raise HTTPException(502, "Agent spawn failed and was rolled back") from exc
-        _audit("playground_spawn", name, "success")
         return room
 
 
