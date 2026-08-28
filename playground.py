@@ -1,19 +1,20 @@
 """Safe, game-inspired agent creation playground."""
 from __future__ import annotations
 
-import fcntl
 import json
 import os
 import re
 import shutil
 import stat
 import tempfile
-from contextlib import contextmanager
+
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+
+from profile_lock import profile_process_lock as _profile_process_lock
 
 from profile_hub import (
     LOCK,
@@ -381,20 +382,6 @@ def _copy_skill(skill_id: str, target_home: Path) -> None:
             shutil.rmtree(stage)
 
 
-@contextmanager
-def _profile_process_lock():
-    """Serialize Playground profile mutations across server workers."""
-    lock_path = _root() / ".agent-playground.lock"
-    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
-    try:
-        os.fchmod(fd, 0o600)
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        yield
-    finally:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-        os.close(fd)
-
-
 def _rollback_profile(name: str, target: Path) -> bool:
     try:
         if target.exists() or target.is_symlink():
@@ -497,7 +484,7 @@ def update_appearance(name: str, body: Any = Body(...)) -> dict[str, Any]:
     if name in PROTECTED:
         raise HTTPException(409, "Protected profile appearance cannot be changed here")
     appearance = _validate_choice_map(body, APPEARANCE, "appearance")
-    with LOCK:
+    with LOCK, _profile_process_lock():
         metadata = _read_metadata(name)
         if metadata is None:
             raise HTTPException(404, "Playground metadata not found")

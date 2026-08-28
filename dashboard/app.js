@@ -1,6 +1,6 @@
 const pageCache = {};
 
-const APP_VERSION = '0.5.1';
+const APP_VERSION = '0.6.0';
 
 const PAGE_BASE = '/dashboard/pages/';
 
@@ -30,6 +30,13 @@ function loadScript(src) {
 async function navigate(page) {
   const hash = page || window.location.hash.slice(1) || 'dashboard';
   if (!hash) { window.location.hash = 'dashboard'; return; }
+  if (hash !== 'profiles' && typeof window.agentStudioConfirmNavigation === 'function') {
+    if (!window.agentStudioConfirmNavigation(hash)) {
+      window.history.replaceState(null, '', '#profiles');
+      return;
+    }
+    window.agentStudioConfirmNavigation = null;
+  }
 
   // Show loading bar
   const bar = document.getElementById('topLoadingBar');

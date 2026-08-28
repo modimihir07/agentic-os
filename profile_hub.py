@@ -14,6 +14,9 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException
 
+from profile_lock import profile_process_lock as _profile_process_lock
+from profile_backup import profile_manifest, verify_profile_backup
+
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,62}[a-z0-9]")
 LOCK = threading.RLock()
 PROTECTED = {"default", os.getenv("AGENTIC_OS_HERMES_PROFILE", "agentic-os")}
@@ -206,7 +209,7 @@ def create_profile(body: Any = Body(...), x_agentic_os_admin: str | None = Heade
     soul = data.get("soul")
     if soul is not None and (not isinstance(soul, str) or len(soul) > 100_000):
         raise HTTPException(400, "Invalid SOUL content")
-    with LOCK:
+    with LOCK, _profile_process_lock():
         _home(name, must_exist=False)
         if (_root() / "profiles" / name).exists():
             raise HTTPException(409, "Profile already exists")
@@ -227,10 +230,12 @@ def create_profile(body: Any = Body(...), x_agentic_os_admin: str | None = Heade
 @router.patch("/profiles/{name}")
 def update_profile(name: str, body: Any = Body(...), x_agentic_os_admin: str | None = Header(default=None)) -> dict[str, Any]:
     _require_admin(x_agentic_os_admin)
+    if name in PROTECTED:
+        raise HTTPException(409, "Protected profile is read-only")
     data = _body(body, {"description", "soul", "name", "confirm"})
     home = _home(name)
     new_name = data.get("name")
-    with LOCK:
+    with LOCK, _profile_process_lock():
         _audit("update", name, "started")
         if new_name is not None:
             new_name = str(new_name)
@@ -255,16 +260,30 @@ def update_profile(name: str, body: Any = Body(...), x_agentic_os_admin: str | N
     return _inventory(name)
 
 
+def _validated_backup(name: str, home: Path) -> tuple[str, dict[str, str]]:
+    backup_dir = Path(os.getenv("AGENTIC_OS_HERMES_BACKUP_DIR", "/var/lib/agentic-os/backups"))
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    if backup_dir.is_symlink() or not backup_dir.is_dir():
+        raise OSError("Unsafe backup directory")
+    filename = f"{name}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')}.tar.gz"
+    destination = backup_dir / filename
+    if destination.exists() or destination.is_symlink():
+        raise OSError("Backup destination already exists")
+    manifest = profile_manifest(home, managed_only=False)
+    _run(["profile", "export", name, "--output", str(destination)], timeout=120)
+    verify_profile_backup(destination, name, manifest)
+    if profile_manifest(home, managed_only=False) != manifest:
+        raise HTTPException(409, "Profile changed during backup; retry before continuing")
+    os.chmod(destination, 0o600)
+    return filename, manifest
+
+
 @router.post("/profiles/{name}/backup")
 def backup_profile(name: str, x_agentic_os_admin: str | None = Header(default=None)) -> dict[str, str]:
     _require_admin(x_agentic_os_admin)
-    _home(name)
-    backup_dir = Path(os.getenv("AGENTIC_OS_HERMES_BACKUP_DIR", "/var/lib/agentic-os/backups"))
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{name}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}.tar.gz"
-    with LOCK:
-        _run(["profile", "export", name, "--output", str(backup_dir / filename)], timeout=120)
-        os.chmod(backup_dir / filename, 0o600)
+    with LOCK, _profile_process_lock():
+        home = _home(name)
+        filename, _ = _validated_backup(name, home)
         _audit("backup", name, "success")
     return {"status": "created", "filename": filename}
 
@@ -279,8 +298,11 @@ def delete_profile(name: str, confirm: str | None = None, x_agentic_os_admin: st
         raise HTTPException(400, "Exact profile name confirmation is required")
     if str(profile.get("gateway", "")).lower() != "stopped":
         raise HTTPException(409, "Stop the profile gateway before deleting")
-    with LOCK:
-        backup_profile(name, x_agentic_os_admin)
+    with LOCK, _profile_process_lock():
+        home = _home(name)
+        _, manifest = _validated_backup(name, home)
+        if profile_manifest(home, managed_only=False) != manifest:
+            raise HTTPException(409, "Profile changed after backup; deletion was cancelled")
         _audit("delete", name, "started")
         _run(["profile", "delete", name, "--yes"], timeout=120)
         _audit("delete", name, "success")

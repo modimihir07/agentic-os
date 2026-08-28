@@ -281,7 +281,7 @@ class AgentPlaygroundTests(unittest.TestCase):
         self.assertIn("api.previewPlaygroundAgent", script)
         self.assertIn("api.spawnPlaygroundAgent", script)
         self.assertIn("/^[a-z0-9][a-z0-9-]{1,62}[a-z0-9]$/", script)
-        backend = (Path(__file__).parents[1] / "playground.py").read_text()
+        backend = (Path(__file__).parents[1] / "profile_lock.py").read_text()
         self.assertIn("fcntl.flock", backend)
 
 

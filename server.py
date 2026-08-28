@@ -43,13 +43,15 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
 
-app = FastAPI(title="Agentic OS", version="0.4.0", lifespan=lifespan)
+app = FastAPI(title="Agentic OS", version="0.6.0", lifespan=lifespan)
 
 # Protected control planes for real Hermes profiles and agent creation.
 from profile_hub import router as profile_hub_router
 from playground import router as playground_router
+from agent_studio import router as agent_studio_router
 app.include_router(profile_hub_router)
 app.include_router(playground_router)
+app.include_router(agent_studio_router)
 
 # Load OpenRouter API key from Hermes .env
 HERMES_ENV = Path.home() / ".hermes" / ".env"

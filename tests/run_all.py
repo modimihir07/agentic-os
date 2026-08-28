@@ -19,13 +19,15 @@ import test_kanban_journal  # noqa: E402
 import test_memory_scheduler  # noqa: E402
 import test_v040  # noqa: E402
 import test_agent_playground  # noqa: E402
+import test_agent_studio  # noqa: E402
 
 
 def main() -> int:
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
     for module in (test_core, test_security, test_kanban_journal,
-                   test_memory_scheduler, test_v040, test_agent_playground):
+                   test_memory_scheduler, test_v040, test_agent_playground,
+                   test_agent_studio):
         suite.addTests(loader.loadTestsFromModule(module))
     runner = unittest.TextTestRunner(verbosity=2)
     result = runner.run(suite)
