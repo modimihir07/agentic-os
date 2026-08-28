@@ -1,6 +1,6 @@
 const pageCache = {};
 
-const APP_VERSION = '0.6.0';
+const APP_VERSION = '0.7.4';
 
 const PAGE_BASE = '/dashboard/pages/';
 

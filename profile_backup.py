@@ -74,6 +74,15 @@ def profile_manifest(home: Path, *, managed_only: bool) -> dict[str, str]:
                 if path.is_symlink():
                     raise OSError("Profile manifest contains a symlink")
                 candidates.append(path)
+        visual = home / ".agent-playground"
+        if visual.exists() or visual.is_symlink():
+            if visual.is_symlink() or not visual.is_dir():
+                raise OSError("Unsafe Agent Studio metadata tree")
+            candidates.append(visual)
+            for path in visual.rglob("*"):
+                if path.is_symlink():
+                    raise OSError("Agent Studio metadata contains a symlink")
+                candidates.append(path)
     else:
         for path in home.rglob("*"):
             if path.is_symlink():

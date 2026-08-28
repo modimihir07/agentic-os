@@ -20,11 +20,14 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from playground import (
     _SECRET_ASSIGNMENT,
     _SECRET_LITERAL,
-    _atomic_write,
     _catalog_map,
     _copy_skill,
+    _metadata_path,
     _read_metadata,
+    _skill_catalog,
 )
+from capability_catalog import enrich_catalog, load_curated_catalog
+from power_map import PowerMapError, composition_templates, empty_power_map, validate_power_map
 from profile_lock import profile_process_lock as _profile_process_lock
 from profile_backup import profile_manifest, read_regular_file, read_regular_file_snapshot, verify_profile_backup
 from profile_hub import LOCK, PROTECTED, _audit, _home, _inventory, _require_admin, _root, _run, _yaml_scalar
@@ -33,6 +36,8 @@ router = APIRouter(prefix="/api/hermes/profiles", dependencies=[Depends(_require
 _SKILL_PART_RE = re.compile(r"[A-Za-z0-9._-]+")
 _MAX_SOUL_BYTES = 100_000
 _MAX_SKILL_MD_BYTES = 1_000_000
+_MAX_METADATA_BYTES = 200_000
+_CURATED_CAPABILITIES = Path(__file__).parent / "dashboard" / "data" / "skill-capabilities.json"
 
 
 class _OwnershipConflict(OSError):
@@ -67,12 +72,16 @@ def _tree_owner(path: Path) -> tuple[int, int, str]:
     return after.st_dev, after.st_ino, signature
 
 
-def _file_owner(path: Path) -> tuple[int, int, str]:
-    snapshot = read_regular_file_snapshot(path, path.parent, _MAX_SOUL_BYTES)
+def _file_owner_bounded(path: Path, maximum: int) -> tuple[int, int, str]:
+    snapshot = read_regular_file_snapshot(path, path.parent, maximum)
     if snapshot is None:
-        raise OSError("Unsafe owned SOUL file")
+        raise OSError("Unsafe owned file")
     info, payload = snapshot
     return info.st_dev, info.st_ino, hashlib.sha256(payload).hexdigest()
+
+
+def _file_owner(path: Path) -> tuple[int, int, str]:
+    return _file_owner_bounded(path, _MAX_SOUL_BYTES)
 
 
 def _read_soul_state(home: Path) -> tuple[str, bool, int, tuple[int, int, str] | None]:
@@ -166,6 +175,37 @@ def _public_skill(item: dict[str, Any], *, studio_mutable: bool = True) -> dict[
     return {**{key: value for key, value in item.items() if key != "path"}, "studio_mutable": studio_mutable}
 
 
+def _capability_payload(name: str) -> dict[str, Any]:
+    home = _home(name)
+    installed = _installed_skills(home)
+    technical: dict[str, dict[str, Any]] = {
+        item["id"]: {**item, "status": "available"}
+        for item in _skill_catalog()
+    }
+    for skill_id, item in installed.items():
+        technical[skill_id] = _public_skill(
+            {**item, "status": "installed"},
+            studio_mutable=not any(
+                other_id != skill_id and _skill_ids_overlap(skill_id, other_id)
+                for other_id in installed
+            ),
+        )
+    curated = load_curated_catalog(_CURATED_CAPABILITIES)
+    capabilities = enrich_catalog(list(technical.values()), curated)
+    capabilities.sort(key=lambda item: (item["intent_category"], item["name"].casefold(), item["id"]))
+    return {
+        "capabilities": capabilities,
+        "templates": composition_templates(),
+        "intent_categories": ["Descubrir", "Pensar", "Crear", "Comunicar", "Organizar", "Proteger"],
+        "executable": False,
+        "execution_reason": "Catálogo de superpoderes: una skill procedural no es una función automática.",
+    }
+
+
+def _capability_map(name: str) -> dict[str, dict[str, Any]]:
+    return {item["id"]: item for item in _capability_payload(name)["capabilities"]}
+
+
 def _skill_ids_overlap(left: str, right: str) -> bool:
     left_parts = Path(left).parts
     right_parts = Path(right).parts
@@ -183,18 +223,21 @@ def _preview_token(name: str, evolution: dict[str, Any]) -> str:
         "soul": evolution["soul"],
         "add_skills": evolution["add_skills"],
         "remove_skills": evolution["remove_skills"],
+        "loadout": evolution["loadout"],
+        "power_map": evolution["power_map"],
     }
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
     return hmac.new(secret.encode("utf-8"), encoded, hashlib.sha256).hexdigest()
 
 
 def _evolution(body: Any, home: Path, *, require_confirm: bool = False, require_preview: bool = False) -> dict[str, Any]:
-    allowed = {"expected_revision", "soul", "add_skills", "remove_skills"}
+    required = {"expected_revision", "soul", "add_skills", "remove_skills"}
+    allowed = required | {"loadout", "power_map"}
     if require_confirm:
         allowed.add("confirm")
     if require_preview:
         allowed.add("preview_token")
-    if not isinstance(body, dict) or set(body) != allowed:
+    if not isinstance(body, dict) or not required.issubset(body) or not set(body).issubset(allowed):
         raise HTTPException(400, "Invalid Studio evolution")
     if require_confirm and body.get("confirm") != _inventory_name(home):
         raise HTTPException(400, "Exact profile confirmation required")
@@ -235,7 +278,35 @@ def _evolution(body: Any, home: Path, *, require_confirm: bool = False, require_
     for candidate in changes["remove_skills"]:
         if any(other != candidate and _skill_ids_overlap(candidate, other) for other in installed):
             raise HTTPException(400, f"Nested skill namespace cannot be removed safely in Studio: {candidate}")
-    result = {"expected_revision": expected, "soul": soul, **changes}
+
+    name = _inventory_name(home)
+    capabilities = _capability_map(name)
+    metadata = _read_metadata(name) or {}
+    default_loadout = metadata.get("loadout", metadata.get("equipped_skills", []))
+    if not isinstance(default_loadout, list):
+        default_loadout = []
+    default_loadout = [item for item in default_loadout if isinstance(item, str) and item in capabilities][:5]
+    loadout = body.get("loadout", default_loadout)
+    power_map = body.get("power_map", metadata.get("power_map", empty_power_map()))
+    if isinstance(loadout, list) and set(loadout) & set(changes["remove_skills"]):
+        raise HTTPException(400, "A removed skill cannot remain in the loadout")
+    try:
+        validated = validate_power_map(power_map, capabilities, loadout)
+    except PowerMapError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    mapped = {node["capability_id"] for node in validated["map"]["nodes"]}
+    effective_skills = (set(installed) - set(changes["remove_skills"])) | set(changes["add_skills"])
+    if not set(validated["loadout"]).issubset(effective_skills):
+        raise HTTPException(400, "Loadout capabilities must be installed or included in add_skills")
+    if not mapped.issubset(set(validated["loadout"])):
+        raise HTTPException(400, "Every Power Map block must also be equipped in the loadout")
+    if mapped & set(changes["remove_skills"]):
+        raise HTTPException(400, "A removed skill cannot remain in the Power Map")
+    result = {
+        "expected_revision": expected, "soul": soul, **changes,
+        "loadout": validated["loadout"], "power_map": validated["map"],
+        "power_validation": validated,
+    }
     if require_preview:
         result["preview_token"] = body["preview_token"]
     return result
@@ -458,6 +529,157 @@ def _restore_soul_transaction(
     # the inode open and mutate it after our final ownership check.
 
 
+def _metadata_state(home: Path) -> tuple[dict[str, Any], bool, int, tuple[int, int, str] | None]:
+    parent = home / ".agent-playground"
+    path = parent / "avatar.json"
+    if parent.exists():
+        if parent.is_symlink() or not parent.is_dir():
+            raise HTTPException(409, "Agent Studio metadata directory is unsafe")
+    else:
+        return {}, False, 0, None
+    try:
+        snapshot = read_regular_file_snapshot(path, parent, _MAX_METADATA_BYTES)
+    except OSError as exc:
+        raise HTTPException(409, "Agent Studio metadata is unsafe or too large") from exc
+    if snapshot is None:
+        return {}, False, 0, None
+    info, payload = snapshot
+    try:
+        value = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(409, "Agent Studio metadata is invalid") from exc
+    if not isinstance(value, dict):
+        raise HTTPException(409, "Agent Studio metadata is invalid")
+    owner = (info.st_dev, info.st_ino, hashlib.sha256(payload).hexdigest())
+    return value, True, stat.S_IMODE(info.st_mode), owner
+
+
+def _evolved_metadata(before: dict[str, Any], evolution: dict[str, Any]) -> dict[str, Any]:
+    result = dict(before)
+    result.update({
+        "schema_version": 2,
+        "loadout": evolution["loadout"],
+        "power_map": evolution["power_map"],
+    })
+    encoded = json.dumps(result, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    if len(encoded) > _MAX_METADATA_BYTES:
+        raise HTTPException(400, "Agent Studio metadata is too large")
+    return result
+
+
+def _metadata_parent(home: Path, *, create: bool) -> tuple[Path, bool]:
+    parent = home / ".agent-playground"
+    created = False
+    if parent.exists() or parent.is_symlink():
+        if parent.is_symlink() or not parent.is_dir():
+            raise OSError("Unsafe Agent Studio metadata directory")
+    elif create:
+        parent.mkdir(mode=0o700)
+        created = True
+    return parent, created
+
+
+def _move_metadata_to_snapshot(home: Path, snapshot_root: Path, snapshot_name: str) -> Path | None:
+    parent, _ = _metadata_parent(home, create=False)
+    if not parent.exists():
+        return None
+    parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    snapshot_fd = os.open(snapshot_root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        try:
+            os.rename("avatar.json", snapshot_name, src_dir_fd=parent_fd, dst_dir_fd=snapshot_fd)
+        except FileNotFoundError:
+            return None
+    finally:
+        os.close(snapshot_fd)
+        os.close(parent_fd)
+    return snapshot_root / snapshot_name
+
+
+def _restore_metadata_snapshot(home: Path, snapshot: Path) -> None:
+    parent, _ = _metadata_parent(home, create=True)
+    parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    snapshot_fd = os.open(snapshot.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        _rename_noreplace(snapshot_fd, snapshot.name, parent_fd, "avatar.json")
+    finally:
+        os.close(snapshot_fd)
+        os.close(parent_fd)
+
+
+def _install_metadata_transaction(
+    home: Path,
+    snapshot_root: Path,
+    value: dict[str, Any],
+    existed_before: bool,
+    mode_before: int,
+    owner_before: tuple[int, int, str] | None,
+) -> tuple[tuple[int, int, str], Path | None, bool]:
+    _, created_parent = _metadata_parent(home, create=True)
+    original = _move_metadata_to_snapshot(home, snapshot_root, "metadata-before")
+    if existed_before:
+        if original is None or owner_before is None or _file_owner_bounded(original, _MAX_METADATA_BYTES) != owner_before:
+            if original is not None:
+                try:
+                    _restore_metadata_snapshot(home, original)
+                except OSError as exc:
+                    raise _OwnershipConflict("Concurrent Agent Studio metadata could not be restored") from exc
+            raise OSError("Agent Studio metadata changed immediately before mutation")
+    elif original is not None:
+        try:
+            _restore_metadata_snapshot(home, original)
+        except OSError as exc:
+            raise _OwnershipConflict("Concurrent Agent Studio metadata could not be restored") from exc
+        raise OSError("Agent Studio metadata appeared immediately before mutation")
+    proposed = snapshot_root / "metadata-proposed"
+    content = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    try:
+        _write_private_snapshot(proposed, content, mode_before or 0o600)
+        owner = _file_owner_bounded(proposed, _MAX_METADATA_BYTES)
+        _restore_metadata_snapshot(home, proposed)
+    except Exception as exc:
+        proposed.unlink(missing_ok=True)
+        restored_original = False
+        if original is not None and not _metadata_path(_inventory_name(home)).exists():
+            try:
+                _restore_metadata_snapshot(home, original)
+                restored_original = True
+            except Exception as restore_exc:
+                raise _OwnershipConflict("Original Agent Studio metadata could not be restored") from restore_exc
+        if restored_original:
+            raise
+        if _metadata_path(_inventory_name(home)).exists() or original is not None and original.exists():
+            raise _OwnershipConflict("Concurrent Agent Studio metadata publication was preserved") from exc
+        raise
+    return owner, original, created_parent
+
+
+def _restore_metadata_transaction(
+    home: Path,
+    snapshot_root: Path,
+    original_existed: bool,
+    original_snapshot: Path | None,
+    owner: tuple[int, int, str],
+    created_parent: bool,
+) -> None:
+    quarantine = _move_metadata_to_snapshot(home, snapshot_root, "metadata-current")
+    if quarantine is not None and _file_owner_bounded(quarantine, _MAX_METADATA_BYTES) != owner:
+        try:
+            _restore_metadata_snapshot(home, quarantine)
+        finally:
+            raise OSError("Concurrent Agent Studio metadata replacement was preserved")
+    if original_existed:
+        if original_snapshot is None or not original_snapshot.exists():
+            raise OSError("Original Agent Studio metadata snapshot is unavailable")
+        _restore_metadata_snapshot(home, original_snapshot)
+    elif created_parent:
+        parent = home / ".agent-playground"
+        try:
+            parent.rmdir()
+        except OSError:
+            pass
+
+
 def _restore_transaction(
     home: Path,
     soul_existed_before: bool,
@@ -466,6 +688,10 @@ def _restore_transaction(
     added: dict[str, tuple[int, int, str]],
     removed_snapshots: dict[str, Path],
     snapshot_root: Path,
+    metadata_existed_before: bool,
+    metadata_owner: tuple[int, int, str] | None,
+    metadata_original_snapshot: Path | None,
+    metadata_parent_created: bool,
 ) -> None:
     conflicts: list[str] = []
     for index, (skill_id, owner) in enumerate(reversed(list(added.items()))):
@@ -499,6 +725,14 @@ def _restore_transaction(
             )
         except OSError:
             conflicts.append("soul")
+    if metadata_owner is not None:
+        try:
+            _restore_metadata_transaction(
+                home, snapshot_root, metadata_existed_before,
+                metadata_original_snapshot, metadata_owner, metadata_parent_created,
+            )
+        except OSError:
+            conflicts.append("metadata")
     if conflicts:
         raise OSError("Concurrent changes prevented complete rollback")
 
@@ -507,6 +741,8 @@ def _apply(name: str, evolution: dict[str, Any]) -> dict[str, Any]:
     home = _home(name)
     soul_state_before = _read_soul_state(home)
     soul_before, soul_existed_before, _, soul_owner_before = soul_state_before
+    metadata_before, metadata_existed_before, metadata_mode_before, metadata_owner_before = _metadata_state(home)
+    metadata_after = _evolved_metadata(metadata_before, evolution)
     installed_before = _installed_skills(home)
     skills_before = set(installed_before)
     untouched_owners = {
@@ -524,6 +760,9 @@ def _apply(name: str, evolution: dict[str, Any]) -> dict[str, Any]:
     removed_snapshots: dict[str, Path] = {}
     soul_owner: tuple[int, int, str] | None = None
     soul_original_snapshot: Path | None = None
+    metadata_owner: tuple[int, int, str] | None = None
+    metadata_original_snapshot: Path | None = None
+    metadata_parent_created = False
     mutation_started = False
     ownership_conflict = False
     preserve_snapshot = False
@@ -572,6 +811,17 @@ def _apply(name: str, evolution: dict[str, Any]) -> dict[str, Any]:
                 if isinstance(exc, _OwnershipConflict):
                     ownership_conflict = True
                 raise
+        if metadata_after != metadata_before:
+            mutation_started = True
+            try:
+                metadata_owner, metadata_original_snapshot, metadata_parent_created = _install_metadata_transaction(
+                    home, snapshot_root, metadata_after, metadata_existed_before,
+                    metadata_mode_before, metadata_owner_before,
+                )
+            except Exception as exc:
+                if isinstance(exc, _OwnershipConflict):
+                    ownership_conflict = True
+                raise
         installed_after = _installed_skills(home)
         for skill_id, owner in {**untouched_owners, **added}.items():
             item = installed_after.get(skill_id)
@@ -579,7 +829,11 @@ def _apply(name: str, evolution: dict[str, Any]) -> dict[str, Any]:
                 raise OSError("Concurrent skill modification detected")
         result = _studio_payload(name)
         expected_skills = (skills_before - set(evolution["remove_skills"])) | set(evolution["add_skills"])
-        if result["soul"] != evolution["soul"] or {item["id"] for item in result["skills"]} != expected_skills:
+        if (
+            result["soul"] != evolution["soul"]
+            or {item["id"] for item in result["skills"]} != expected_skills
+            or result["metadata"] != metadata_after
+        ):
             raise OSError("Studio verification failed")
         _audit("studio_apply", name, "success")
         return {**result, "backup": "created"}
@@ -594,6 +848,8 @@ def _apply(name: str, evolution: dict[str, Any]) -> dict[str, Any]:
                 _restore_transaction(
                     home, soul_existed_before,
                     soul_owner, soul_original_snapshot, added, removed_snapshots, snapshot_root,
+                    metadata_existed_before, metadata_owner, metadata_original_snapshot,
+                    metadata_parent_created,
                 )
             except Exception as restore_exc:
                 rollback_error = restore_exc
@@ -644,6 +900,24 @@ def get_studio(name: str) -> dict[str, Any]:
     return _studio_payload(name)
 
 
+@router.get("/{name}/studio/capabilities")
+def get_studio_capabilities(name: str) -> dict[str, Any]:
+    _home(name)
+    return _capability_payload(name)
+
+
+@router.post("/{name}/studio/evolution/validate")
+def validate_studio_evolution(name: str, body: Any = Body(...)) -> dict[str, Any]:
+    _home(name)
+    if not isinstance(body, dict) or set(body) != {"loadout", "power_map"}:
+        raise HTTPException(400, "Invalid evolution blueprint")
+    try:
+        result = validate_power_map(body["power_map"], _capability_map(name), body["loadout"])
+    except PowerMapError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {**result, "writes_state": False}
+
+
 @router.post("/{name}/studio/preview")
 def preview_studio(name: str, body: Any = Body(...)) -> dict[str, Any]:
     home = _home(name)
@@ -657,6 +931,12 @@ def preview_studio(name: str, body: Any = Body(...)) -> dict[str, Any]:
         "soul_diff": _soul_diff(before["soul"], evolution["soul"]),
         "add_skills": evolution["add_skills"],
         "remove_skills": evolution["remove_skills"],
+        "loadout_before": (before.get("metadata") or {}).get("loadout", []),
+        "loadout": evolution["loadout"],
+        "power_map_before": (before.get("metadata") or {}).get("power_map", empty_power_map()),
+        "power_map": evolution["power_map"],
+        "readiness_percent": evolution["power_validation"]["readiness_percent"],
+        "warnings": evolution["power_validation"]["warnings"],
         "preview_token": _preview_token(name, evolution),
         "writes_state": False,
     }

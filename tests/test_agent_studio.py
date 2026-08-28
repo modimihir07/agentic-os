@@ -4,6 +4,7 @@ import shutil
 import stat
 import sys
 import tarfile
+import tempfile
 import urllib.error
 import urllib.request
 import unittest
@@ -110,7 +111,9 @@ class AgentStudioTests(unittest.TestCase):
         return payload
 
     def apply(self, body):
-        preview_body = {key: body[key] for key in ("expected_revision", "soul", "add_skills", "remove_skills")}
+        preview_body = {key: body[key] for key in (
+            "expected_revision", "soul", "add_skills", "remove_skills", "loadout", "power_map"
+        ) if key in body}
         status, preview = self.request(
             "POST", "/api/hermes/profiles/studio-agent/studio/preview", preview_body,
         )
@@ -118,6 +121,134 @@ class AgentStudioTests(unittest.TestCase):
             return status, preview
         apply_body = {**body, "preview_token": preview["preview_token"]}
         return self.request("POST", "/api/hermes/profiles/studio-agent/studio/apply", apply_body)
+
+    def test_capability_catalog_explains_superpowers_without_paths(self):
+        status, payload = self.request(
+            "GET", "/api/hermes/profiles/studio-agent/studio/capabilities"
+        )
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["executable"])
+        self.assertGreaterEqual(len(payload["capabilities"]), 2)
+        new_skill = next(item for item in payload["capabilities"] if item["id"] == "research/new-skill")
+        for field in (
+            "superpower", "contribution", "intent_category", "inputs", "outputs",
+            "workflow_steps", "side_effects", "readiness",
+        ):
+            self.assertIn(field, new_skill)
+        self.assertNotIn(str(self.h.tmp), json.dumps(payload))
+        self.assertNotIn("path", json.dumps(payload).lower())
+
+    def test_evolution_validate_is_design_only_and_does_not_write(self):
+        before = self.studio()
+        body = {
+            "loadout": ["research/old-skill"],
+            "power_map": {
+                "version": 1,
+                "nodes": [{
+                    "id": "research", "capability_id": "research/old-skill",
+                    "x": 180, "y": 160,
+                }],
+                "edges": [],
+            },
+        }
+        status, payload = self.request(
+            "POST", "/api/hermes/profiles/studio-agent/studio/evolution/validate", body,
+        )
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["executable"])
+        self.assertFalse(payload["writes_state"])
+        self.assertEqual(self.studio()["revision"], before["revision"])
+
+    def test_apply_persists_reviewed_loadout_and_power_map(self):
+        current = self.studio()
+        power_map = {
+            "version": 1,
+            "nodes": [{
+                "id": "builder", "capability_id": "research/new-skill",
+                "x": 220, "y": 140,
+            }],
+            "edges": [],
+        }
+        status, result = self.apply({
+            "expected_revision": current["revision"],
+            "confirm": "studio-agent",
+            "soul": current["soul"],
+            "add_skills": ["research/new-skill"],
+            "remove_skills": [],
+            "loadout": ["research/new-skill"],
+            "power_map": power_map,
+        })
+        self.assertEqual(status, 200)
+        self.assertEqual(result["metadata"]["schema_version"], 2)
+        self.assertEqual(result["metadata"]["loadout"], ["research/new-skill"])
+        self.assertEqual(result["metadata"]["power_map"], power_map)
+        stored = json.loads((self.target / ".agent-playground" / "avatar.json").read_text())
+        self.assertEqual(stored["power_map"], power_map)
+
+    def test_apply_rejects_blueprint_changed_after_preview(self):
+        current = self.studio()
+        original = {
+            "expected_revision": current["revision"], "soul": current["soul"],
+            "add_skills": [], "remove_skills": [],
+            "loadout": ["research/old-skill"],
+            "power_map": {"version": 1, "nodes": [], "edges": []},
+        }
+        status, preview = self.request(
+            "POST", "/api/hermes/profiles/studio-agent/studio/preview", original,
+        )
+        self.assertEqual(status, 200)
+        changed = {
+            **original, "confirm": "studio-agent", "preview_token": preview["preview_token"],
+            "loadout": [],
+        }
+        status, payload = self.request(
+            "POST", "/api/hermes/profiles/studio-agent/studio/apply", changed,
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("preview", payload["detail"].lower())
+
+    def test_preview_rejects_equipped_skill_that_will_not_be_installed(self):
+        current = self.studio()
+        body = {
+            "expected_revision": current["revision"], "soul": current["soul"],
+            "add_skills": [], "remove_skills": [],
+            "loadout": ["research/new-skill"],
+            "power_map": {
+                "version": 1,
+                "nodes": [{"id": "n1", "capability_id": "research/new-skill", "x": 1, "y": 2}],
+                "edges": [],
+            },
+        }
+        status, payload = self.request("POST", "/api/hermes/profiles/studio-agent/studio/preview", body)
+        self.assertEqual(status, 400)
+        self.assertIn("installed", payload["detail"])
+
+    def test_metadata_publish_race_preserves_both_original_and_concurrent_versions(self):
+        import agent_studio
+
+        parent = self.target / ".agent-playground"
+        parent.mkdir()
+        avatar = parent / "avatar.json"
+        avatar.write_text('{"original":true}\n')
+        before, existed, mode, owner = agent_studio._metadata_state(self.target)
+        snapshot_root = Path(tempfile.mkdtemp(prefix="studio-metadata-race-"))
+        real_restore = agent_studio._restore_metadata_snapshot
+
+        def publish_with_race(home, snapshot):
+            if snapshot.name == "metadata-proposed":
+                avatar.write_text('{"concurrent":true}\n')
+            return real_restore(home, snapshot)
+
+        try:
+            with mock.patch.object(agent_studio, "_restore_metadata_snapshot", side_effect=publish_with_race):
+                with self.assertRaises(agent_studio._OwnershipConflict):
+                    agent_studio._install_metadata_transaction(
+                        self.target, snapshot_root, {"schema_version": 2}, existed, mode, owner,
+                    )
+            self.assertEqual(json.loads(avatar.read_text()), {"concurrent": True})
+            self.assertEqual(json.loads((snapshot_root / "metadata-before").read_text()), before)
+        finally:
+            shutil.rmtree(snapshot_root, ignore_errors=True)
 
     def test_studio_read_is_admin_only_and_returns_soul_and_skills(self):
         self.assertEqual(self.request("GET", "/api/hermes/profiles/studio-agent/studio", admin=False)[0], 401)
