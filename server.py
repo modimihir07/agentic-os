@@ -58,7 +58,11 @@ if HERMES_ENV.exists():
 # CORS for local dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:8080", "http://localhost:8080"],
+    allow_origins=[
+        "http://127.0.0.1:8080", "http://localhost:8080",
+        # Command Center (command-center/): Vite dev, Tauri webview (Windows / macOS+Linux), PWA preview.
+        "http://localhost:1420", "http://tauri.localhost", "tauri://localhost", "http://localhost:4173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
