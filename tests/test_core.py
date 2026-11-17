@@ -29,7 +29,9 @@ class CoreEndpointTests(unittest.TestCase):
     def test_three_agents_present(self):
         _, data = self.h.api("GET", "/api/status")
         names = {a.get("name") for a in data.get("agents", [])}
-        self.assertEqual(names, {"opencode", "hermes", "agy"})
+        # The core three must always be reported; v5's CLI hub adds claude / gemini / llm.
+        self.assertTrue({"opencode", "hermes", "agy"} <= names, names)
+        self.assertEqual(len(names), len(data.get("agents", [])), "duplicate agent names")
 
     def test_skills_list(self):
         status, data = self.h.api("GET", "/api/skills")

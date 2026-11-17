@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Jarvis Command Center",
+  "version": "0.1.0",
+  "identifier": "os.agentic.commandcenter",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Tony · Command Center",
+        "width": 1600,
+        "height": 960,
+        "minWidth": 900,
+        "minHeight": 600,
+        "backgroundColor": "#0b0d11",
+        "decorations": true,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion --enable-features=CanvasOopRasterization --disable-renderer-backgrounding --disable-backgrounding-occluded-windows"
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self' 'wasm-unsafe-eval' https://s3.tradingview.com",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: http://127.0.0.1:8080 http://localhost:8080",
+        "font-src": "'self' data:",
+        "media-src": "'self' blob: mediastream:",
+        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:8080 http://localhost:8080 https://api.open-meteo.com ws://127.0.0.1:8080 ws://localhost:8080",
+        "frame-src": "https://s.tradingview.com https://www.tradingview-widget.com https://s3.tradingview.com https://www.tradingview.com https://*.tradingview.com http://127.0.0.1:8080 http://localhost:8080"
+      },
+      "freezePrototype": true
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

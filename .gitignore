@@ -20,3 +20,12 @@ data/memory.db
 data/kanban/*.json
 data/uploads/
 scheduler/*.pyc
+
+# Command Center: personal data (finance, scans, notes) and its backups never leave this machine
+data/command-center/
+backups/command-center/
+
+
+# Synaptic fine-tuning logs (personal automation history)
+training_logs/
+

@@ -1,0 +1,222 @@
+@import "tailwindcss";
+@import "@fontsource-variable/plus-jakarta-sans";
+@import "@fontsource-variable/jetbrains-mono";
+
+/*
+ * Design tokens — "Tactile Neo-Glass & Luminescent Hardware" (Stitch export).
+ * Dark-only by design: the UI floats over cinematic night wallpapers.
+ * Amber = energy / action / state. Teal = sync / telemetry / healthy.
+ */
+@theme {
+  --color-canvas: #0b0d11;
+  --color-chassis: #14171f;
+  --color-card: #181c26;
+  --color-well: #10131a;
+  --color-raised: #1e2330;
+
+  --color-amber: #ff7a2f;
+  --color-amber-light: #ffb36b;
+  --color-amber-soft: #ffb693;
+  --color-teal: #00e5c3;
+  --color-teal-light: #2dd4bf;
+  --color-teal-soft: #75ffe0;
+  --color-alert: #ff5a5f;
+  --color-violet: #a855f7;
+  --color-volt: #00f0ff;
+
+  /* n8n pipeline / sync status palette */
+  --color-pipe-ok: #14b8a6; /* active · healthy · sync verified */
+  --color-pipe-live: #f43f5e; /* running live · execution error · sync failed */
+  --color-pipe-idle: #64748b; /* idle · paused · offline */
+  --color-pipe-surface: #0f172a;
+  --color-pipe-raised: #1e293b;
+
+  --color-ink: #f8fafc;
+  --color-ink-2: #a1a8b8;
+  --color-ink-3: #5a6275;
+
+  --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "Cascadia Mono", monospace;
+
+  --radius-card: 20px;
+  --radius-module: 14px;
+
+  --animate-living-drift: living-drift 60s ease-in-out infinite alternate;
+  @keyframes living-drift {
+    0% { transform: scale(1.06) translate3d(0, 0, 0); }
+    100% { transform: scale(1.12) translate3d(-1.5%, -1%, 0); }
+  }
+}
+
+@layer base {
+  html, body, #root { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  ::selection { background: color-mix(in oklab, var(--color-amber) 40%, transparent); }
+  :focus-visible { outline: 2px solid var(--color-teal); outline-offset: 2px; }
+  * { scrollbar-width: thin; scrollbar-color: #2a3040 transparent; }
+}
+
+/* Frosted neo-glass card with edge-lit bevel. */
+@utility glass {
+  background:
+    linear-gradient(rgba(24, 28, 38, 0.62), rgba(24, 28, 38, 0.62)) padding-box,
+    linear-gradient(to bottom right, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.03)) border-box;
+  border: 1px solid transparent;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.6), inset 0 1px 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/*
+ * Ultra glass: near-clear panel so the wallpaper reads through almost
+ * untouched. Legibility comes from a soft text shadow instead of a backdrop.
+ */
+@utility glass-ultra {
+  /* --ultra-* follow Settings → Appearance → glass opacity (0 % = crystal-clear HUD). */
+  background: rgba(11, 13, 17, var(--ultra-alpha, 0.08));
+  border: 1px solid rgba(255, 255, 255, var(--ultra-border, 0.1));
+  -webkit-backdrop-filter: blur(var(--ultra-blur, 1.5px)) saturate(115%);
+  backdrop-filter: blur(var(--ultra-blur, 1.5px)) saturate(115%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.85), 0 0 12px rgba(0, 0, 0, 0.45);
+}
+
+/* Lighter glass for chrome (top bar, dock) so the wallpaper reads through. */
+@utility glass-thin {
+  background: rgba(11, 13, 17, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* Recessed hardware tray. */
+@utility well {
+  background: var(--color-well);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.8), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+/* Stamped industrial label. */
+@utility label-caps {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@utility tabular { font-variant-numeric: tabular-nums; }
+
+@utility glow-amber { box-shadow: 0 0 24px -2px rgba(255, 122, 47, 0.35), inset 0 1px 2px rgba(255, 179, 107, 0.5); }
+@utility glow-teal { box-shadow: 0 0 24px -2px rgba(0, 229, 195, 0.35), inset 0 1px 2px rgba(45, 212, 191, 0.5); }
+
+@utility pill-primary {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  height: 40px; padding: 0 20px; border-radius: 9999px;
+  background: linear-gradient(135deg, #ff7a2f 0%, #ff6b4a 100%);
+  border: 1px solid rgba(255, 179, 107, 0.3);
+  box-shadow: 0 4px 16px rgba(255, 122, 47, 0.3);
+  color: #fff; font-weight: 600; font-size: 14px;
+  transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms;
+  &:hover { filter: brightness(1.08); }
+  &:active { transform: scale(0.97); }
+  &:disabled { opacity: 0.5; pointer-events: none; }
+}
+
+@utility pill-glass {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  height: 40px; padding: 0 18px; border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: var(--color-ink); font-weight: 500; font-size: 14px;
+  transition: background 160ms, border-color 160ms, transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+  &:hover { background: rgba(255, 255, 255, 0.08); border-color: rgba(0, 229, 195, 0.4); }
+  &:active { transform: scale(0.97); }
+}
+
+@utility field {
+  width: 100%; border-radius: 12px; padding: 10px 14px;
+  background: var(--color-well); color: var(--color-ink);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px; outline: none;
+  transition: border-color 160ms, box-shadow 160ms;
+  &::placeholder { color: var(--color-ink-3); }
+  &:focus { border-color: var(--color-teal); box-shadow: 0 0 12px rgba(0, 229, 195, 0.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+
+/* ── WebView2 flicker fix ──────────────────────────────────────────────────
+ * Black/green flashes on Windows come from the GPU compositor re-blurring
+ * stacked backdrop-filter layers on every scroll/state tick.
+ *  - Glass inside glass doesn't blur again (the outer layer already did).
+ *  - Scroll containers, drawers and modals get their own paint layer.
+ */
+.glass .glass,
+.glass .glass-ultra,
+.glass-ultra .glass,
+.glass-ultra .glass-ultra,
+.glass .glass-thin {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.glass,
+.glass-ultra,
+.glass-thin {
+  backface-visibility: hidden;
+  isolation: isolate;
+}
+/* Scrollers get their own compositor layer without becoming a containing block
+   (contain/transform would trap position:fixed modals inside them). */
+.overflow-y-auto,
+.overflow-auto {
+  will-change: scroll-position;
+}
+[role="dialog"] {
+  contain: layout paint;
+  backface-visibility: hidden;
+}
+
+/* Dual-handle audio trimmer: two stacked range inputs, only the thumbs are interactive. */
+.trim-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+  height: 100%;
+  margin: 0;
+}
+.trim-range::-webkit-slider-runnable-track {
+  background: transparent;
+  height: 100%;
+}
+.trim-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 12px;
+  height: 100%;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--color-amber) 85%, white);
+  cursor: ew-resize;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45);
+}
+.trim-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 12px;
+  height: 56px;
+  border-radius: 4px;
+  background: var(--color-amber);
+  cursor: ew-resize;
+}

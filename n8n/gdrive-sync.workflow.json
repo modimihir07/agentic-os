@@ -1,0 +1,50 @@
+{
+  "name": "Jarvis · Google Drive Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "gdrive-sync",
+        "responseMode": "onReceived",
+        "responseCode": 200,
+        "options": { "rawBody": false }
+      },
+      "id": "a1f2c3d4-0001-4a1b-9c1d-000000000001",
+      "name": "Webhook · gdrive-sync",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "gdrive-sync"
+    },
+    {
+      "parameters": {
+        "jsCode": "// One item per changed file that arrived with content (base64).\n// Files over 1 MB arrive as metadata only (contentOmitted) and are skipped here.\nconst body = $input.first().json.body ?? $input.first().json;\nconst stamp = new Date(body.generatedAt ?? Date.now()).toISOString().slice(0, 10);\nconst out = [];\nfor (const f of body.files ?? []) {\n  if (!f.content) continue;\n  const safe = `${f.root}__${String(f.path).replace(/[\\\\/]+/g, '__')}`;\n  out.push({\n    json: { root: f.root, path: f.path, size: f.size, modified: f.modified, host: body.host, day: stamp },\n    binary: { data: { data: f.content, mimeType: 'application/octet-stream', fileName: safe } },\n  });\n}\nreturn out;"
+      },
+      "id": "a1f2c3d4-0002-4a1b-9c1d-000000000002",
+      "name": "Unpack files",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "name": "={{ $binary.data.fileName }}",
+        "driveId": { "__rl": true, "mode": "list", "value": "My Drive" },
+        "folderId": { "__rl": true, "mode": "list", "value": "root", "cachedResultName": "/ (Root folder)" },
+        "options": {}
+      },
+      "id": "a1f2c3d4-0003-4a1b-9c1d-000000000003",
+      "name": "Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [520, 0],
+      "notes": "Pick your Google Drive credential and a backup folder (e.g. 'Jarvis Backups') after importing."
+    }
+  ],
+  "connections": {
+    "Webhook · gdrive-sync": { "main": [[{ "node": "Unpack files", "type": "main", "index": 0 }]] },
+    "Unpack files": { "main": [[{ "node": "Upload to Google Drive", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "jarvis" }]
+}
