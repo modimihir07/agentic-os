@@ -81,6 +81,21 @@ export default defineConfig({
     host: host || false,
     hmr: host ? { protocol: "ws", host, port: 1421 } : undefined,
     watch: { ignored: ["**/src-tauri/**"] },
+    // Spotify's redirect URI is http://127.0.0.1:1420/callback. In dev Vite owns
+    // :1420, so hand the redirect to the gateway, where Rust picks it up.
+    proxy: {
+      "/callback": {
+        target: "http://127.0.0.1:8080",
+        rewrite: (path) => path.replace(/^\/callback/, "/api/spotify/callback"),
+        // Registered before Vite's own proxy error logger (which prints req.url), so if the
+        // gateway is down the OAuth code/state never reach the dev terminal.
+        configure: (proxy) => {
+          proxy.on("error", (_err, req) => {
+            if (req && typeof req.url === "string") req.url = req.url.split("?")[0];
+          });
+        },
+      },
+    },
   },
   build: {
     target: isTauri ? (process.env.TAURI_ENV_PLATFORM === "windows" ? "chrome105" : "safari15") : "es2022",

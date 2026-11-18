@@ -27,6 +27,8 @@ export interface WidgetDefinition<C = Record<string, unknown>> {
   maxSize?: { w: number; h: number };
   /** Omit to allow everywhere. */
   platforms?: Platform[];
+  /** Extra words a "Generate" prompt can name to add this widget directly (id and title always count). */
+  keywords?: string[];
   defaultConfig: C;
   /** Phone stack position (lower = higher up). Defaults to the desktop row. */
   compactOrder?: number;

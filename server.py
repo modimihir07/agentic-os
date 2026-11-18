@@ -70,7 +70,7 @@ command_center_api.start()
 import os_api  # noqa: E402
 
 os_api.init()
-for _r in (os_api.play_router, os_api.pipeline_router, os_api.comms_router, os_api.inbox_router, os_api.models_router):
+for _r in (os_api.play_router, os_api.pipeline_router, os_api.comms_router, os_api.inbox_router, os_api.models_router, os_api.spotify_router):
     app.include_router(_r)
 
 # No-cache for dashboard assets — SPA JS is loaded on demand and updated

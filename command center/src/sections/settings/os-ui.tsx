@@ -68,7 +68,7 @@ export function TierSelect({ value, onChange, label, hint }: { value: Tier; onCh
 }
 
 /** Set / replace / delete an OS-level secret. The value is never read back. */
-export function SecretRow({ name, label, placeholder, hint }: { name: OsSecret; label: string; placeholder?: string; hint?: string }) {
+export function SecretRow({ name, label, placeholder, hint, onChange }: { name: OsSecret; label: string; placeholder?: string; hint?: string; onChange?: () => void }) {
   const [has, setHas] = useState<boolean | null>(null);
   const [val, setVal] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -86,7 +86,7 @@ export function SecretRow({ name, label, placeholder, hint }: { name: OsSecret; 
             e.preventDefault();
             if (!val.trim()) return;
             void cmd("os_secret_set", { name, value: val })
-              .then(() => (setVal(""), setMsg(null), refresh()))
+              .then(() => (setVal(""), setMsg(null), refresh(), onChange?.()))
               .catch((er) => setMsg(String(er)));
           }}
         >
@@ -95,7 +95,7 @@ export function SecretRow({ name, label, placeholder, hint }: { name: OsSecret; 
             Save
           </button>
           {has && (
-            <button type="button" aria-label={`Delete ${label}`} onClick={() => void cmd("os_secret_delete", { name }).then(refresh)} className="pill-glass !h-9 !w-9 !p-0 hover:!border-alert/50">
+            <button type="button" aria-label={`Delete ${label}`} onClick={() => void cmd("os_secret_delete", { name }).then(() => (refresh(), onChange?.()))} className="pill-glass !h-9 !w-9 !p-0 hover:!border-alert/50">
               <Trash2 size={13} />
             </button>
           )}

@@ -40,15 +40,28 @@ function splitLong(s: string, maxChars: number): string[] {
   return out;
 }
 
-const LIST_LINE = /^\s*(?:[-*+•]|\d+[.)])\s+/;
+export const LIST_LINE = /^\s*(?:[-*+•]|\d+[.)])\s+/;
 
 /** True when most non-blank lines are bulleted/numbered (a WhatsApp casting summary,
  * a checklist) rather than ordinary prose split across lines. */
-function looksLikeList(text: string): boolean {
+export function looksLikeList(text: string): boolean {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
   if (lines.length < 2) return false;
   const marked = lines.filter((l) => LIST_LINE.test(l)).length;
   return marked >= 2 && marked / lines.length >= 0.5;
+}
+
+const TERMINAL = /[.!?…:;,]["')\]]*$/;
+
+/** One line of speech per list line: a bullet without its own punctuation gets a period
+ * so it doesn't run into the next one when read aloud. */
+function joinListLines(clean: string): string {
+  return clean
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .map((l) => (TERMINAL.test(l) ? l : `${l}.`))
+    .join(" ");
 }
 
 /** Split for pipelining: speak sentence 1 while sentence 2 synthesises. Each chunk is
@@ -64,7 +77,7 @@ function looksLikeList(text: string): boolean {
  * `maxChars` via `splitLong`, same as any other long chunk). */
 export function sentences(text: string, maxChars = 1800): string[] {
   const clean = stripForSpeech(text);
-  if (looksLikeList(text)) return splitLong(clean.replace(/\s+/g, " ").trim(), maxChars);
+  if (looksLikeList(text)) return splitLong(joinListLines(clean), maxChars);
   const parts = clean.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+["')\]]*|\S[^.!?]*$/g) ?? [clean];
   const out: string[] = [];
   for (const raw of parts.map((s) => s.trim()).filter(Boolean)) {
@@ -75,4 +88,18 @@ export function sentences(text: string, maxChars = 1800): string[] {
     }
   }
   return out;
+}
+
+/** Streamed-reply chunking: the next piece of `buffered` (past `spokenUpTo`) worth sending
+ * to TTS on its own, or null to keep waiting. The first chunk is the first clause of 20+
+ * chars (a comma is enough) so the first audio renders fast; after that, whole sentences
+ * of 40+ chars. Once any streamed line is a list line it returns null for good: the rest of
+ * the reply is spoken at end of stream as one `sentences()` call, so a list isn't split
+ * into one TTS round trip per bullet. `end` is the new `spokenUpTo`. */
+export function nextStreamChunk(buffered: string, spokenUpTo: number): { chunk: string; end: number } | null {
+  if (buffered.split("\n").some((l) => LIST_LINE.test(l))) return null;
+  const pending = buffered.slice(spokenUpTo);
+  const lead = /^\s*/.exec(pending)![0].length;
+  const m = (spokenUpTo === 0 ? /^[\s\S]{20,}?[.!?…,;:](?=\s)/ : /^[\s\S]{40,}?[.!?…](?=\s)/).exec(pending.slice(lead));
+  return m ? { chunk: m[0].trim(), end: spokenUpTo + lead + m[0].length } : null;
 }

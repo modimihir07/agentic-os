@@ -10,6 +10,7 @@ import { Toasts } from "@/components/Toasts";
 import { TopBar } from "@/shell/TopBar";
 import { MobileTabs, SideRail } from "@/shell/Navigation";
 import { ReelDock } from "@/shell/ReelDock";
+import { PageSwitcher } from "@/shell/PageSwitcher";
 import { useNav, type Section } from "@/stores/nav";
 import { useSettings } from "@/stores/settings";
 import { useLayout } from "@/core/widgets/layout-store";
@@ -84,6 +85,7 @@ function MainApp() {
         </div>
       </div>
       <MobileTabs />
+      {section === "command" && <PageSwitcher mobile />}
       <VoiceHUD />
       <ConfirmCard />
       <Toasts />
@@ -92,7 +94,7 @@ function MainApp() {
 }
 
 /**
- * Mirror this device's UI configuration (settings + widget layout) to the
+ * Mirror this device's UI configuration (settings + every dashboard page) to the
  * gateway, so the scheduled backup captures it and you can restore it on a
  * new device. Debounced; never includes secrets (those live in the keychain).
  */
@@ -103,7 +105,8 @@ function useConfigSnapshot() {
       clearTimeout(t);
       t = setTimeout(() => {
         const { set: _set, ...settings } = useSettings.getState();
-        const layout = useLayout.getState().instances;
+        const { pages, activePage } = useLayout.getState();
+        const layout = { pages, activePage };
         void cc.kvSet(`ui.${platform}`, { settings, layout, at: Date.now() }).catch(() => undefined);
       }, 5000);
     };

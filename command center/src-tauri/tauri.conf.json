@@ -27,11 +27,11 @@
         "default-src": "'self'",
         "script-src": "'self' 'wasm-unsafe-eval' https://s3.tradingview.com",
         "style-src": "'self' 'unsafe-inline'",
-        "img-src": "'self' data: blob: http://127.0.0.1:8080 http://localhost:8080",
+        "img-src": "'self' data: blob: http://127.0.0.1:8080 http://localhost:8080 https://i.scdn.co https://*.scdn.co https://*.spotifycdn.com",
         "font-src": "'self' data:",
         "media-src": "'self' blob: mediastream:",
         "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:8080 http://localhost:8080 https://api.open-meteo.com ws://127.0.0.1:8080 ws://localhost:8080",
-        "frame-src": "https://s.tradingview.com https://www.tradingview-widget.com https://s3.tradingview.com https://www.tradingview.com https://*.tradingview.com http://127.0.0.1:8080 http://localhost:8080"
+        "frame-src": "https://s.tradingview.com https://www.tradingview-widget.com https://s3.tradingview.com https://www.tradingview.com https://*.tradingview.com http://127.0.0.1:8080 http://localhost:8080 https://open.spotify.com"
       },
       "freezePrototype": true
     }

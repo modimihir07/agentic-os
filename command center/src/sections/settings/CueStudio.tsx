@@ -4,9 +4,10 @@ import { Card, Field, Input, Select } from "@/components/ui";
 import { cc, useCollection } from "@/lib/cc-api";
 import { SECTIONS } from "@/stores/nav";
 import { THREADS } from "@/features/voice/voice-store";
-import { loadBuffer, peaks, playClip, useCueRun, type Playing } from "@/features/cues/player";
+import { loadBuffer, peaks, playClip, setThemeVolume, useCueRun, type Playing } from "@/features/cues/player";
 import { fireCue } from "@/features/cues/cue-runtime";
 import { newClip, type AudioClip, type CueWidget, type ThemeClip } from "@/features/cues/types";
+import { MAX_CUE_VOLUME } from "@/features/cues/volume";
 import { CueVoiceLine } from "./CueVoiceLine";
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
@@ -104,6 +105,7 @@ function CueCard({ cue, onChange, onDelete }: { cue: CueWidget & { id: string };
           icon={<Music size={13} />}
           clip={cue.theme}
           theme
+          cueId={cue.id}
           onChange={(c) => onChange({ theme: c ? ({ duck: true, duckLevel: 22, ...(cue.theme ?? {}), ...c } as ThemeClip) : null })}
         />
       </div>
@@ -150,7 +152,7 @@ function CueCard({ cue, onChange, onDelete }: { cue: CueWidget & { id: string };
 }
 
 /** Loader + non-destructive dual-handle trimmer with a mini waveform. */
-function ClipRow({ label, icon, clip, theme, onChange }: { label: string; icon: React.ReactNode; clip: AudioClip | ThemeClip | null; theme?: boolean; onChange: (c: AudioClip | null) => void }) {
+function ClipRow({ label, icon, clip, theme, cueId, onChange }: { label: string; icon: React.ReactNode; clip: AudioClip | ThemeClip | null; theme?: boolean; cueId?: string; onChange: (c: AudioClip | null) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [wave, setWave] = useState<number[] | null>(null);
@@ -233,11 +235,13 @@ function ClipRow({ label, icon, clip, theme, onChange }: { label: string; icon: 
               <input type="number" min={0} max={dur} step={0.1} value={clip.outPoint} onChange={(e) => set({ outPoint: Math.min(dur, Math.max(Number(e.target.value), clip.inPoint + 0.1)) })} className="field !h-7 !w-20 !py-0 font-mono !text-[12px]" />s
             </label>
             <span className="font-mono text-amber-light">Clip {fmt(clip.outPoint - clip.inPoint)}</span>
-            <label className="flex items-center gap-1">
-              Vol
-              <input type="range" min={0} max={100} value={clip.volume} onChange={(e) => set({ volume: Number(e.target.value) })} className="w-20 accent-teal" />
-              <span className="w-8 font-mono">{clip.volume}%</span>
-            </label>
+            <VolumeSlider
+              value={clip.volume}
+              onLive={(v) => {
+                if (theme && useCueRun.getState().cueId === cueId) setThemeVolume(v);
+              }}
+              onCommit={(v) => set({ volume: v })}
+            />
             <label className="flex items-center gap-1">
               Fade in
               <input type="number" min={0} max={5000} step={50} value={clip.fadeInMs} onChange={(e) => set({ fadeInMs: Number(e.target.value) })} className="field !h-7 !w-20 !py-0 font-mono !text-[12px]" />ms
@@ -262,5 +266,38 @@ function ClipRow({ label, icon, clip, theme, onChange }: { label: string; icon: 
         </>
       )}
     </div>
+  );
+}
+
+/** Clip volume, 0–300 %. The drag stays local and saves once on release (not one PATCH per tick). */
+function VolumeSlider({ value, onLive, onCommit }: { value: number; onLive: (v: number) => void; onCommit: (v: number) => void }) {
+  const [drag, setDrag] = useState<number | null>(null);
+  const v = drag ?? value;
+  const commit = () => {
+    if (drag === null) return;
+    if (drag !== value) onCommit(drag);
+    setDrag(null);
+  };
+  return (
+    <label className="flex items-center gap-1">
+      Vol
+      <input
+        type="range"
+        min={0}
+        max={MAX_CUE_VOLUME}
+        step={5}
+        value={v}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          setDrag(n);
+          onLive(n);
+        }}
+        onPointerUp={commit}
+        onKeyUp={commit}
+        onBlur={commit}
+        className="w-24 accent-teal"
+      />
+      <span className="w-10 text-right font-mono">{v}%</span>
+    </label>
   );
 }

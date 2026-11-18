@@ -84,6 +84,26 @@ export interface NativeCommands {
   mcp_list_tools: { args: { refresh?: boolean }; result: ServerTools[] };
   mcp_call: { args: { name: string; args: Record<string, unknown>; approved?: boolean; agent?: string }; result: string };
   mcp_sync_anythingllm: { args: undefined; result: AllmSyncReport };
+  /** Which Gmail backend `gmail.*` tools use; credentials are set via `os_secret_set` (`gmail-script-id` / `gmail-script-key`). */
+  gmail_status: { args: undefined; result: { configured: boolean; source: "script" | "n8n" | "none" } };
+  /** Copies AnythingLLM Desktop's Gmail agent deployment into the keychain (values never reach the webview). */
+  gmail_import_anythingllm: { args: undefined; result: { imported: boolean; detail: string } };
+  /** Only after the confirmation card: returns `PERMISSION_REQUIRED:gmail-draft` unless `approved`. */
+  gmail_create_draft: { args: { to: string; subject: string; body: string; approved?: boolean }; result: string };
+  /** Opens Spotify's consent page in the system browser and returns its URL (fallback link);
+   * the outcome arrives as the `spotify-auth` event. */
+  spotify_auth_start: { args: undefined; result: { url: string } };
+  /** `configured` = SPOTIFY_CLIENT_ID is in the env / repo .env; `connected` = a refresh token is stored. */
+  spotify_status: { args: undefined; result: SpotifyStatus };
+  spotify_disconnect: { args: undefined; result: void };
+  spotify_now_playing: { args: undefined; result: SpotifyNowPlaying };
+  /** `value`: volume → number (absolute %) or "+N" / "-N"; shuffle → boolean / "on" / "off" (omit to toggle).
+   * `approved` only matters when the MCP permission tier is Ask. Resolves to a short reply ("Paused Spotify."). */
+  spotify_control: { args: { action: SpotifyAction; value?: number | string | boolean; approved?: boolean }; result: string };
+  spotify_play: { args: { query: string; kind?: "track" | "artist" | "album" | "playlist"; approved?: boolean }; result: string };
+  spotify_play_uri: { args: { uri: string; approved?: boolean }; result: string };
+  spotify_recent: { args: undefined; result: SpotifyItem[] };
+  spotify_playlists: { args: undefined; result: SpotifyItem[] };
   skills_scan: { args: undefined; result: SkillInfo[] };
   memory_harvest: { args: { req: { month?: string } }; result: LedgerEntry };
   memory_flush: { args: { req: { month: string; includeLocal?: boolean; approved?: boolean } }; result: string[] };
@@ -120,7 +140,7 @@ export async function nativeRaw<T>(cmdName: "stt_transcribe" | "tts_voice_upload
 }
 
 /** Subscribe to a Rust → webview event. Returns an unsubscribe function. No-op on the PWA. */
-export async function onNativeEvent<P = unknown>(event: "voice-toggle" | "memory-progress" | "pipeline-step" | "pipeline-failed" | "gpu-slot" | "droplet-status" | "tony-token" | "tts-fallback", handler: (payload: P) => void): Promise<() => void> {
+export async function onNativeEvent<P = unknown>(event: "voice-toggle" | "memory-progress" | "pipeline-step" | "pipeline-failed" | "gpu-slot" | "droplet-status" | "tony-token" | "tts-fallback" | "spotify-auth", handler: (payload: P) => void): Promise<() => void> {
   if (!isTauri()) return () => undefined;
   const { listen } = await import("@tauri-apps/api/event");
   return listen<P>(event, (e) => handler(e.payload));
@@ -362,7 +382,7 @@ export interface NetbirdStatus {
 
 export type Tier = "allow" | "ask" | "deny";
 export type ComputeMode = "local" | "hybrid" | "cloud";
-export type OsSecret = "anthropic" | "gemini" | "brave" | "twelvedata" | "vault" | "gateway-token" | "anythingllm-remote";
+export type OsSecret = "anthropic" | "gemini" | "brave" | "twelvedata" | "vault" | "gateway-token" | "anythingllm-remote" | "gmail-script-id" | "gmail-script-key" | "spotify-refresh";
 export type OverseerEngine = "claude-cli" | "claude-api" | "gemini-cli" | "gemini-api" | "droplet" | "local";
 
 export interface AgentTriggers {
@@ -582,6 +602,40 @@ export interface ServerTools {
   ok: boolean;
   error: string | null;
   tools: ToolInfo[];
+}
+
+export type SpotifyAction = "play" | "pause" | "resume" | "next" | "previous" | "volume" | "shuffle";
+export interface SpotifyStatus {
+  configured: boolean;
+  connected: boolean;
+  account: string | null;
+}
+/** `track` is null when nothing is playing (Spotify answered 204). */
+export interface SpotifyNowPlaying {
+  isPlaying: boolean;
+  track: string | null;
+  artists: string[];
+  album: string | null;
+  artUrl: string | null;
+  progressMs: number;
+  durationMs: number;
+  device: string | null;
+  volume: number | null;
+  shuffle: boolean;
+  uri: string | null;
+}
+/** A quick-select row (recent track or playlist); play it with `spotify_play_uri`. */
+export interface SpotifyItem {
+  uri: string;
+  title: string;
+  subtitle: string;
+  artUrl: string | null;
+}
+/** Payload of the `spotify-auth` event. */
+export interface SpotifyAuthEvent {
+  ok: boolean;
+  error?: string;
+  account?: string | null;
 }
 export interface SkillInfo {
   name: string;

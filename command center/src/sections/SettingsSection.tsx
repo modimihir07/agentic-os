@@ -6,7 +6,7 @@ import { isTauri } from "@/lib/platform";
 import { Card, Field, Input, Select, SubTabs } from "@/components/ui";
 import { GatewayStatusCard, OrchestratorCard, VerifierCard } from "./settings/ServicesSettings";
 import { AgentVoiceRoster, SttCard, TtsCard } from "./settings/VoiceSettings";
-import { GoogleCard, LocalLlmCard, N8nCard } from "./settings/IntegrationSettings";
+import { GmailCard, GoogleCard, LocalLlmCard, N8nCard, SpotifyCard } from "./settings/IntegrationSettings";
 import { BridgeCard, PipelinesCard } from "./settings/PipelineSettings";
 import { ComputeCard, DropletCard, MarketDataCard, OsIdentityCard, OsPermissionsCard, OverseerCard, PrivacyShieldCard, WorkspacesCard } from "./settings/OsSettings";
 import { McpRegistryCard, SkillsLibraryCard } from "./settings/LibrarySettings";
@@ -88,6 +88,8 @@ export function SettingsSection() {
               <AiProvidersCard />
               <SkillsLibraryCard />
               <McpRegistryCard />
+              <GmailCard />
+              <SpotifyCard />
               <OverseerCard />
               <MarketDataCard />
             </>
@@ -101,7 +103,7 @@ export function SettingsSection() {
               <GoogleCard />
             </>
           ) : (
-            <DesktopOnly what="n8n and Google credentials" />
+            <DesktopOnly what="Gmail, Spotify, n8n and Google credentials" />
           )}
         </>
       )}

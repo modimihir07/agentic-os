@@ -37,6 +37,8 @@ export function isGabaLike(joined: string): boolean {
   return /^[gck]/.test(w) && /b.*[gck]/.test(w.slice(1)) && w.length >= 7 && editDistance(w, TARGET) <= 2;
 }
 
+const NO_MERGE_TAIL = new Set(["up", "down", "on", "off", "in", "out", "mode", "louder", "quieter", "now"]);
+
 /** Lowercase, punctuation → spaces, collapse whitespace, and canonicalise "gabagool". */
 export function norm(s: string): string {
   const base = s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
@@ -47,6 +49,9 @@ export function norm(s: string): string {
     let took = 0;
     // Longest span first: "ga ba gool" → 3 tokens, "gaba gool" → 2, "gobble" → 1.
     for (let n = Math.min(3, tokens.length - i); n >= 1; n--) {
+      // "gabagool up" joined is "gabagoolup", close enough to fuzzy-match — never let a
+      // span swallow a trailing command word, or "turn gabagool up/on" loses its verb.
+      if (n > 1 && NO_MERGE_TAIL.has(tokens[i + n - 1])) continue;
       if (isGabaLike(tokens.slice(i, i + n).join(""))) {
         took = n;
         break;

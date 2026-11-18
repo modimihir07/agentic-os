@@ -291,7 +291,8 @@ pub fn default_mcps() -> Vec<McpServer> {
         builtin("git", "Git", true, "Status and recent commits of a repository under the allowed roots."),
         builtin("knowledge-graph", "Knowledge Graph", true, "Search C:\\ai-hub\\memory\\knowledge-graph.json."),
         builtin("brave-search", "Brave Search", false, "Web search (needs a Brave API key in Settings)."),
-        builtin("gmail", "Gmail", false, "Recent inbox messages via the read-only n8n workflow \"gmail-recent\"."),
+        builtin("gmail", "Gmail", false, "Search and read your inbox via your Google Apps Script deployment (or the read-only n8n workflow \"gmail-recent\")."),
+        builtin("spotify", "Spotify", false, "Now playing, playback control, recent tracks and playlists (connect in Settings → Integrations)."),
         McpServer {
             id: "whatsapp".into(),
             name: "WhatsApp Bridge".into(),
@@ -750,7 +751,7 @@ pub fn gate(bridge: &BridgeState, tier: Tier, what: &str, approved: bool, detail
 // to that service. The webview can set / check / delete, never read.
 
 const SERVICE: &str = "agentic-os-command-center";
-pub const OS_SECRETS: [&str; 7] = ["anthropic", "gemini", "brave", "twelvedata", "vault", "gateway-token", "anythingllm-remote"];
+pub const OS_SECRETS: [&str; 10] = ["anthropic", "gemini", "brave", "twelvedata", "vault", "gateway-token", "anythingllm-remote", "gmail-script-id", "gmail-script-key", "spotify-refresh"];
 
 fn os_entry(name: &str) -> Result<keyring::Entry, String> {
     if !OS_SECRETS.contains(&name) {
@@ -763,6 +764,18 @@ pub(crate) fn os_secret(name: &str) -> Option<String> {
     os_entry(name).ok()?.get_password().ok()
 }
 
+/// Rust-side writes (OAuth refresh tokens, imported credentials) — never via the webview.
+pub(crate) fn os_secret_store(name: &str, value: &str) -> Result<(), String> {
+    os_entry(name)?.set_password(value).map_err(|e| e.to_string())
+}
+
+pub(crate) fn os_secret_clear(name: &str) -> Result<(), String> {
+    match os_entry(name)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
 #[tauri::command]
 pub fn os_secret_set(name: String, value: String) -> Result<(), String> {
     let v = value.trim();
@@ -772,7 +785,7 @@ pub fn os_secret_set(name: String, value: String) -> Result<(), String> {
     if name == "vault" && v.len() < 10 {
         return Err("vault password must be at least 10 characters".into());
     }
-    os_entry(&name)?.set_password(v).map_err(|e| e.to_string())
+    os_secret_store(&name, v)
 }
 
 #[tauri::command]
@@ -782,10 +795,7 @@ pub fn os_secret_status() -> BTreeMap<String, bool> {
 
 #[tauri::command]
 pub fn os_secret_delete(name: String) -> Result<(), String> {
-    match os_entry(&name)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-        Err(e) => Err(e.to_string()),
-    }
+    os_secret_clear(&name)
 }
 
 // ── Commands ────────────────────────────────────────────────────────────────
@@ -1211,6 +1221,8 @@ mod tests {
         assert_eq!(whatsapp.agents, Some(vec!["booking".to_string(), "ops".to_string()]));
         let weather = mcps.iter().find(|m| m.id == "weather").unwrap();
         assert_eq!(weather.agents, Some(vec!["all".to_string()]));
+        let spotify = mcps.iter().find(|m| m.id == "spotify").unwrap();
+        assert!(!spotify.enabled && spotify.transport == "builtin");
     }
 
     #[test]

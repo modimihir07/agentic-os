@@ -3,11 +3,10 @@ import { collections, useCollection } from "@/lib/cc-api";
 import { useNav, SECTIONS, type Section } from "@/stores/nav";
 import { useVoice, THREADS, type ThreadId } from "@/features/voice/voice-store";
 import { useToasts } from "@/features/reminders/notify";
-import { parseOsIntent } from "@/features/os/os-intent-parse";
-import { useSettings } from "@/stores/settings";
+import { hasOnVerb, type OsIntent } from "@/features/os/os-intent-parse";
 import { DEFAULT_CUES, type CueWidget } from "./types";
 import { norm } from "./gaba";
-import { cueRecentlyActive, runCue, stopAllAudio, useCueRun } from "./player";
+import { runCue, stopAllAudio, useCueRun } from "./player";
 
 /**
  * Cue triggers: voice/text phrase, time of day, app startup. The voice
@@ -25,14 +24,6 @@ export const registerCueIO = (s: Speak, p: Prompt) => {
 /** Whisper hears "gabagool" a dozen ways (gaba gool, gobble, cabbage cool…): see gaba.ts. */
 export { norm };
 
-/**
- * "turn off gaba goom mode", "stop gabagool", "exit gobble"… — or a bare "stop" /
- * "turn off" / "kill the music" while a cue is playing or fired in the last 10 minutes.
- */
-export function isStopCue(text: string): boolean {
-  return parseOsIntent(text, { osName: useSettings.getState().osName, cueActive: cueRecentlyActive() })?.kind === "gabagool-off";
-}
-
 /** A cue whose phrase is in what the user said/typed ("hey tony, enter gabagool mode"). */
 export function matchCue(text: string): (CueWidget & { id: string }) | null {
   const t = ` ${norm(text)} `;
@@ -46,6 +37,20 @@ export function matchCue(text: string): (CueWidget & { id: string }) | null {
     }
   }
   return best?.cue ?? null;
+}
+
+/**
+ * The cue a line should fire, given what the OS-intent parser made of it: a Gabagool-on
+ * phrase, a line the parser left alone, or a "play …" (without "spotify") that is really a
+ * cue's phrase. A cue that is already running only restarts on an ON verb, so "make the
+ * gabagool music louder" or "gabagool is great" never replays the intro.
+ */
+export function cueFor(text: string, intent: OsIntent | null): (CueWidget & { id: string }) | null {
+  const playLine = intent?.kind === "media" && intent.action === "play" && !/\bspotify\b/i.test(text);
+  if (intent && intent.kind !== "gabagool-on" && !playLine) return null;
+  const cue = matchCue(text);
+  if (!cue || (useCueRun.getState().cueId === cue.id && !hasOnVerb(text))) return null;
+  return cue;
 }
 
 function runAction(w: CueWidget) {

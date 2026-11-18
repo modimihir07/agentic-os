@@ -40,20 +40,6 @@ pub enum KeySource {
     Missing,
 }
 
-fn from_env_file(path: &Path) -> Option<String> {
-    let text = std::fs::read_to_string(path).ok()?;
-    text.lines().find_map(|line| {
-        let line = line.trim();
-        let rest = line.strip_prefix("export ").unwrap_or(line);
-        let (k, v) = rest.split_once('=')?;
-        if k.trim() != ENV_KEY {
-            return None;
-        }
-        let v = v.trim().trim_matches('"').trim_matches('\'').trim();
-        (!v.is_empty()).then(|| v.to_string())
-    })
-}
-
 /// The key and where it came from. Never exposed beyond this crate.
 pub(crate) fn api_key(state: &DispatchState, p: &Provider) -> (Option<String>, KeySource) {
     if let Ok(v) = std::env::var(ENV_KEY) {
@@ -62,7 +48,7 @@ pub(crate) fn api_key(state: &DispatchState, p: &Provider) -> (Option<String>, K
         }
     }
     let repo = state.snapshot().gateway.workdir;
-    if let Some(v) = from_env_file(&Path::new(&repo).join(".env")) {
+    if let Some(v) = super::envfile::from_env_file(&Path::new(&repo).join(".env"), ENV_KEY) {
         return (Some(v), KeySource::EnvFile);
     }
     if let Some(v) = secrets::get(state, &p.id) {
@@ -321,18 +307,6 @@ mod tests {
     #[test]
     fn tts_models_from_body_handles_non_array() {
         assert_eq!(tts_models_from_body(&serde_json::json!({"error": "nope"})), Vec::<String>::new());
-    }
-
-    #[test]
-    fn env_file_parsing() {
-        let dir = std::env::temp_dir().join(format!("el-env-test-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let f = dir.join(".env");
-        std::fs::write(&f, "# comment\nOTHER=1\nexport ELEVENLABS_API_KEY=\"sk_test_123\"\n").unwrap();
-        assert_eq!(from_env_file(&f).as_deref(), Some("sk_test_123"));
-        std::fs::write(&f, "ELEVENLABS_API_KEY=\n").unwrap();
-        assert_eq!(from_env_file(&f), None);
-        let _ = std::fs::remove_dir_all(dir);
     }
 }
 

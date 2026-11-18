@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AlertTriangle, Check, ChevronDown, Mic, ShieldAlert, ShieldCheck, ShieldQuestion, Workflow, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Mail, Mic, ShieldAlert, ShieldCheck, ShieldQuestion, Workflow, X } from "lucide-react";
 import { SUB_AGENTS } from "@/features/dispatcher/agents";
 import { useVoice } from "@/features/voice/voice-store";
 import { approve, reject } from "@/features/voice/voice-controller";
@@ -76,6 +76,10 @@ export function ConfirmCard() {
               {plan.target.kind === "n8n" ? (
                 <>
                   <Workflow size={12} className="text-amber-soft" /> n8n · {plan.target.workflow}
+                </>
+              ) : plan.target.kind === "tool" ? (
+                <>
+                  <Mail size={12} className="text-amber-soft" /> {plan.target.tool === "gmail.create_draft" ? "Gmail · draft (not sent)" : plan.target.tool}
                 </>
               ) : plan.target.kind === "bridge" ? (
                 <>

@@ -4,7 +4,10 @@
 //!
 //! Safety:
 //!   - Every tool is read-only from the model's point of view. Nothing here
-//!     writes files, sends messages or runs arbitrary commands.
+//!     writes files, sends messages or runs arbitrary commands; the one
+//!     mutating builtin (`gmail.create_draft`) is hidden from the router and
+//!     refuses to run unless the user approved it. Spotify playback tools are
+//!     hidden from the router too; only deterministic plans call them.
 //!   - Filesystem / git are confined to the allowed roots (canonicalised).
 //!   - Fetch refuses loopback / private / mesh addresses (no SSRF into your
 //!     own services) and is blocked by the kill switch.
@@ -22,6 +25,7 @@ use tauri::State;
 
 use super::bridge::BridgeState;
 use super::dispatch::{short, DispatchState};
+use super::gmail::Source as GmailSource;
 use super::os_core::{self, McpServer, OsConfig, OsState};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -38,7 +42,7 @@ fn t(server: &str, name: &str, description: &str, args: &[&str]) -> ToolInfo {
     ToolInfo { name: name.into(), description: description.into(), server: server.into(), args: args.iter().map(|a| a.to_string()).collect() }
 }
 
-fn builtin_tools(id: &str) -> Vec<ToolInfo> {
+pub(crate) fn builtin_tools(id: &str) -> Vec<ToolInfo> {
     match id {
         "weather" => vec![t(id, "weather.current", "Live conditions + 3-day forecast. Omit place for the user's home (Toronto).", &["place?"])],
         "time" => vec![t(id, "time.now", "Current local date, time and weekday.", &[])],
@@ -50,9 +54,56 @@ fn builtin_tools(id: &str) -> Vec<ToolInfo> {
         "git" => vec![t(id, "git.status", "Branch, changed files and last commits of a repo under the allowed roots.", &["path"])],
         "knowledge-graph" => vec![t(id, "kg.search", "Search the personal knowledge graph (people, projects, facts).", &["query"])],
         "brave-search" => vec![t(id, "web.search", "Search the web (Brave).", &["query"])],
-        "gmail" => vec![t(id, "gmail.recent", "Most recent inbox messages (sender, subject, snippet).", &["count?"])],
+        "gmail" => vec![
+            t(id, "gmail.recent", "Most recent inbox emails (sender, subject, date, preview).", &["count?"]),
+            t(id, "gmail.search", "Search Gmail with Gmail query syntax (from:sam, is:unread, subject:rates, newer_than:7d).", &["query", "limit?"]),
+            t(id, "gmail.read_thread", "Read one email thread in full by its thread id (from gmail.recent / gmail.search).", &["threadId"]),
+            t(id, "gmail.create_draft", "Save a draft email (not sent). Only after the user's confirmation card.", &["to", "subject", "body"]),
+        ],
+        "spotify" => vec![
+            t(id, "spotify.now_playing", "What's playing on Spotify right now (track, artist, device, volume).", &[]),
+            t(id, "spotify.recent", "The user's recently played Spotify tracks.", &[]),
+            t(id, "spotify.playlists", "The user's Spotify playlists.", &[]),
+            t(id, "spotify.play", "Search Spotify and play the first hit.", &["query", "kind?"]),
+            t(id, "spotify.pause", "Pause Spotify playback.", &[]),
+            t(id, "spotify.resume", "Resume Spotify playback.", &[]),
+            t(id, "spotify.next", "Skip to the next track.", &[]),
+            t(id, "spotify.previous", "Go back to the previous track.", &[]),
+            t(id, "spotify.volume", "Set Spotify volume (0-100, or \"+N\"/\"-N\").", &["percent"]),
+        ],
         _ => vec![],
     }
+}
+
+/// A builtin's tools, or an error when its backend isn't configured, so the
+/// registry never shows a false "ok" for a server that can't answer.
+fn builtin_listing(id: &str, gmail: impl Fn() -> GmailSource, has_brave_key: impl Fn() -> bool, spotify: impl Fn() -> Result<(), String>) -> Result<Vec<ToolInfo>, String> {
+    match id {
+        "gmail" => match gmail() {
+            GmailSource::None => Err(super::gmail::NO_BACKEND.into()),
+            GmailSource::N8n(_) => Ok(builtin_tools(id).into_iter().filter(|t| t.name == "gmail.recent").collect()),
+            GmailSource::Script => Ok(builtin_tools(id)),
+        },
+        "brave-search" if !has_brave_key() => Err("Brave Search: no API key — add one in Settings → Integrations".into()),
+        "spotify" => spotify().map(|_| builtin_tools(id)),
+        _ => Ok(builtin_tools(id)),
+    }
+}
+
+/// Why server `id` can't serve tools right now (switched off, or no backend), if so.
+pub(crate) fn unavailable_reason(state: &DispatchState, cfg: &OsConfig, id: &str) -> Option<String> {
+    let s = cfg.mcps.iter().find(|m| m.id == id)?;
+    if !s.enabled {
+        return Some(format!("{} is switched off — enable it in Settings → Skills & MCP Library", s.name));
+    }
+    if s.transport != "builtin" {
+        return None;
+    }
+    listing(state, id).err()
+}
+
+fn listing(state: &DispatchState, id: &str) -> Result<Vec<ToolInfo>, String> {
+    builtin_listing(id, || super::gmail::source(state), || os_core::os_secret("brave").is_some(), || super::spotify::readiness(state))
 }
 
 // ── Listing ─────────────────────────────────────────────────────────────────
@@ -78,8 +129,16 @@ pub fn is_mutating_tool(name: &str) -> bool {
         .any(|v| tool.starts_with(v) || tool.contains(&format!("_{v}")))
 }
 
+/// Spotify tools the router may pick; playback runs only from deterministic
+/// plans (`agents::spotify_plan`) or the UI, so the router stays read-only.
+const SPOTIFY_ROUTER_TOOLS: [&str; 3] = ["spotify.now_playing", "spotify.recent", "spotify.playlists"];
+
+fn offered_to_router(name: &str) -> bool {
+    !is_mutating_tool(name) && (!name.starts_with("spotify.") || SPOTIFY_ROUTER_TOOLS.contains(&name))
+}
+
 /// Tools `agent` is actually allowed to use: every enabled server it is
-/// granted (`McpServer.grants`), minus mutating tools. Tony (`"general"` or
+/// granted (`McpServer.grants`), minus mutating tools and Spotify playback. Tony (`"general"` or
 /// `"tony"`) always gets every enabled server, regardless of its grant list
 /// (Part 2 spec). Servers are queried concurrently with a short per-server
 /// timeout so one dead external server can't stall the whole listing.
@@ -101,7 +160,7 @@ pub async fn enabled_tools(state: &DispatchState, os: &OsState, agent: &str) -> 
         }
     }))
     .await;
-    let mut out: Vec<ToolInfo> = results.into_iter().flatten().filter(|t| !is_mutating_tool(&t.name)).collect();
+    let mut out: Vec<ToolInfo> = results.into_iter().flatten().filter(|t| offered_to_router(&t.name)).collect();
     if cfg.skills.grants.values().any(|a| os_core::agent_matches(a, agent)) {
         out.push(t("skills", "skills.read", "Read the full instructions of one of your attached skills.", &["name"]));
     }
@@ -110,7 +169,7 @@ pub async fn enabled_tools(state: &DispatchState, os: &OsState, agent: &str) -> 
 
 async fn tools_of(state: &DispatchState, os: &OsState, s: &McpServer, refresh: bool) -> Result<Vec<ToolInfo>, String> {
     if s.transport == "builtin" {
-        return Ok(builtin_tools(&s.id));
+        return listing(state, &s.id);
     }
     let now = os_core::now_secs();
     if !refresh {
@@ -174,58 +233,60 @@ pub async fn call_tool(state: &DispatchState, os: &OsState, bridge: &BridgeState
     os_core::gate(bridge, cfg.permissions.mcp, "mcp", approved, json!({ "tool": name }))?;
     let arg = |k: &str| args.get(k).and_then(|v| v.as_str()).map(str::trim).unwrap_or("").to_string();
     let server_on = |id: &str| cfg.mcps.iter().any(|m| m.id == id && m.enabled);
-    let out = match name {
-        "weather.current" if server_on("weather") => weather(state, &arg("place")).await,
-        "time.now" if server_on("time") => Ok(chrono::Local::now().format("%A, %B %-d %Y · %-I:%M %p (%Z local time)").to_string()),
-        "fetch.url" if server_on("fetch") => {
-            if cfg.privacy.kill_switch {
-                return Err("kill switch is on — no outbound web requests".into());
+    // An async block, so an early `?`/`return` still reaches `bridge.log` below.
+    let out: Result<String, String> = async {
+        match name {
+            "weather.current" if server_on("weather") => weather(state, &arg("place")).await,
+            "time.now" if server_on("time") => Ok(chrono::Local::now().format("%A, %B %-d %Y · %-I:%M %p (%Z local time)").to_string()),
+            "fetch.url" if server_on("fetch") => {
+                if cfg.privacy.kill_switch {
+                    return Err("kill switch is on — no outbound web requests".into());
+                }
+                fetch_public(state, &arg("url")).await
             }
-            fetch_public(state, &arg("url")).await
-        }
-        "fs.list" | "fs.read" if server_on("filesystem") => {
-            os_core::gate(bridge, cfg.permissions.filesystem, "filesystem", approved, json!({ "path": arg("path") }))?;
-            let path = confine(&cfg, state, &arg("path"))?;
-            if name == "fs.list" {
-                list_dir(&path)
-            } else {
-                read_text(&path)
+            "fs.list" | "fs.read" if server_on("filesystem") => {
+                os_core::gate(bridge, cfg.permissions.filesystem, "filesystem", approved, json!({ "path": arg("path") }))?;
+                let path = confine(&cfg, state, &arg("path"))?;
+                if name == "fs.list" {
+                    list_dir(&path)
+                } else {
+                    read_text(&path)
+                }
+            }
+            "git.status" if server_on("git") => {
+                os_core::gate(bridge, cfg.permissions.filesystem, "filesystem", approved, json!({ "path": arg("path") }))?;
+                let path = confine(&cfg, state, &arg("path"))?;
+                git_status(path).await
+            }
+            "kg.search" if server_on("knowledge-graph") => kg_search(&arg("query")),
+            "web.search" if server_on("brave-search") => {
+                if cfg.privacy.kill_switch {
+                    return Err("kill switch is on — no outbound web requests".into());
+                }
+                brave(state, &arg("query")).await
+            }
+            // Drafts never run from here (whatever `approved` says): only `gmail_create_draft`, after the confirmation card.
+            gmail if gmail.starts_with("gmail.") && server_on("gmail") => super::gmail::tool(state, os, gmail, args, false).await,
+            spotify if spotify.starts_with("spotify.") && server_on("spotify") => super::spotify::tool(state, os, spotify, args).await,
+            "skills.read" => read_skill(&cfg, &arg("name"), agent),
+            other => {
+                let (sid, tool) = other.split_once('.').ok_or("unknown tool")?;
+                let s = cfg.mcps.iter().find(|m| m.id == sid && m.enabled && m.transport != "builtin").ok_or_else(|| format!("tool {other} is not available (server off?)"))?;
+                if cfg.privacy.kill_switch && s.transport == "http" && os_core::is_remote(&dummy_provider(&s.url)) {
+                    return Err("kill switch is on — remote MCP blocked".into());
+                }
+                let res = rpc(state, s, "tools/call", json!({ "name": tool, "arguments": args })).await?;
+                let text: Vec<String> = res["content"].as_array().into_iter().flatten().filter_map(|c| c["text"].as_str().map(String::from)).collect();
+                let joined = if text.is_empty() { res.to_string() } else { text.join("\n") };
+                if res["isError"].as_bool() == Some(true) {
+                    Err(joined.chars().take(500).collect())
+                } else {
+                    Ok(joined)
+                }
             }
         }
-        "git.status" if server_on("git") => {
-            os_core::gate(bridge, cfg.permissions.filesystem, "filesystem", approved, json!({ "path": arg("path") }))?;
-            let path = confine(&cfg, state, &arg("path"))?;
-            git_status(path).await
-        }
-        "kg.search" if server_on("knowledge-graph") => kg_search(&arg("query")),
-        "web.search" if server_on("brave-search") => {
-            if cfg.privacy.kill_switch {
-                return Err("kill switch is on — no outbound web requests".into());
-            }
-            brave(state, &arg("query")).await
-        }
-        "gmail.recent" if server_on("gmail") => {
-            let n = args.get("count").and_then(|v| v.as_u64()).unwrap_or(5).clamp(1, 20);
-            let v = super::n8n::fetch_readonly(state, "gmail-recent", json!({ "count": n })).await.map_err(|e| format!("{e} — import a read-only n8n workflow named \"gmail-recent\""))?;
-            Ok(v.to_string().chars().take(6000).collect())
-        }
-        "skills.read" => read_skill(&cfg, &arg("name"), agent),
-        other => {
-            let (sid, tool) = other.split_once('.').ok_or("unknown tool")?;
-            let s = cfg.mcps.iter().find(|m| m.id == sid && m.enabled && m.transport != "builtin").ok_or_else(|| format!("tool {other} is not available (server off?)"))?;
-            if cfg.privacy.kill_switch && s.transport == "http" && os_core::is_remote(&dummy_provider(&s.url)) {
-                return Err("kill switch is on — remote MCP blocked".into());
-            }
-            let res = rpc(state, s, "tools/call", json!({ "name": tool, "arguments": args })).await?;
-            let text: Vec<String> = res["content"].as_array().into_iter().flatten().filter_map(|c| c["text"].as_str().map(String::from)).collect();
-            let joined = if text.is_empty() { res.to_string() } else { text.join("\n") };
-            if res["isError"].as_bool() == Some(true) {
-                Err(joined.chars().take(500).collect())
-            } else {
-                Ok(joined)
-            }
-        }
-    };
+    }
+    .await;
     let out = out.map(|s| s.chars().take(8000).collect::<String>());
     bridge.log(json!({ "type": "os-tool", "tool": name, "ok": out.is_ok(), "chars": out.as_ref().map(|s| s.len()).unwrap_or(0) }));
     out
@@ -799,6 +860,42 @@ mod tests {
         for t in ["whatsapp.list_messages", "whatsapp.search_contacts", "weather.current", "fs.read", "git.status", "kg.search"] {
             assert!(!is_mutating_tool(t), "{t}");
         }
+    }
+
+    #[test]
+    fn gmail_tools_split_read_only_and_draft() {
+        let names: Vec<String> = builtin_tools("gmail").into_iter().map(|t| t.name).collect();
+        assert_eq!(names, ["gmail.recent", "gmail.search", "gmail.read_thread", "gmail.create_draft"]);
+        for t in ["gmail.recent", "gmail.search", "gmail.read_thread"] {
+            assert!(!is_mutating_tool(t), "{t}");
+        }
+        assert!(is_mutating_tool("gmail.create_draft"));
+    }
+
+    #[test]
+    fn builtin_listing_is_honest_about_backends() {
+        let ok = || Ok(());
+        let e = builtin_listing("gmail", || GmailSource::None, || true, ok).unwrap_err();
+        assert!(e.starts_with("Gmail: no backend"), "{e}");
+        let n8n: Vec<String> = builtin_listing("gmail", || GmailSource::N8n("gmail-digest"), || true, ok).unwrap().into_iter().map(|t| t.name).collect();
+        assert_eq!(n8n, ["gmail.recent"]);
+        assert_eq!(builtin_listing("gmail", || GmailSource::Script, || true, ok).unwrap().len(), 4);
+        assert!(builtin_listing("brave-search", || GmailSource::None, || false, ok).is_err());
+        assert_eq!(builtin_listing("brave-search", || GmailSource::None, || true, ok).unwrap().len(), 1);
+        assert_eq!(builtin_listing("weather", || GmailSource::None, || false, ok).unwrap().len(), 1);
+        let e = builtin_listing("spotify", || GmailSource::None, || true, || Err(super::super::spotify::NOT_CONNECTED.into())).unwrap_err();
+        assert!(e.starts_with("Spotify isn't connected"), "{e}");
+        assert_eq!(builtin_listing("spotify", || GmailSource::None, || true, ok).unwrap().len(), 9);
+    }
+
+    #[test]
+    fn spotify_router_sees_only_read_tools() {
+        let offered: Vec<String> = builtin_tools("spotify").into_iter().map(|t| t.name).filter(|n| offered_to_router(n)).collect();
+        assert_eq!(offered, ["spotify.now_playing", "spotify.recent", "spotify.playlists"]);
+        for t in ["spotify.play", "spotify.pause", "spotify.volume", "spotify.next"] {
+            assert!(!offered_to_router(t), "{t}");
+        }
+        assert!(offered_to_router("weather.current") && !offered_to_router("gmail.create_draft"));
     }
 
     #[test]

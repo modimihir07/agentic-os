@@ -1,7 +1,7 @@
 mod commands;
 mod proc;
 
-use commands::{agents, bridge, clihub, modellab, dispatch, market, mcp, memory, n8n, os_core, pipeline, pipelines, secrets, services, system, telemetry, voice};
+use commands::{agents, bridge, clihub, modellab, dispatch, gmail, market, mcp, memory, n8n, os_core, pipeline, pipelines, secrets, services, spotify, system, telemetry, voice};
 
 /// Event the webview listens for to start/stop a voice session.
 pub const VOICE_TOGGLE_EVENT: &str = "voice-toggle";
@@ -116,6 +116,18 @@ pub fn run() {
             mcp::mcp_call,
             mcp::mcp_sync_anythingllm,
             mcp::skills_scan,
+            gmail::gmail_status,
+            gmail::gmail_import_anythingllm,
+            gmail::gmail_create_draft,
+            spotify::spotify_auth_start,
+            spotify::spotify_status,
+            spotify::spotify_disconnect,
+            spotify::spotify_now_playing,
+            spotify::spotify_control,
+            spotify::spotify_play,
+            spotify::spotify_play_uri,
+            spotify::spotify_recent,
+            spotify::spotify_playlists,
             memory::memory_harvest,
             memory::memory_flush,
             memory::memory_ledger,

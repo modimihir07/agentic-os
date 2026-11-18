@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sentences, stripForSpeech } from "./tts-text";
+import { looksLikeList, nextStreamChunk, sentences, stripForSpeech } from "./tts-text";
 
 describe("stripForSpeech", () => {
   it("strips fenced code blocks and inline code", () => {
@@ -107,5 +107,79 @@ describe("sentences", () => {
     expect(out.length).toBeGreaterThan(1);
     for (const chunk of out) expect(chunk.length).toBeLessThanOrEqual(500);
     expect(out.join(" ").replace(/\s+/g, " ")).toBe(stripForSpeech(text).replace(/\s+/g, " "));
+  });
+});
+
+describe("sentences list join", () => {
+  it("ends unpunctuated list lines with a period so bullets don't run together", () => {
+    expect(sentences("Groceries:\n- eggs\n- milk\n- bread")).toEqual(["Groceries: eggs. milk. bread."]);
+  });
+
+  it("leaves list lines that already end in punctuation alone", () => {
+    expect(sentences("- Call Sam back?\n- Book the room;\n- **Done.**")).toEqual(["Call Sam back? Book the room; Done."]);
+  });
+});
+
+describe("looksLikeList", () => {
+  it("needs two or more marked lines making up at least half the lines", () => {
+    expect(looksLikeList("- a\n- b")).toBe(true);
+    expect(looksLikeList("Intro\n- a\n- b\nOutro")).toBe(true);
+    expect(looksLikeList("- a\nplain\nplain\nplain")).toBe(false);
+  });
+});
+
+describe("nextStreamChunk", () => {
+  /** Feed `text` one character at a time, collecting chunks the way osRun does. */
+  const stream = (text: string) => {
+    const chunks: string[] = [];
+    let buffered = "";
+    let spokenUpTo = 0;
+    for (const ch of text) {
+      buffered += ch;
+      const next = nextStreamChunk(buffered, spokenUpTo);
+      if (next) {
+        chunks.push(next.chunk);
+        spokenUpTo = next.end;
+      }
+    }
+    return { chunks, rest: text.slice(spokenUpTo).trim() };
+  };
+
+  const first = "Alright, here's where we stand today.";
+  const long1 = "The callback is set for Saturday at noon sharp.";
+  const long2 = "Wardrobe still needs Priya for one more fitting.";
+
+  it("waits for a 20+ char clause before the first chunk, then 40+ char sentences", () => {
+    expect(nextStreamChunk("Sure, ", 0)).toBeNull();
+    expect(nextStreamChunk("Okay, let me look into that for you. ", 0)).toEqual({ chunk: "Okay, let me look into that for you.", end: 36 });
+    expect(nextStreamChunk(`${first} Short one. `, first.length)).toBeNull();
+  });
+
+  it("does not stall behind a short sentence: it is absorbed into the next long one", () => {
+    const { chunks, rest } = stream(`${first} Got it. ${long1} ${long2} Done`);
+    expect(chunks).toEqual([first, `Got it. ${long1}`, long2]);
+    expect(rest).toBe("Done");
+  });
+
+  it("does not count leading whitespace toward a chunk's minimum length", () => {
+    const { chunks } = stream(`${first}\n\n${" ".repeat(30)}Got it. ${long1} `);
+    expect(chunks).toEqual([first, `Got it. ${long1}`]);
+  });
+
+  it("stops chunking once a list line streams in, leaving the list to one end-of-stream call", () => {
+    const intro = "Here is the casting summary for this week in order.";
+    const list = "\n- John Smith confirmed for Saturday's callback at noon.\n- Priya Shah still pending her wardrobe fitting today.\n- Marcus Lee dropped out, backup notified.";
+    const { chunks, rest } = stream(`${intro}${list} Anything else?`);
+    expect(chunks).toEqual([intro]);
+    expect(sentences(rest)).toHaveLength(1);
+  });
+
+  it("never chunks a reply that opens with a list", () => {
+    const { chunks } = stream("1. Scene one is locked in, the crew is booked.\n2. Scene two needs a reshoot next week, sadly.\n");
+    expect(chunks).toEqual([]);
+  });
+
+  it("does not mistake a mid-line number for a list line", () => {
+    expect(nextStreamChunk("We moved it to 3. That works for everyone involved, right? ", 0)).not.toBeNull();
   });
 });

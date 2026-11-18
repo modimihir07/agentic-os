@@ -2,6 +2,7 @@ import { cmd, isTauri, type ChatMessage, type WorkflowInfo } from "@/lib/platfor
 import { SUB_AGENTS, type AgentRole } from "@/features/dispatcher/agents";
 import { DEFAULT_ROUTING_CONFIG, resolve as resolveRoute } from "@/features/dispatcher/router";
 import { extractJson } from "@/features/orchestrator/extract-json";
+import { parseDraftEmail, type DraftParse } from "@/features/orchestrator/draft-email";
 import { isOsControlPhrase } from "@/features/os/os-intent-parse";
 import { useOs } from "@/features/os/os-store";
 import { useSettings } from "@/stores/settings";
@@ -24,7 +25,9 @@ export type PlanTarget =
   | { kind: "agent" }
   | { kind: "n8n"; workflow: string }
   /** A Permission-Bridge-gated native action (n8n run/toggle, Drive sync…). */
-  | { kind: "bridge"; action: string; scopes: string[] };
+  | { kind: "bridge"; action: string; scopes: string[] }
+  /** A native tool behind its own approved-only Rust command (execute.ts), e.g. `gmail.create_draft`. */
+  | { kind: "tool"; tool: string; args: Record<string, unknown> };
 
 export interface Verification {
   status: "verified" | "flagged" | "unverified" | "skipped";
@@ -72,6 +75,12 @@ const CHAINED = /\b(and|then|also|after that|plus)\b|[,;]/i;
 /** Nouns that are also verbs ("email Sam…") only count in command position. */
 const COMMAND_VERB = /(^|\b(and|then|also)\s+)(e-?mail|text|message|dm|ping|call)\b/i;
 
+/** Playback controls ("change the song", "start my workout playlist") are Spotify's job (intent
+ * layer / Tony's spotify_plan), never a gateway agent's — unless they edit the library. */
+const PLAYBACK = /\b(play(ing)?|pause|resume|skip|next|previous|restart|start|change|switch|put on|stop|turn)\b.*\b(spotify|music|songs?|tracks?|playlists?|albums?|tunes?)\b/i;
+const LIBRARY_EDIT = /\b(add|save|like|remove|delete|create|follow|unfollow|share|send|post|rename)\b/i;
+const isPlayback = (s: string) => PLAYBACK.test(s) && !LIBRARY_EDIT.test(s);
+
 function looksMutating(utterance: string): boolean {
   const s = utterance.trim().replace(filler(), "");
   if (!MUTATING.test(s) && !COMMAND_VERB.test(s)) return false;
@@ -110,8 +119,14 @@ function cleanIntent(utterance: string): string {
 }
 
 function readBackFor(p: Pick<ActionPlan, "role" | "intent" | "target" | "missing" | "verification">): string {
-  const who = p.target.kind === "n8n" ? `running the ${p.target.workflow} workflow` : `instructing ${SUB_AGENTS[p.role].label}`;
-  let s = `Got it — ${who} to ${p.intent}.`;
+  let s: string;
+  if (p.target.kind === "tool" && p.target.tool === "gmail.create_draft") {
+    const a = p.target.args;
+    s = `Got it — saving a Gmail draft to ${a.to}, subject "${a.subject}". It won't be sent.`;
+  } else {
+    const who = p.target.kind === "n8n" ? `running the ${p.target.workflow} workflow` : `instructing ${SUB_AGENTS[p.role].label}`;
+    s = `Got it — ${who} to ${p.intent}.`;
+  }
   if (p.missing.length) s += ` I don't have the ${p.missing.slice(0, 2).join(" or ")}.`;
   if (p.verification.status === "flagged") s += " Heads up: the verifier flagged a possible mismatch.";
   return `${s} Proceed?`;
@@ -129,10 +144,19 @@ function fallbackRole(utterance: string): AgentRole {
 export function heuristicPlan(utterance: string, role?: AgentRole): ActionPlan {
   const r = role ?? fallbackRole(utterance);
   const intent = cleanIntent(utterance);
+  // "…saying I'm running late, Tony." — the name addressed at the end isn't part of the email.
+  const draftText = utterance.trim().replace(filler(), "").replace(new RegExp(`\\s*,\\s*(?:${NAME_ALT()})[\\s.!?]*$`, "i"), "");
+  const draft = parseDraftEmail(draftText);
+  // An address-less draft routed to another desk ("draft an email to my agent about the
+  // self-tape" → Booking Desk, one of its routing domains) is that desk's job, not a
+  // "who should it go to?" prompt. A reply ("draft a reply to my last email") is about the
+  // user's own inbox, so it still asks for the address.
+  const deskDraft = draft?.kind === "ask" && r !== "general" && !/\breply\b/i.test(utterance);
+  if (draft && !deskDraft) return draftPlan(utterance, r, intent, draft);
   // "turn off gabagool mode" matches MUTATING's `turn (on|off)`, but the OS-control
   // intent layer (voice-controller.ts) owns these phrases before the plan is ever
   // built — they must never become a mutating plan for a gateway agent.
-  const mutating = looksMutating(utterance) && !isOsControlPhrase(utterance, useSettings.getState().osName);
+  const mutating = looksMutating(utterance) && !isOsControlPhrase(utterance, useSettings.getState().osName) && !isPlayback(utterance);
   const plan: ActionPlan = {
     id: crypto.randomUUID(),
     utterance,
@@ -147,6 +171,38 @@ export function heuristicPlan(utterance: string, role?: AgentRole): ActionPlan {
     verification: { status: "skipped", notes: [] },
     planner: "heuristic",
   };
+  plan.readBack = readBackFor(plan);
+  return plan;
+}
+
+/** A Gmail draft: a mutating plan bound to `gmail.create_draft`, or a read-only follow-up question. */
+function draftPlan(utterance: string, role: AgentRole, intent: string, d: DraftParse): ActionPlan {
+  const plan: ActionPlan = {
+    id: crypto.randomUUID(),
+    utterance,
+    role,
+    intent,
+    summary: "",
+    readBack: "",
+    mutating: false,
+    target: { kind: "agent" },
+    payload: {},
+    missing: [],
+    verification: { status: "skipped", notes: [] },
+    planner: "heuristic",
+    plannerNote: "Gmail draft binding",
+  };
+  if (d.kind === "ask" || !isTauri()) {
+    const text = d.kind === "ask" ? d.reply : "Gmail drafts are saved by the desktop app — ask me there.";
+    plan.summary = "Gmail draft";
+    plan.run = async () => ({ text, meta: "gmail · draft" });
+    return plan;
+  }
+  const args = { to: d.to, subject: d.subject, body: d.body };
+  plan.mutating = true;
+  plan.target = { kind: "tool", tool: "gmail.create_draft", args };
+  plan.payload = args;
+  plan.summary = `Save a Gmail draft to ${d.to}: "${d.subject}"`;
   plan.readBack = readBackFor(plan);
   return plan;
 }
@@ -206,8 +262,9 @@ async function modelPlan(base: ActionPlan, history: ChatMessage[]): Promise<Acti
   // A route the user named directly always wins — the model never overrides it.
   const role = base.routeKind !== "Named" && (Object.keys(SUB_AGENTS) as AgentRole[]).includes(j.role as AgentRole) ? (j.role as AgentRole) : base.role;
   const t = j.target as { kind?: string; workflow?: string } | undefined;
-  const wfInfo = t?.kind === "n8n" ? workflows.find((w) => w.name === t.workflow) : undefined;
-  const target: PlanTarget = wfInfo ? { kind: "n8n", workflow: wfInfo.name } : { kind: "agent" };
+  const wfInfo = base.target.kind === "agent" && t?.kind === "n8n" ? workflows.find((w) => w.name === t.workflow) : undefined;
+  // Only an agent target may be re-targeted; a tool/bridge binding is never downgraded.
+  const target: PlanTarget = base.target.kind !== "agent" ? base.target : wfInfo ? { kind: "n8n", workflow: wfInfo.name } : { kind: "agent" };
   const plan: ActionPlan = {
     ...base,
     role,
@@ -216,7 +273,7 @@ async function modelPlan(base: ActionPlan, history: ChatMessage[]): Promise<Acti
     // Safety: the model can escalate to mutating, never de-escalate.
     mutating: base.mutating || j.mutating === true || !!wfInfo?.mutating,
     target,
-    payload: j.payload && typeof j.payload === "object" && !Array.isArray(j.payload) ? (j.payload as Record<string, unknown>) : {},
+    payload: base.target.kind === "tool" ? base.payload : j.payload && typeof j.payload === "object" && !Array.isArray(j.payload) ? (j.payload as Record<string, unknown>) : {},
     missing: Array.isArray(j.missing) ? j.missing.map((m) => str(m, 40)).filter(Boolean).slice(0, 5) : [],
     planner: "model",
     plannerNote: `${res.providerId} · ${res.latencyMs}ms`,
@@ -268,15 +325,16 @@ export async function planIntent(utterance: string, opts: { role?: AgentRole; hi
   if (isTauri()) {
     // Plain questions skip the model planner (one fewer model call per turn): the OS
     // core routes them anyway. Anything that could change the world still gets the
-    // full model plan + verifier.
-    if (plan.mutating) {
+    // full model plan + verifier. A tool binding's fields come straight from the
+    // words, so it skips the planner (the verifier still checks it).
+    if (plan.mutating && plan.target.kind !== "tool") {
       try {
         plan = await modelPlan(plan, opts.history ?? []);
       } catch (e) {
         plan.plannerNote = `model planner unavailable (${e instanceof Error ? e.message : e}) — heuristic`;
       }
-    } else {
-      plan.plannerNote = "question — heuristic routing (no planner call)";
+    } else if (!plan.mutating) {
+      plan.plannerNote ??= "question — heuristic routing (no planner call)";
     }
     if (plan.mutating) {
       plan.verification = await verify(plan);

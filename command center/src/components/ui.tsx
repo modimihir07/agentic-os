@@ -13,7 +13,7 @@ export function Field({ label, children, className = "" }: { label: string; chil
 
 export function Select({ className = "", children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select {...rest} className={`field appearance-none bg-[length:12px] bg-[right_12px_center] bg-no-repeat pr-8 ${className}`} style={{ backgroundImage: CHEVRON }}>
+    <select {...rest} className={`field appearance-none leading-normal bg-[length:12px] bg-[right_12px_center] bg-no-repeat pr-8 ${className}`} style={{ backgroundImage: CHEVRON }}>
       {children}
     </select>
   );

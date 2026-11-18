@@ -1,9 +1,9 @@
-import { Component, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Component, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { GripVertical, Maximize2, X } from "lucide-react";
 import { getWidget } from "./registry";
-import { GRID_COLS, GRID_ROWS, fits, useLayout } from "./layout-store";
+import { GRID_COLS, GRID_ROWS, activeItems, fits, useLayout } from "./layout-store";
 import type { WidgetInstance } from "./types";
-import { useMediaQuery } from "@/lib/use-media-query";
+import { useMediaQuery, usePrefersReducedMotion } from "@/lib/use-media-query";
 
 /**
  * 12×8 snap grid on desktop/tablet; a single scrolling column on phones.
@@ -12,16 +12,28 @@ import { useMediaQuery } from "@/lib/use-media-query";
  * so it works with mouse and touch).
  */
 export function WidgetGrid() {
-  const instances = useLayout((s) => s.instances);
+  const activePage = useLayout((s) => s.activePage);
+  return <PageBoard key={activePage} />;
+}
+
+/** One page's board. Keyed by page id, so a page switch remounts it and fades it in. */
+function PageBoard() {
+  // `activeItems` returns the stored array, so this only re-renders when the page's items change.
+  const instances = useLayout(activeItems);
   const editing = useLayout((s) => s.editing);
   const compact = useMediaQuery("(max-width: 767px)");
+  const reduced = usePrefersReducedMotion();
   const gridRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!reduced) gridRef.current?.animate?.([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
+  }, [reduced]);
 
   if (compact) {
     const order = (i: WidgetInstance) => getWidget(i.widgetId)?.compactOrder ?? i.row;
     const ordered = [...instances].sort((a, b) => order(a) - order(b) || a.col - b.col);
     return (
-      <div className="flex flex-col gap-3 px-4 pb-40 pt-2">
+      <div ref={gridRef} className="flex flex-col gap-3 px-4 pb-40 pt-2">
         {ordered.map((inst) => (
           <WidgetCell key={inst.instanceId} inst={inst} editing={editing} compact />
         ))}
@@ -107,7 +119,7 @@ function WidgetCell({
             h: Math.min(max.h, Math.max(min.h, inst.h + dr)),
           };
     setGhost(next);
-    setGhostValid(fits(useLayout.getState().instances, { ...inst, ...next }));
+    setGhostValid(fits(activeItems(useLayout.getState()), { ...inst, ...next }));
   };
 
   const onPointerUp = () => {

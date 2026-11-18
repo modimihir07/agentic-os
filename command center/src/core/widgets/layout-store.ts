@@ -3,9 +3,9 @@ import { persist } from "zustand/middleware";
 import { getWidget } from "./registry";
 import { isTauri } from "@/lib/platform";
 import type { WidgetInstance } from "./types";
+import { activeItems, allIds, fits, migrateLayout, moveToPage, nextPageName, placeWidget, removePage, sanitizePages, withUniqueIds, type PagesState } from "./pages";
 
-export const GRID_COLS = 12;
-export const GRID_ROWS = 8;
+export { GRID_COLS, GRID_ROWS, activeItems, fits, type LayoutPage } from "./pages";
 
 const PIPELINES_SLOT: WidgetInstance = { instanceId: "n8n", widgetId: "n8n-pipelines", col: 4, row: 4, w: 6, h: 2, config: {} };
 
@@ -29,101 +29,118 @@ const DEFAULT_LAYOUT: WidgetInstance[] = [
   ...(isTauri() ? [PIPELINES_SLOT] : []),
 ];
 
-const overlaps = (a: Pick<WidgetInstance, "col" | "row" | "w" | "h">, b: Pick<WidgetInstance, "col" | "row" | "w" | "h">) =>
-  a.col < b.col + b.w && b.col < a.col + a.w && a.row < b.row + b.h && b.row < a.row + a.h;
-
-const inBounds = (r: Pick<WidgetInstance, "col" | "row" | "w" | "h">) =>
-  r.col >= 1 && r.row >= 1 && r.col + r.w - 1 <= GRID_COLS && r.row + r.h - 1 <= GRID_ROWS;
-
-export function fits(instances: WidgetInstance[], candidate: WidgetInstance): boolean {
-  return inBounds(candidate) && instances.every((o) => o.instanceId === candidate.instanceId || !overlaps(o, candidate));
+export interface AddResult {
+  ok: boolean;
+  reason?: string;
+  /** The page the widget landed on (it becomes the active page). */
+  pageId?: string;
+  /** True when no page had room and a new one was made. */
+  created?: boolean;
 }
 
-/** First free slot scanning row-major, or null when the board is full. */
-function findSlot(instances: WidgetInstance[], w: number, h: number): { col: number; row: number } | null {
-  for (let row = 1; row <= GRID_ROWS - h + 1; row++)
-    for (let col = 1; col <= GRID_COLS - w + 1; col++)
-      if (fits(instances, { instanceId: "__probe", widgetId: "", col, row, w, h, config: {} })) return { col, row };
-  return null;
-}
-
-interface LayoutState {
-  instances: WidgetInstance[];
+interface LayoutState extends PagesState {
   editing: boolean;
   setEditing: (v: boolean) => void;
-  add: (widgetId: string, config?: Record<string, unknown>) => { ok: boolean; reason?: string };
+  /** Lands on the start page (default: active) if it fits, else a later page, else a new page. */
+  add: (widgetId: string, config?: Record<string, unknown>, opts?: { pageId?: string }) => AddResult;
   remove: (instanceId: string) => void;
   /** Returns false (and changes nothing) if the target rect is out of bounds or collides. */
   place: (instanceId: string, rect: Pick<WidgetInstance, "col" | "row" | "w" | "h">) => boolean;
   setConfig: (instanceId: string, patch: Record<string, unknown>) => void;
   setGlass: (instanceId: string, ultra: boolean) => void;
   setGlassAll: (ultra: boolean) => void;
+  /** Resets the active page only: the first page gets the default board back, any other page is cleared. */
   reset: () => void;
+  addPage: (name?: string) => string;
+  removePage: (id: string) => void;
+  renamePage: (id: string, name: string) => void;
+  setActivePage: (id: string) => void;
+  moveToPage: (instanceId: string, pageId: string) => boolean;
 }
+
+const shortId = () => crypto.randomUUID().slice(0, 6);
 
 export const useLayout = create<LayoutState>()(
   persist(
-    (set, get) => ({
-      instances: DEFAULT_LAYOUT,
-      editing: false,
-      setEditing: (editing) => set({ editing }),
-      add: (widgetId, config) => {
-        const def = getWidget(widgetId);
-        if (!def) return { ok: false, reason: "Unknown widget" };
-        // Try the preferred size first, then shrink to the minimum.
-        for (const size of [def.defaultSize, def.minSize].filter((s): s is { w: number; h: number } => !!s)) {
-          const slot = findSlot(get().instances, size.w, size.h);
-          if (!slot) continue;
-          const instance: WidgetInstance = {
-            instanceId: `${widgetId}-${crypto.randomUUID().slice(0, 6)}`,
-            widgetId,
-            ...slot,
-            ...size,
-            config: { ...def.defaultConfig, ...config },
-          };
-          set((s) => ({ instances: [...s.instances, instance] }));
-          return { ok: true };
-        }
-        return { ok: false, reason: "No free space — remove or shrink a widget first" };
-      },
-      remove: (instanceId) => set((s) => ({ instances: s.instances.filter((i) => i.instanceId !== instanceId) })),
-      place: (instanceId, rect) => {
-        const current = get().instances.find((i) => i.instanceId === instanceId);
-        if (!current) return false;
-        const next = { ...current, ...rect };
-        if (!fits(get().instances, next)) return false;
-        set((s) => ({ instances: s.instances.map((i) => (i.instanceId === instanceId ? next : i)) }));
-        return true;
-      },
-      setConfig: (instanceId, patch) =>
-        set((s) => ({
-          instances: s.instances.map((i) => (i.instanceId === instanceId ? { ...i, config: { ...i.config, ...patch } } : i)),
-        })),
-      setGlass: (instanceId, ultra) =>
-        set((s) => ({ instances: s.instances.map((i) => (i.instanceId === instanceId ? { ...i, glass: ultra ? ("ultra" as const) : undefined } : i)) })),
-      setGlassAll: (ultra) => set((s) => ({ instances: s.instances.map((i) => ({ ...i, glass: ultra ? ("ultra" as const) : undefined })) })),
-      reset: () => set({ instances: DEFAULT_LAYOUT }),
-    }),
+    (set, get) => {
+      /** Replace the active page's items. */
+      const updateActive = (fn: (items: WidgetInstance[]) => WidgetInstance[]) =>
+        set((s) => ({ pages: s.pages.map((p) => (p.id === s.activePage ? { ...p, items: fn(p.items) } : p)) }));
+      return {
+        pages: [{ id: "p1", name: "Page 1", items: DEFAULT_LAYOUT }],
+        activePage: "p1",
+        editing: false,
+        setEditing: (editing) => set({ editing }),
+        add: (widgetId, config, opts) => {
+          const def = getWidget(widgetId);
+          if (!def) return { ok: false, reason: "Unknown widget" };
+          const sizes = [def.defaultSize, def.minSize].filter((z): z is { w: number; h: number } => !!z);
+          const s = get();
+          const r = placeWidget(s, { widgetId, sizes, config: { ...def.defaultConfig, ...config }, pageId: opts?.pageId }, shortId);
+          if (!r.ok) return { ok: false, reason: r.reason };
+          set(r.state);
+          return { ok: true, pageId: r.pageId, created: r.created };
+        },
+        remove: (instanceId) => updateActive((items) => items.filter((i) => i.instanceId !== instanceId)),
+        place: (instanceId, rect) => {
+          const items = activeItems(get());
+          const current = items.find((i) => i.instanceId === instanceId);
+          if (!current) return false;
+          const next = { ...current, ...rect };
+          if (!fits(items, next)) return false;
+          updateActive((list) => list.map((i) => (i.instanceId === instanceId ? next : i)));
+          return true;
+        },
+        // By id on whichever page holds it (ids are unique), so a widget's late async save still lands after a page switch.
+        setConfig: (instanceId, patch) =>
+          set((s) => ({
+            pages: s.pages.map((p) =>
+              p.items.some((i) => i.instanceId === instanceId)
+                ? { ...p, items: p.items.map((i) => (i.instanceId === instanceId ? { ...i, config: { ...i.config, ...patch } } : i)) }
+                : p,
+            ),
+          })),
+        setGlass: (instanceId, ultra) =>
+          updateActive((items) => items.map((i) => (i.instanceId === instanceId ? { ...i, glass: ultra ? ("ultra" as const) : undefined } : i))),
+        setGlassAll: (ultra) => updateActive((items) => items.map((i) => ({ ...i, glass: ultra ? ("ultra" as const) : undefined }))),
+        reset: () => {
+          const s = get();
+          const first = s.pages[0]?.id === s.activePage;
+          const others = allIds(s.pages.filter((p) => p.id !== s.activePage));
+          updateActive(() => (first ? withUniqueIds(DEFAULT_LAYOUT, others, shortId) : []));
+        },
+        addPage: (name) => {
+          const s = get();
+          const ids = new Set(s.pages.map((p) => p.id));
+          let id = `p${shortId()}`;
+          while (ids.has(id)) id = `p${shortId()}`;
+          set({ pages: [...s.pages, { id, name: name?.trim() || nextPageName(s.pages), items: [] }], activePage: id });
+          return id;
+        },
+        removePage: (id) => set((s) => removePage(s, id)),
+        renamePage: (id, name) => {
+          const n = name.trim().slice(0, 40);
+          if (n) set((s) => ({ pages: s.pages.map((p) => (p.id === id ? { ...p, name: n } : p)) }));
+        },
+        setActivePage: (id) => {
+          if (get().pages.some((p) => p.id === id)) set({ activePage: id });
+        },
+        moveToPage: (instanceId, pageId) => {
+          const s = get();
+          const inst = s.pages.flatMap((p) => p.items).find((i) => i.instanceId === instanceId);
+          const next = moveToPage(s, instanceId, pageId, inst ? getWidget(inst.widgetId)?.minSize : undefined);
+          if (!next) return false;
+          set(next);
+          return true;
+        },
+      };
+    },
     {
       name: "cc.layout",
-      version: 4,
-      partialize: (s) => ({ instances: s.instances }),
-      // v3 ships a new default board (reminders, pipeline, contracting). Start from it,
-      // then keep any generated custom widgets from the old board that still fit.
-      // v4 adds the n8n Pipelines panel (desktop) to the centre band if it's free.
-      migrate: (persisted, version) => {
-        const state = persisted as { instances: WidgetInstance[] };
-        if (version === 3) {
-          const has = state.instances.some((i) => i.widgetId === "n8n-pipelines");
-          return isTauri() && !has && fits(state.instances, PIPELINES_SLOT) ? { instances: [...state.instances, PIPELINES_SLOT] } : state;
-        }
-        if (version >= 4) return state;
-        let next = [...DEFAULT_LAYOUT];
-        for (const old of state.instances ?? []) {
-          if (old.widgetId === "custom" && fits(next, old)) next = [...next, old];
-        }
-        return { instances: next };
-      },
+      version: 5,
+      partialize: (s) => ({ pages: s.pages, activePage: s.activePage }),
+      migrate: (persisted, version) => migrateLayout(persisted, version, DEFAULT_LAYOUT, isTauri() ? PIPELINES_SLOT : null),
+      merge: (persisted, current) => (persisted == null ? current : { ...current, ...sanitizePages(persisted, DEFAULT_LAYOUT) }),
     },
   ),
 );

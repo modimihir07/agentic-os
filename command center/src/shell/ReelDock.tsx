@@ -1,8 +1,9 @@
 import { ChevronLeft, ChevronRight, Pause, Play } from "lucide-react";
 import { useWallpapers } from "@/features/wallpaper/wallpaper-store";
 import { useSettings } from "@/stores/settings";
+import { PageSwitcher } from "./PageSwitcher";
 
-/** Bottom wallpaper reel (desktop): "01 Drift Fog · 02 Skyline · 03 Pine Mist (Live)…" */
+/** Bottom wallpaper reel (desktop): "01 Drift Fog · 02 Skyline · 03 Pine Mist (Live)…", dashboard pages at the right end. */
 export function ReelDock() {
   const { items, currentId, playing, select, setPlaying, next } = useWallpapers();
   const shuffle = useSettings((s) => s.wallpaperShuffle);
@@ -48,6 +49,7 @@ export function ReelDock() {
           );
         })}
       </ol>
+      <PageSwitcher />
     </div>
   );
 }

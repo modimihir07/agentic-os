@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Loader2, Plus, RotateCcw, Sparkles } from "lucide-react";
 import { WidgetGrid } from "@/core/widgets/WidgetGrid";
 import { availableWidgets } from "@/core/widgets/registry";
-import { useLayout } from "@/core/widgets/layout-store";
+import { activeItems, useLayout, type AddResult } from "@/core/widgets/layout-store";
+import { matchCatalog } from "@/core/widgets/catalog-match";
 import { cc } from "@/lib/cc-api";
 import { GlassOpacitySlider } from "@/features/os/OsControls";
 import { GENERATOR_SYSTEM, validateSpec, type CustomSpec } from "@/widgets/custom/spec";
@@ -29,7 +30,7 @@ const TEMPLATES: { label: string; spec: CustomSpec }[] = [
 
 /** One switch for every widget's ultra-glass mode (each widget also has its own in edit mode). */
 function GlassAllSwitch() {
-  const instances = useLayout((s) => s.instances);
+  const instances = useLayout(activeItems);
   const setGlassAll = useLayout((s) => s.setGlassAll);
   const on = instances.length > 0 && instances.every((i) => i.glass === "ultra");
   return (
@@ -50,21 +51,35 @@ function GlassAllSwitch() {
 
 /** "Add widget" tray (registry), templates, and the LLM widget generator. */
 function WidgetTray() {
-  const { add, reset } = useLayout();
+  const add = useLayout((s) => s.add);
+  const reset = useLayout((s) => s.reset);
   const [msg, setMsg] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const addCustom = (spec: CustomSpec) => {
-    const r = add("custom", { spec });
-    setMsg(r.ok ? `Added “${spec.title}”.` : (r.reason ?? null));
+  /** Add, then say where it went when it didn't land on the page you were looking at. */
+  const addAndReport = (widgetId: string, title: string, config?: Record<string, unknown>) => {
+    const before = useLayout.getState().activePage;
+    const r: AddResult = add(widgetId, config);
+    if (!r.ok) return setMsg(r.reason ?? null);
+    const page = useLayout.getState().pages.find((p) => p.id === r.pageId);
+    setMsg(r.created || r.pageId !== before ? `Added “${title}” on ${page?.name ?? "a new page"}.` : `Added “${title}”.`);
   };
+
+  const addCustom = (spec: CustomSpec) => addAndReport("custom", spec.title, { spec });
 
   const generate = async () => {
     const p = prompt.trim();
     if (!p) return;
-    setBusy(true);
     setMsg(null);
+    // A built-in widget named in the prompt ("spotify") is added directly — no LLM round trip.
+    const builtIn = matchCatalog(p, availableWidgets());
+    if (builtIn) {
+      addAndReport(builtIn.id, builtIn.title);
+      setPrompt("");
+      return;
+    }
+    setBusy(true);
     try {
       const raw = await cc.llmJson<unknown>(GENERATOR_SYSTEM, `${p}\n(Current date: ${new Date().toISOString()})`);
       const spec = validateSpec(raw);
@@ -90,10 +105,7 @@ function WidgetTray() {
               <button
                 key={w.id}
                 title={w.description}
-                onClick={() => {
-                  const r = add(w.id);
-                  setMsg(r.ok ? null : (r.reason ?? null));
-                }}
+                onClick={() => addAndReport(w.id, w.title)}
                 className="pill-glass !h-9 shrink-0 !px-3 text-[13px]"
               >
                 <Plus size={13} />
@@ -104,8 +116,8 @@ function WidgetTray() {
           })}
         <GlassAllSwitch />
         <GlassOpacitySlider />
-        <button onClick={reset} className="pill-glass !h-9 shrink-0 !px-3 text-[13px]" title="Restore the default layout">
-          <RotateCcw size={13} /> Reset
+        <button onClick={reset} className="pill-glass !h-9 shrink-0 !px-3 text-[13px]" title="Restores the default layout on the first page, or clears any other page. Other pages are untouched.">
+          <RotateCcw size={13} /> Reset this page
         </button>
       </div>
 

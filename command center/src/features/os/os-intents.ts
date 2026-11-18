@@ -1,23 +1,27 @@
 /**
  * Native OS-control intents — the executing half. Local, reversible controls
- * (Gabagool, stop-audio, workspace switch, model swap, compute mode, kill
- * switch, status) run in-process: no gateway hop, no confirmation card.
+ * (Gabagool on/off/volume, stop-audio, Spotify playback, workspace switch, model
+ * swap, compute mode, kill switch, status) run in-process: no gateway hop, no
+ * confirmation card (Spotify still honours the MCP permission tier in Rust).
  *
- * Called from `voice-controller.ts handleInput` right after the stop/cue
- * checks and BEFORE idea capture, local intents and the planner, so a phrase
- * like "turn off gabagool mode" can never reach a gateway agent.
+ * `voice-controller.ts handleInput` parses every line once with `parseOsLine`
+ * (before a pending confirmation, so "stop" still works there) and runs the
+ * result BEFORE idea capture, local intents and the planner, so a phrase like
+ * "turn off gabagool mode" can never reach a gateway agent.
  */
 import { collections } from "@/lib/cc-api";
 import { cmd, isTauri } from "@/lib/platform";
 import { useNav } from "@/stores/nav";
 import { useSettings } from "@/stores/settings";
 import { fireCue } from "@/features/cues/cue-runtime";
-import { cueRecentlyActive, gabagoolOn, stopAllAudio, useCueRun } from "@/features/cues/player";
+import { cueRecentlyActive, gabagoolOn, nudgeCueVolume, stopAllAudio, useCueRun } from "@/features/cues/player";
 import type { CueWidget } from "@/features/cues/types";
 import { useHealthStore } from "@/features/services/use-health";
 import { useVoice } from "@/features/voice/voice-store";
 import { roleLabel } from "@/features/dispatcher/roles";
+import { gated } from "@/features/bridge/gate";
 import { useOs } from "./os-store";
+import { nowPlayingReply, spotifyErrorReply } from "./media-reply";
 import { parseOsIntent, resolveModel, type OsIntent, type WorkspaceId } from "./os-intent-parse";
 
 export interface OsIntentResult {
@@ -25,20 +29,22 @@ export interface OsIntentResult {
   reply: string;
 }
 
-/** Parse + execute. Returns null for anything that isn't an OS-control phrase. */
-export async function handleOsIntent(text: string): Promise<OsIntentResult | null> {
+/** Parse a line against the live cue state. Null for anything that isn't an OS-control phrase. */
+export function parseOsLine(text: string): OsIntent | null {
   const osName = useSettings.getState().osName || "Tony";
-  const intent = parseOsIntent(text, { osName, cueActive: cueRecentlyActive() });
-  if (!intent) return null;
-  return run(intent);
+  return parseOsIntent(text, { osName, cueActive: cueRecentlyActive(), cuePlaying: !!useCueRun.getState().running });
 }
 
-async function run(intent: OsIntent): Promise<OsIntentResult> {
+export async function runOsIntent(intent: OsIntent): Promise<OsIntentResult> {
   switch (intent.kind) {
     case "gabagool-on":
       return gabagoolOnAction();
     case "gabagool-off":
       return gabagoolOffAction(intent.explicit);
+    case "cue-volume":
+      return cueVolumeAction(intent.steps);
+    case "media":
+      return mediaAction(intent);
     case "workspace":
       return workspaceAction(intent.thread);
     case "model":
@@ -70,6 +76,59 @@ function gabagoolOffAction(explicit: boolean): OsIntentResult {
   stopAllAudio();
   if (!wasActive && explicit) return { reply: "Gabagool mode is already off." };
   return { reply: "Gabagool mode off." };
+}
+
+async function cueVolumeAction(steps: number): Promise<OsIntentResult> {
+  const pct = await nudgeCueVolume(25 * steps);
+  return { reply: pct === null ? "No Gabagool theme loaded — add one in Settings → Voice & Triggers." : `Music at ${pct}%.` };
+}
+
+type MediaIntent = Extract<OsIntent, { kind: "media" }>;
+
+async function mediaAction(m: MediaIntent): Promise<OsIntentResult> {
+  if (!isTauri()) return { reply: "Spotify control needs the desktop app." };
+  switch (m.action) {
+    case "now":
+      try {
+        return { reply: nowPlayingReply(await cmd("spotify_now_playing")) };
+      } catch (e) {
+        return { reply: spotifyErrorReply(e) };
+      }
+    case "play": {
+      const { query, searchKind: kind } = m;
+      if (!query) return spotifyControl("Resume Spotify", (approved) => cmd("spotify_control", { action: "resume", approved }));
+      return spotifyControl(`Play ${query} on Spotify`, (approved) => cmd("spotify_play", { query, kind, approved }));
+    }
+    case "volume": {
+      const value = m.value ?? `${(m.delta ?? 0) >= 0 ? "+" : ""}${m.delta ?? 0}`;
+      return spotifyControl("Change the Spotify volume", (approved) => cmd("spotify_control", { action: "volume", value, approved }));
+    }
+    case "pause":
+    case "resume":
+    case "next":
+    case "previous": {
+      const action = m.action;
+      return spotifyControl(MEDIA_SUMMARY[action], (approved) => cmd("spotify_control", { action, approved }));
+    }
+  }
+}
+
+const MEDIA_SUMMARY = { pause: "Pause Spotify", resume: "Resume Spotify", next: "Skip to the next track", previous: "Go back a track" } as const;
+
+/**
+ * A Spotify playback command. Rust applies the kill switch and the MCP permission tier;
+ * on Ask, the standard confirmation card runs it after the user's yes (its result then
+ * lands in the transcript from the approved plan).
+ */
+async function spotifyControl(summary: string, call: (approved: boolean) => Promise<string>): Promise<OsIntentResult> {
+  try {
+    return { reply: await call(false) };
+  } catch (e) {
+    if (!String(e).includes("PERMISSION_REQUIRED:")) return { reply: spotifyErrorReply(e) };
+    if (useVoice.getState().pending) return { reply: "Spotify control needs your OK — answer the open card first." };
+    void gated({ action: "spotify", summary }, call, (r) => r).catch(() => undefined);
+    return { reply: "Spotify control is set to Ask — approve the card and I'll do it." };
+  }
 }
 
 function workspaceAction(thread: WorkspaceId): OsIntentResult {

@@ -352,7 +352,7 @@ function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entr
     <tr className="border-t border-white/[0.06]">
       <td className="px-1 py-1.5 font-medium text-ink">{roleLabel(role)}</td>
       <td className="px-1 py-1.5">
-        <Select value={engine} onChange={(e) => onPatch({ engine: e.target.value as AgentVoice["engine"] })} className="!h-8 !w-36 !text-xs">
+        <Select value={engine} onChange={(e) => onPatch({ engine: e.target.value as AgentVoice["engine"] })} className="!h-9 !w-36 !py-0 !text-xs !leading-normal">
           <option value="elevenlabs">ElevenLabs (cloud)</option>
           <option value="kokoro">Kokoro (local)</option>
         </Select>
@@ -360,7 +360,7 @@ function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entr
       <td className="px-1 py-1.5">
         {/* w-40 used to clip a cloned voice's full name ("Tony Soprano Master Gabagool"); wide
             enough now for that plus some headroom, with a title so hover shows the rest anyway. */}
-        <Select value={current} onChange={(e) => onPatch({ voice: e.target.value })} className="!h-8 !w-56 !text-xs" title={engine === "elevenlabs" ? current || undefined : undefined}>
+        <Select value={current} onChange={(e) => onPatch({ voice: e.target.value })} className="!h-9 !w-56 !py-0 !text-xs !leading-normal" title={engine === "elevenlabs" ? current || undefined : undefined}>
           <option value="">Default</option>
           {!list.some((v) => v.id === current) && current && <option value={current}>{current}</option>}
           {list.map((v) => (
@@ -372,7 +372,7 @@ function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entr
       </td>
       <td className="px-1 py-1.5">
         {engine === "elevenlabs" ? (
-          <Select value={entry?.model ?? ""} onChange={(e) => onPatch({ model: e.target.value })} className="!h-8 !w-32 !text-xs">
+          <Select value={entry?.model ?? ""} onChange={(e) => onPatch({ model: e.target.value })} className="!h-9 !w-32 !py-0 !text-xs !leading-normal">
             <option value="">Default</option>
             {models.map((m) => (
               <option key={m} value={m}>

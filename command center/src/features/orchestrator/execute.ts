@@ -17,6 +17,7 @@ export interface ExecutionResult {
  * Routing:
  *   read-only        → dispatch() chat (local model / cloud fallback / gateway)
  *   mutating + n8n   → named n8n webhook (Rust, URL from providers.json)
+ *   mutating + tool  → that tool's approved-only Rust command (gmail_create_draft)
  *   mutating + agent → Agentic OS agent via the gateway (opencode has real
  *                      tools). A plain chat model has NO tools and would
  *                      only *claim* it acted, so it is never used to
@@ -60,6 +61,8 @@ export async function execute(plan: ActionPlan, history: ChatMessage[]): Promise
     };
   }
 
+  if (plan.target.kind === "tool") return runTool(plan.target.tool, plan.target.args);
+
   if (plan.target.kind === "n8n") {
     const started = performance.now();
     const out = await cmd("n8n_trigger", {
@@ -99,6 +102,18 @@ export async function execute(plan: ActionPlan, history: ChatMessage[]): Promise
     text: res.response?.content || "(no response)",
     meta: `${agent.label} → Agentic OS · ${agent.gatewayAgent} · ${Math.round(performance.now() - started)}ms`,
   };
+}
+
+/** An approved tool plan: each tool has its own Rust command that refuses without `approved`. */
+async function runTool(tool: string, args: Record<string, unknown>): Promise<ExecutionResult> {
+  if (tool !== "gmail.create_draft") throw new Error(`Nothing was done — ${tool} has no approved-action path.`);
+  const started = performance.now();
+  const s = (k: string) => (typeof args[k] === "string" ? (args[k] as string) : "");
+  const text = await cmd("gmail_create_draft", { to: s("to"), subject: s("subject"), body: s("body"), approved: true }).catch((e) => {
+    const raw = e instanceof Error ? e.message : String(e);
+    throw new Error(raw.startsWith("PERMISSION_DENIED") ? "Nothing was done — MCP tools are set to Deny in Settings → Integrations." : `No draft was saved — ${raw}`);
+  });
+  return { text, meta: `Gmail · draft · ${Math.round(performance.now() - started)}ms` };
 }
 
 function summariseOutput(raw: string): string {

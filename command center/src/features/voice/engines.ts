@@ -98,17 +98,26 @@ export class MicCapture {
   private stream: MediaStream | null = null;
   private nodes: AudioNode[] = [];
   private chunks: Float32Array[] = [];
-  private done = false;
+  private done = true;
   private timer: ReturnType<typeof setInterval> | undefined;
   private silero: SileroStream | null = null;
+  /** Bumped by every start()/stop(): an older start() still awaiting the mic sees it changed and bails. */
+  private session = 0;
+
+  /** start() is still acquiring the mic (nothing captured yet, not stopped). */
+  get starting() {
+    return !this.done && !this.stream;
+  }
 
   async start(opts: CaptureOpts): Promise<void> {
     this.stop();
+    const my = ++this.session;
     this.done = false;
     this.chunks = [];
     const ac = await audioContext();
+    if (my !== this.session) return;
     const { micDeviceId: deviceId, vad } = useSettings.getState();
-    this.stream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
@@ -118,8 +127,12 @@ export class MicCapture {
         ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
       },
     });
-    const src = ac.createMediaStreamSource(this.stream);
+    if (my !== this.session) return stream.getTracks().forEach((t) => t.stop());
+    this.stream = stream;
+    const src = ac.createMediaStreamSource(stream);
     await ac.audioWorklet.addModule(import.meta.env.BASE_URL + "worklets/pcm-capture.js");
+    // A stop() during addModule already released `stream`; stopping again is a no-op.
+    if (my !== this.session) return stream.getTracks().forEach((t) => t.stop());
     const worklet = new AudioWorkletNode(ac, "pcm-capture");
     const sink = ac.createGain();
     sink.gain.value = 0; // keep the graph pulled without audible output
@@ -214,9 +227,9 @@ export class MicCapture {
     }, 1000);
   }
 
-  /** End now and hand over whatever was captured (used by the stop button). */
+  /** End now and hand over whatever was captured (used by the stop button). Nothing live → just stop. */
   flush(onUtteranceEnd: CaptureOpts["onUtteranceEnd"]) {
-    if (this.done || !ctx) return this.stop();
+    if (this.done || !this.stream || !ctx) return this.stop();
     this.finish(ctx.sampleRate, { record: true, onUtteranceEnd }, 0);
   }
 
@@ -234,7 +247,10 @@ export class MicCapture {
     opts.onUtteranceEnd?.(pcm, rate);
   }
 
+  /** Releases the mic (tracks stopped → OS indicator off). The shared AudioContext stays open for TTS. */
   stop() {
+    this.session++;
+    this.done = true;
     clearInterval(this.timer);
     this.silero?.close();
     this.silero = null;
@@ -295,6 +311,7 @@ export class WhisperStt implements SttEngine {
   start(h: SttHandlers, opts?: { maxSilenceStartMs?: number; sensitivityOffset?: number; endSilenceMs?: number; maxUtteranceMs?: number }) {
     this.handlers = h;
     h.onPhase?.("waiting");
+    const current = () => this.handlers === h;
     this.mic
       .start({
         record: true,
@@ -302,16 +319,23 @@ export class WhisperStt implements SttEngine {
         sensitivityOffset: opts?.sensitivityOffset,
         endSilenceMs: opts?.endSilenceMs,
         maxUtteranceMs: opts?.maxUtteranceMs,
-        onSpeechStart: () => h.onPhase?.("speech"),
-        onNoSpeech: () => h.onFinal(""),
-        onUtteranceEnd: (pcm, rate) => void this.transcribe(pcm, rate),
+        onSpeechStart: () => current() && h.onPhase?.("speech"),
+        onNoSpeech: () => current() && h.onFinal(""),
+        onUtteranceEnd: (pcm, rate) => void this.transcribe(pcm, rate, h),
       })
-      .catch(() => h.onError("Microphone blocked — allow mic access"));
+      .catch(() => current() && h.onError("Microphone blocked — allow mic access"));
   }
 
   /** Stop button: transcribe what we have instead of discarding it. */
   stop() {
-    this.mic.flush((pcm, rate) => void this.transcribe(pcm, rate));
+    const h = this.handlers;
+    if (!h) return this.mic.stop();
+    // Stopped before the mic even opened: nothing was captured, so the listen simply ends empty.
+    if (this.mic.starting) {
+      this.mic.stop();
+      return h.onFinal("");
+    }
+    this.mic.flush((pcm, rate) => void this.transcribe(pcm, rate, h));
   }
 
   abort() {
@@ -319,9 +343,8 @@ export class WhisperStt implements SttEngine {
     this.mic.stop();
   }
 
-  private async transcribe(pcm: Float32Array, rate: number) {
-    const h = this.handlers;
-    if (!h) return;
+  private async transcribe(pcm: Float32Array, rate: number, h: SttHandlers) {
+    if (this.handlers !== h) return;
     if (pcm.length < rate * 0.3) return h.onFinal("");
     h.onPhase?.("transcribing");
     try {

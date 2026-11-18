@@ -8,7 +8,7 @@ export interface AudioClip {
   duration: number;
   inPoint: number;
   outPoint: number;
-  /** 0–100 %. */
+  /** 0–300 % (above 100 boosts; the cue bus limiter keeps it from clipping hard). */
   volume: number;
   fadeInMs: number;
   fadeOutMs: number;

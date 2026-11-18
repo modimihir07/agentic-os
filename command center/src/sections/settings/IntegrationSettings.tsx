@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
-import { Container, Loader2, Plus, Radar, ShieldCheck, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Container, Copy, Download, FlaskConical, Loader2, Mail, Music2, Plus, Radar, ShieldCheck, Trash2, Unplug } from "lucide-react";
 import { Card, Field, Input, Select } from "@/components/ui";
-import { cmd, isTauri, type N8nDiscovery, type WorkflowInfo } from "@/lib/platform";
+import { cmd, isTauri, type N8nDiscovery, type NativeCommands, type SpotifyStatus, type WorkflowInfo } from "@/lib/platform";
 import { cc, type CcConfig } from "@/lib/cc-api";
 import { syncCalendar } from "@/features/reminders/scheduler";
+import { setMcpEnabled } from "@/features/integrations/mcp-enable";
+import { useSpotifyAuthRefresh, useSpotifyConnect } from "@/features/integrations/spotify-connect";
 import { useProviders } from "./use-providers";
+import { SecretRow, Toggle, useOsCfg } from "./os-ui";
 
 /** n8n bound to the local Docker container; workflow map with read-only vs mutating tiers. */
 export function N8nCard() {
@@ -45,7 +48,7 @@ export function N8nCard() {
   return (
     <Card
       title="n8n · Docker"
-      hint="Bound to your local n8n container automatically. Read-only workflows (e.g. calendar-upcoming, gmail-digest) feed widgets directly. Mutating ones only run after you approve on the confirmation card — the app can only call workflows listed here."
+      hint="Bound to your local n8n container automatically. Read-only workflows (e.g. calendar-upcoming, gmail-recent) feed widgets directly. Mutating ones only run after you approve on the confirmation card — the app can only call workflows listed here."
       action={busy ? <Loader2 size={14} className="animate-spin text-ink-3" /> : null}
     >
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-[12px] border border-white/[0.07] px-3 py-2 text-sm">
@@ -104,7 +107,7 @@ const GOOGLE_PRESETS: WorkflowInfo[] = [
   { name: "calendar-upcoming", path: "webhook/calendar-upcoming", mutating: false, description: "list upcoming Google Calendar events" },
   { name: "calendar-create", path: "webhook/calendar-create", mutating: true, description: "create a Google Calendar event" },
   { name: "calendar-cancel", path: "webhook/calendar-cancel", mutating: true, description: "cancel a Google Calendar event" },
-  { name: "gmail-digest", path: "webhook/gmail-digest", mutating: false, description: "unread Gmail summary" },
+  { name: "gmail-recent", path: "webhook/gmail-recent", mutating: false, description: "recent inbox messages (fallback for the Gmail tools)" },
   { name: "gmail-send", path: "webhook/gmail-send", mutating: true, description: "send an email from Gmail" },
 ];
 
@@ -129,7 +132,7 @@ export function GoogleCard() {
   };
 
   return (
-    <Card title="Gmail & Google Calendar" hint="Route 1 (works today): n8n’s Gmail and Google Calendar nodes hold your Google sign-in; Jarvis calls their webhooks. Reads sync every 10 minutes; creating, cancelling or sending always asks first.">
+    <Card title="Google Calendar & n8n Gmail" hint="Route 1 (works today): n8n’s Google Calendar and Gmail nodes hold your Google sign-in; Jarvis calls their webhooks. Reads sync every 10 minutes; creating, cancelling or sending always asks first. For reading mail the Gmail card’s Apps Script backend comes first — gmail-recent is its fallback.">
       <div className="space-y-1.5">
         {GOOGLE_PRESETS.map((p) => (
           <div key={p.name} className="flex items-center gap-2 text-[13px]">
@@ -190,6 +193,153 @@ export function GoogleCard() {
         )}
       </div>
       {msg && <p className="mt-2 text-xs text-ink-2">{msg}</p>}
+    </Card>
+  );
+}
+
+type GmailStatus = NativeCommands["gmail_status"]["result"];
+const GMAIL_SOURCE: Record<GmailStatus["source"], string> = {
+  script: "Apps Script deployment",
+  n8n: "n8n workflow (read-only fallback)",
+  none: "not set up",
+};
+
+/**
+ * Gmail through the same Google Apps Script deployment AnythingLLM's Gmail agent
+ * uses. The deployment ID and key live in the OS keychain; they never come back
+ * to the webview (the import copies them inside Rust).
+ */
+export function GmailCard() {
+  const { cfg } = useOsCfg();
+  const [status, setStatus] = useState<GmailStatus | null>(null);
+  const [rev, setRev] = useState(0);
+  const [busy, setBusy] = useState<"import" | "test" | "toggle" | null>(null);
+  const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null);
+  const refresh = () => void cmd("gmail_status").then(setStatus).catch(() => setStatus(null));
+  useEffect(refresh, []);
+  const server = cfg?.mcps.find((m) => m.id === "gmail");
+
+  const run = async (what: "import" | "test" | "toggle", fn: () => Promise<{ ok: boolean; text: string } | null>) => {
+    setBusy(what);
+    try {
+      const r = await fn();
+      if (r) setOut(r);
+    } catch (e) {
+      setOut({ ok: false, text: String(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+  const importAllm = () =>
+    run("import", async () => {
+      const r = await cmd("gmail_import_anythingllm");
+      refresh();
+      setRev((n) => n + 1);
+      return { ok: r.imported, text: r.detail };
+    });
+  // A click here is the user's own read-only request, so it doesn't wait on the Ask tier.
+  const test = () => run("test", async () => ({ ok: true, text: (await cmd("mcp_call", { name: "gmail.recent", args: { count: 1 }, approved: true, agent: "tony" })).slice(0, 600) }));
+  const toggle = (on: boolean) => run("toggle", async () => (await setMcpEnabled("gmail", on), null));
+
+  return (
+    <Card
+      title="Gmail"
+      hint="Reads your inbox through the Google Apps Script deployment AnythingLLM's Gmail agent uses. Reading runs when you ask; a draft is saved only after you approve the confirmation card, and nothing is ever sent."
+      action={busy ? <Loader2 size={14} className="animate-spin text-ink-3" /> : null}
+    >
+      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[12px] border border-white/[0.07] px-3 py-2 text-sm">
+        <Mail size={15} className={status?.configured ? "text-teal" : "text-ink-3"} />
+        <span className="text-ink-2">
+          Backend: <b className={status?.configured ? "text-teal" : "text-ink"}>{status ? GMAIL_SOURCE[status.source] : "…"}</b>
+        </span>
+        <button onClick={() => void importAllm()} disabled={!!busy} className="pill-glass ml-auto !h-8 text-xs" title="Copy AnythingLLM Desktop's Gmail agent deployment into the keychain">
+          <Download size={13} /> Import from AnythingLLM
+        </button>
+        <button onClick={() => void test()} disabled={!!busy || !status?.configured || !server?.enabled} className="pill-glass !h-8 text-xs" title="Fetch your latest email">
+          <FlaskConical size={13} /> Test
+        </button>
+      </div>
+      {server && <Toggle on={server.enabled} disabled={busy === "toggle"} onChange={(v) => void toggle(v)} label="Gmail tools on" hint="Off: Tony and the agents can't read mail, and drafts are refused." />}
+      <div key={rev}>
+        <SecretRow name="gmail-script-id" label="Apps Script deployment ID" placeholder="AKfycb…" onChange={refresh} />
+        <SecretRow name="gmail-script-key" label="Apps Script API key" onChange={refresh} />
+      </div>
+      {out && <pre className={`well mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-[8px] p-2 text-[11px] ${out.ok ? "text-ink-2" : "text-alert"}`}>{out.text}</pre>}
+    </Card>
+  );
+}
+
+/** Spotify Web API: OAuth (PKCE) in Rust, refresh token in the keychain. */
+export function SpotifyCard() {
+  const [status, setStatus] = useState<SpotifyStatus | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const refresh = useCallback(
+    () =>
+      void cmd("spotify_status")
+        .then((s) => (setStatus(s), setErr(null)))
+        .catch((e) => setErr(String(e))),
+    [],
+  );
+  useEffect(refresh, [refresh]);
+  useSpotifyAuthRefresh(refresh);
+  const { state, connect, reset } = useSpotifyConnect(refresh);
+  const waiting = state.phase === "waiting";
+  const disconnect = () =>
+    void cmd("spotify_disconnect")
+      .then(() => (reset(), refresh()))
+      .catch((e) => setErr(String(e)));
+  const copy = (url: string) =>
+    void navigator.clipboard
+      .writeText(url)
+      .then(() => setCopied(true))
+      .catch(() => setCopied(false));
+
+  return (
+    <Card title="Spotify" hint="Now playing, play / pause / skip / volume and your playlists — by voice, from Tony and from the Spotify widget. Playback control needs Spotify Premium.">
+      <div className="mb-2 flex flex-wrap items-center gap-2 rounded-[12px] border border-white/[0.07] px-3 py-2 text-sm">
+        <Music2 size={15} className={status?.connected ? "text-teal" : "text-ink-3"} />
+        <span className="text-ink-2">
+          {!status ? "…" : !status.configured ? "Not configured" : status.connected ? <>Connected{status.account ? <> as <b className="text-ink">{status.account}</b></> : null}</> : "Not connected"}
+        </span>
+        <button onClick={() => (setCopied(false), void connect())} disabled={waiting || !status?.configured} className="pill-primary ml-auto !h-8 text-xs">
+          {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {status?.connected ? "Reconnect" : "Connect"}
+        </button>
+        {status?.connected && (
+          <button onClick={disconnect} className="pill-glass !h-8 text-xs">
+            <Unplug size={13} /> Disconnect
+          </button>
+        )}
+      </div>
+      {waiting && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
+          <Loader2 size={12} className="animate-spin" /> Waiting for Spotify… finish signing in in your browser.
+          {state.url && (
+            <>
+              <a href={state.url} target="_blank" rel="noreferrer" className="text-teal underline">
+                Open the sign-in page
+              </a>
+              <button onClick={() => copy(state.url!)} className="flex items-center gap-1 text-ink-3 hover:text-ink">
+                <Copy size={11} /> {copied ? "Copied" : "Copy link"}
+              </button>
+            </>
+          )}
+        </p>
+      )}
+      {state.phase === "done" && <p className={`text-xs ${state.warning ? "text-amber-light" : "text-teal"}`}>{state.warning ?? `Spotify connected${state.account ? ` as ${state.account}` : ""} — its tools are on.`}</p>}
+      {state.phase === "error" && <p className="text-xs text-alert">{state.error}</p>}
+      {err && <p className="text-xs text-alert">{err}</p>}
+      <ul className="mt-2 space-y-1 text-xs text-ink-3">
+        {status && !status.configured && (
+          <li>
+            Add <span className="font-mono text-ink-2">SPOTIFY_CLIENT_ID</span> and <span className="font-mono text-ink-2">SPOTIFY_CLIENT_SECRET</span> to the repo-root <span className="font-mono text-ink-2">.env</span>, then reopen this tab.
+          </li>
+        )}
+        <li>
+          The redirect URI <span className="font-mono text-ink-2">http://127.0.0.1:1420/callback</span> must be registered for your app in the Spotify Developer Dashboard.
+        </li>
+        <li>Open Spotify on this PC or your phone before asking it to play — control needs an active device.</li>
+      </ul>
     </Card>
   );
 }

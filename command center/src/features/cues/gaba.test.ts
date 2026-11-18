@@ -55,3 +55,13 @@ describe("editDistance", () => {
   it("counts substitutions", () => expect(editDistance("gabagool", "gabagoom")).toBe(1));
   it("counts insertions/deletions", () => expect(editDistance("gabagol", "gabagool")).toBe(1));
 });
+
+describe("norm never swallows a trailing command word", () => {
+  it.each([
+    ["gabagool up", "gabagool up"],
+    ["turn gabagool on", "turn gabagool on"],
+    ["turn the gabagool down", "turn the gabagool down"],
+    ["gaba gool mode", "gabagool mode"],
+    ["ga ba gool", "gabagool"],
+  ])("%s → %s", (input, out) => expect(norm(input)).toBe(out));
+});

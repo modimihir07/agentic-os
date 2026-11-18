@@ -246,7 +246,8 @@ fn role_label(role: &str) -> String {
     }
 }
 
-pub fn system_prompt(cfg: &OsConfig, context: &str) -> String {
+/// `tools`: names of the tools Tony can use this turn (`mcp::enabled_tools`).
+pub fn system_prompt(cfg: &OsConfig, context: &str, tools: &[String]) -> String {
     let name = &cfg.os_name;
     let mut s = format!(
         "You are {name}, the user's personal operating system (Agentic OS) running on their own desktop. \
@@ -278,8 +279,19 @@ card — never claim you performed one. You are {name}; never call yourself Jarv
     if !skills.is_empty() {
         s.push_str(&format!("\n\nSKILLS ATTACHED TO YOU (read one with the skills.read tool when relevant):\n{skills}"));
     }
+    s.push_str(&tools_section(tools));
     s.push_str("\n\nStyle: warm, direct, concise — 1 to 4 sentences unless the user asks for detail. Spoken aloud, so no markdown tables.");
     s
+}
+
+fn tools_section(tools: &[String]) -> String {
+    let list = if tools.is_empty() { "none switched on right now (Settings → Skills & MCP Library)".to_string() } else { tools.join(", ") };
+    format!(
+        "\n\nTOOLS YOU HAVE THIS TURN: {list}.\nRead-only tools run automatically before you answer; their results appear below as LIVE MCP TOOL DATA. \
+Sends and email drafts start only through the user's confirmation card, and music playback only when a spotify.* result appears below as \
+LIVE MCP TOOL DATA. If neither happened this turn, don't claim it's done or queued: say plainly you couldn't start it and give the exact \
+phrasing that works (e.g. \"play <song> on Spotify\", \"draft an email to <address> about ...\"), never that you lack the tool or the skill."
+    )
 }
 
 /// "my conversation with Sam … about the shoot" → ("Sam", "the shoot").
@@ -300,15 +312,40 @@ pub(crate) fn comms_recall_intent(text: &str) -> Option<(String, String)> {
     Some((who, topic))
 }
 
-/// Widened per Part 2: also catches "what's up" (Whisper's mangle of
-/// "WhatsApp"), plural messages/texts/chats, inbox, "files", and "latest" —
-/// the exact gaps the MCP map found causing false WhatsApp/email refusals.
+/// Only words tied to a tool's subject (weather, files, git, web, email,
+/// WhatsApp incl. Whisper's "what's up"…) — generic verbs like read/open/
+/// list/find/latest made the router fire on unrelated requests.
 fn wants_tools(text: &str) -> bool {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"(?i)\b(weather|forecast|temperature|rain|snow|wind|time|date|today|tomorrow|fetch|url|https?://|website|web ?page|page|files?|folder|read|open|list|repo|git|commit|branch|search|look ?up|google|find|news|knowledge|remember|who is|emails?|inbox|gmail|what'?s ?app|whatsapp|messages?|texts?|chats?|what'?s ?up|dm|group|skill|status|latest)\b").unwrap()
+        regex::Regex::new(r"(?i)\b(weather|forecast|temperature|rain|snow|wind|what time|the date|tomorrow|fetch|url|https?://|website|web ?page|files?|folders?|readme|repo|git|commit|branch|search|look ?up|google|news|knowledge|remember|who is|e-?mails?|inbox|gmail|mails?|what'?s ?app|whatsapp|messages?|texts?|chats?|what'?s ?up|dms?|skills?|spotify|music|songs?|playlists?|what'?s playing|now playing)\b|[a-z]:[\\/]").unwrap()
     })
     .is_match(text)
+}
+
+/// Gmail / WhatsApp / Spotify tools are only offered to the router when the
+/// request itself names their subject (`norm` is `routing::normalize`d).
+fn router_keyword_ok(server: &str, norm: &str) -> bool {
+    static GMAIL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static WHATSAPP: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static SPOTIFY: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    match server {
+        "gmail" => GMAIL.get_or_init(|| regex::Regex::new(r"\b(gmail|e ?mails?|inbox|mails?)\b").unwrap()).is_match(norm),
+        "whatsapp" => WHATSAPP.get_or_init(|| regex::Regex::new(r"\b(whatsapp|messages?|texts?|chats?|dms?)\b").unwrap()).is_match(norm),
+        "spotify" => SPOTIFY.get_or_init(|| regex::Regex::new(r"\b(spotify|music|songs?|tracks?|playing|playlists?|albums?|listen(ed|ing)?)\b").unwrap()).is_match(norm),
+        _ => true,
+    }
+}
+
+/// One router line per tool: arg names plus a JSON call example.
+fn router_tool_line(t: &super::mcp::ToolInfo) -> String {
+    let args: serde_json::Map<String, Value> = t
+        .args
+        .iter()
+        .filter(|a| !a.ends_with('?'))
+        .map(|a| (a.clone(), if matches!(a.as_str(), "count" | "limit") { json!(5) } else { json!(format!("<{a}>")) }))
+        .collect();
+    format!("- {}({}): {} e.g. {}", t.name, t.args.join(", "), t.description, json!({ "tool": t.name, "args": args }))
 }
 
 // ── Tool pre-executor (Part 2) ──────────────────────────────────────────────
@@ -371,14 +408,232 @@ fn time_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, 
     (norm.contains("what time") || norm.contains("current time") || norm.contains("whats the date") || norm.contains("what date")).then(|| ("time.now".to_string(), json!({})))
 }
 
-fn deterministic_plan(text: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
-    whatsapp_plan(text, tools).or_else(|| time_plan(text, tools))
+/// The request names email at all (`norm` is `routing::normalize`d).
+fn mentions_email(norm: &str) -> bool {
+    router_keyword_ok("gmail", norm)
 }
 
-/// Run the existing JSON tool router, restricted to `tools`, for up to two
-/// sequential calls (so a second lookup can build on the first), capped by
-/// `deadline`. Each call gets its own short timeout so a dead server can't
-/// stall the turn — the caller already bounds the whole thing to ~20s.
+/// "read my last email", "latest 3 emails", "check my inbox", "any new
+/// emails", "unread mail" → `gmail.recent`; "emails from Sam" →
+/// `gmail.search {query: "from:Sam"}`. Checked before WhatsApp.
+fn gmail_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    let norm = super::routing::normalize(original);
+    if !mentions_email(&norm) {
+        return None;
+    }
+    // "any unread messages in my WhatsApp inbox" names WhatsApp, not email: leave it to
+    // whatsapp_plan unless the line also says email/Gmail outright.
+    static OTHER_CHANNEL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static EXPLICIT_EMAIL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    if OTHER_CHANNEL.get_or_init(|| regex::Regex::new(r"\b(whatsapp|texts?|chats?|dms?)\b").unwrap()).is_match(&norm)
+        && !EXPLICIT_EMAIL.get_or_init(|| regex::Regex::new(r"\b(gmail|e ?mails?)\b").unwrap()).is_match(&norm)
+    {
+        return None;
+    }
+    let has = |name: &str| tools.iter().any(|t| t.name == name);
+    static FROM: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let from = FROM.get_or_init(|| regex::Regex::new(r"\b(?i:e-?mails?|mails?|messages?)\s+(?i:from)\s+([\w.@+'\-]+(?:\s+[A-Z][\w'\-]*)?)").unwrap());
+    if has("gmail.search") {
+        if let Some(c) = from.captures(original) {
+            let who = c[1].trim_end_matches(['?', '.', ',', '!']);
+            if !who.is_empty() && !["me", "my", "him", "her", "them", "today", "yesterday"].contains(&who.to_ascii_lowercase().as_str()) {
+                let query = if who.contains(' ') { format!("from:\"{who}\"") } else { format!("from:{who}") };
+                return Some(("gmail.search".to_string(), json!({ "query": query, "limit": 5 })));
+            }
+        }
+    }
+    if !has("gmail.recent") {
+        return None;
+    }
+    static RECENT: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = RECENT.get_or_init(|| {
+        regex::Regex::new(
+            r"\b(?:last|latest|newest|most recent|recent)\s+(\d{1,2})?\s*(?:gmail\s+)?(e ?mails?|gmails?|mails?)\b|\b(?:check|read|open|show|whats in|what is in)\s+(?:me\s+)?(?:my\s+|the\s+)?(?:gmail\s+)?(?:inbox|e ?mails?|gmail|mail)\b|\bany\s+(?:new\s+)?(?:e ?mails?|mail)\b|\bunread\b",
+        )
+        .unwrap()
+    });
+    let c = re.captures(&norm)?;
+    let count: u64 = match (c.get(1), c.get(2)) {
+        (Some(n), _) => n.as_str().parse().unwrap_or(1),
+        (None, Some(noun)) if !noun.as_str().ends_with('s') => 1,
+        _ => 5,
+    };
+    Some(("gmail.recent".to_string(), json!({ "count": count.clamp(1, 20) })))
+}
+
+/// "play X (on spotify)" → (query, kind). Without "on spotify" only a short
+/// request that starts with "play" counts, so "play devil's advocate on this
+/// plan" stays a normal turn.
+fn spotify_play_request(original: &str) -> Option<(String, &'static str)> {
+    const LEAD_INS: [&str; 12] = ["hey tony", "tony", "hey", "ok", "okay", "yo", "please", "can you", "could you", "would you", "will you", "go ahead and"];
+    let mut s = original.trim().trim_end_matches(['.', '!', '?']).trim().to_string();
+    while let Some(p) = LEAD_INS.iter().find(|p| s.to_ascii_lowercase().starts_with(*p) && s[p.len()..].starts_with([' ', ','])) {
+        s = s[p.len()..].trim_start_matches([' ', ',']).to_string();
+    }
+    // "Play Daft Punk on Spotify, Tony." / "... please, Tony"
+    for tail in [" tony", " jarvis", " please", " for me"] {
+        let lower = s.to_ascii_lowercase();
+        // "play something by Tony" credits an artist; only an addressed name is dropped.
+        let credit = matches!(tail, " tony" | " jarvis") && (lower.ends_with(&format!(" by{tail}")) || lower.ends_with(&format!(" from{tail}")));
+        if lower.ends_with(tail) && !credit {
+            s.truncate(s.len() - tail.len());
+            s = s.trim_end_matches([',', ' ']).to_string();
+        }
+    }
+    let on_spotify = ["on spotify", "in spotify", "from spotify"].iter().find(|t| s.to_ascii_lowercase().ends_with(*t)).map(|t| t.len());
+    if let Some(n) = on_spotify {
+        s.truncate(s.len() - n);
+    }
+    let s = s.trim();
+    if !s.to_ascii_lowercase().starts_with("play ") {
+        return None;
+    }
+    let mut rest = s[5..].trim();
+    if rest.to_ascii_lowercase().starts_with("me ") {
+        rest = rest[3..].trim();
+    }
+    let lower = rest.to_ascii_lowercase();
+    const NOT_MUSIC: [&str; 12] = ["a game", "games", "devil", "around", "with", "along", "it ", "dumb", "nice", "back", "the role", "hard to get"];
+    if on_spotify.is_none() && (lower.split_whitespace().count() > 6 || NOT_MUSIC.iter().any(|w| lower.starts_with(w))) {
+        return None;
+    }
+    static KINDS: std::sync::OnceLock<Vec<(regex::Regex, &'static str)>> = std::sync::OnceLock::new();
+    let kinds = KINDS.get_or_init(|| {
+        [
+            (r"(?i)^(?:the\s+)?album\s+(.+)$", "album"),
+            (r"(?i)^(?:the\s+)?(.+?)\s+album$", "album"),
+            (r"(?i)^(?:the\s+|my\s+)?playlist\s+(.+)$", "playlist"),
+            (r"(?i)^(?:the\s+|my\s+)?(.+?)\s+playlist$", "playlist"),
+            (r"(?i)^(?:songs|music|something|anything|stuff|tracks)\s+by\s+(.+)$", "artist"),
+            (r"(?i)^(?:the\s+)?artist\s+(.+)$", "artist"),
+            (r"(?i)^some\s+(.+)$", "playlist"),
+            (r"(?i)^(?:the\s+)?(?:song|track)\s+(.+)$", "track"),
+        ]
+        .into_iter()
+        .map(|(re, k)| (regex::Regex::new(re).unwrap(), k))
+        .collect()
+    });
+    let (query, kind) = kinds.iter().find_map(|(re, k)| re.captures(rest).map(|c| (c[1].trim().to_string(), *k))).unwrap_or_else(|| (rest.replace(" by ", " "), "track"));
+    if query.is_empty() || ["music", "spotify", "something", "anything", "it", "my music", "the music"].contains(&query.to_ascii_lowercase().as_str()) {
+        return None;
+    }
+    Some((query, kind))
+}
+
+/// Spotify by voice, without a model round trip: now playing, play X,
+/// pause / resume / skip / previous, volume N. Needs the `spotify` server
+/// (its router-visible `spotify.now_playing` proves it is on and granted);
+/// playback tools are called directly because the user asked explicitly.
+fn spotify_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    if !tools.iter().any(|t| t.name == "spotify.now_playing") {
+        return None;
+    }
+    let norm = super::routing::normalize(original);
+    static RULES: std::sync::OnceLock<Vec<(regex::Regex, &'static str)>> = std::sync::OnceLock::new();
+    let rules = RULES.get_or_init(|| {
+        [
+            (r"\b(?:spotify|music) volume (?:to |at )?(\d{1,3})\b|\bset (?:the )?(?:spotify|music)(?: volume)? to (\d{1,3})\b|\bvolume (?:to |at )?(\d{1,3})(?: percent)? on spotify\b", "spotify.volume"),
+            (r"\bwhats playing\b|\bwhat is playing\b|\bwhat (?:song|track) is (?:this|that|playing|on)\b|\bwhats (?:this|that) (?:song|track)\b|\bwhat (?:song|track) am i listening to\b|\bnow playing\b", "spotify.now_playing"),
+            // Anchored: this runs before every Tony turn and acts immediately, so "how do I turn off
+            // spotify autoplay" or "remind me to stop the music at 11" must not pause playback.
+            (r"^(?:(?:hey )?(?:tony|jarvis) )?(?:(?:please|can you|could you|would you|ok|okay) )*(?:pause|stop|(?:(?:pause|stop|quit)(?: playing)? (?:the |my |this )?(?:music|songs?|tracks?|spotify|playback)(?: on spotify)?)|(?:turn|switch) (?:off (?:the )?spotify|(?:the )?spotify off)|pause spotify)(?: (?:please|now|for me))*(?: (?:tony|jarvis))?$", "spotify.pause"),
+            (r"^(?:resume|unpause)$|\b(?:resume|unpause|continue) (?:the )?(?:music|song|track|spotify|playback)\b|\bplay (?:the |my )?(?:music|spotify)$|\bkeep playing\b", "spotify.resume"),
+            (r"^(?:skip|next)$|\b(?:skip|next) (?:this |the )?(?:song|track)\b|\bskip (?:it|this)$|\bnext on spotify\b", "spotify.next"),
+            (r"\b(?:previous|prior) (?:song|track)\b|\bgo back (?:a|1) (?:song|track)\b|\bback (?:a|1) (?:song|track)\b", "spotify.previous"),
+            (r"\brecently played\b|\bwhat (?:have|did) i (?:just )?(?:been )?listen(?:ed|ing)? to\b", "spotify.recent"),
+            (r"\bmy (?:spotify )?playlists\b", "spotify.playlists"),
+        ]
+        .into_iter()
+        .map(|(re, t)| (regex::Regex::new(re).unwrap(), t))
+        .collect()
+    });
+    let core = norm.strip_prefix("hey ").unwrap_or(&norm);
+    let core = core.strip_prefix("tony ").unwrap_or(core).trim();
+    if let Some((re, tool)) = rules.iter().find(|(re, _)| re.is_match(core)) {
+        if *tool == "spotify.volume" {
+            let n: u64 = re.captures(core)?.iter().skip(1).flatten().next()?.as_str().parse().ok()?;
+            return Some((tool.to_string(), json!({ "percent": n.min(100) })));
+        }
+        return Some((tool.to_string(), json!({})));
+    }
+    let (query, kind) = spotify_play_request(original)?;
+    Some(("spotify.play".to_string(), json!({ "query": query, "kind": kind })))
+}
+
+fn deterministic_plan(text: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    gmail_plan(text, tools).or_else(|| whatsapp_plan(text, tools)).or_else(|| spotify_plan(text, tools)).or_else(|| time_plan(text, tools))
+}
+
+/// Text appended to Tony's (or a delegated agent's) prompt: the live tool data,
+/// and/or an instruction to report the tool failure honestly.
+fn tool_note(os_name: &str, raw: &str, failure: Option<&(String, String)>) -> String {
+    let mut note = String::new();
+    if !raw.is_empty() {
+        note.push_str(&format!(
+            "{raw}\n\nYou have live tool access through {os_name}. The data above was fetched just now; answer from it directly. Never say you lack access to WhatsApp, email, files or the internet."
+        ));
+    }
+    if let Some((tool, err)) = failure {
+        note.push_str(&format!("\n\n[TOOL FAILURE - {tool}]: {err}. Tell the user in one sentence exactly what failed and how to fix it; never say you lack the tool or the skill."));
+    }
+    note
+}
+
+/// What the tool pre-executor produced for one turn.
+#[derive(Default)]
+struct Prefetch {
+    block: String,
+    steps: Vec<OsStep>,
+    used: Option<String>,
+    /// (tool, error) of the call that failed — reported honestly to the model.
+    failure: Option<(String, String)>,
+    /// Names of the tools offered this turn.
+    tools: Vec<String>,
+}
+
+fn humanize_tool_error(e: &str) -> String {
+    if let Some(what) = e.strip_prefix("PERMISSION_DENIED:") {
+        format!("the {what} permission is set to Deny in Settings → Permissions")
+    } else if let Some(what) = e.strip_prefix("PERMISSION_REQUIRED:") {
+        format!("the {what} permission is set to Ask and this turn wasn't approved")
+    } else {
+        e.to_string()
+    }
+}
+
+impl Prefetch {
+    /// Run one tool call (bounded by `secs`) and record its step plus either
+    /// its data or its failure. Returns the output on success.
+    async fn call(&mut self, state: &DispatchState, os: &OsState, bridge: &BridgeState, name: &str, args: &Value, approved: bool, agent: &str, secs: Duration) -> Option<String> {
+        let t0 = Instant::now();
+        let res = tokio::time::timeout(secs, super::mcp::call_tool(state, os, bridge, name, args, approved, agent)).await;
+        let ms = t0.elapsed().as_millis();
+        match res {
+            Ok(Ok(out)) => {
+                self.steps.push(step("tool", "os", name, format!("{args}\n→ {}", out.chars().take(600).collect::<String>()), true, ms));
+                let server = name.split('.').next().unwrap_or(name);
+                self.block.push_str(&format!("\n\n[LIVE MCP TOOL DATA - {server}]:\n{}", out.chars().take(2000).collect::<String>()));
+                self.used = Some(name.to_string());
+                Some(out)
+            }
+            Ok(Err(e)) => {
+                let label = if e.starts_with("PERMISSION_") { "blocked" } else { "failed" };
+                self.steps.push(step("tool", "os", name, format!("{label}: {e}"), false, ms));
+                self.failure = Some((name.to_string(), humanize_tool_error(&e)));
+                None
+            }
+            Err(_) => {
+                self.steps.push(step("tool", "os", name, format!("{name} timed out"), false, ms));
+                self.failure = Some((name.to_string(), "timed out".into()));
+                None
+            }
+        }
+    }
+}
+
+/// Run the JSON tool router, restricted to `tools` (minus Gmail/WhatsApp
+/// tools the request doesn't name), for up to two sequential calls (so a
+/// second lookup can build on the first), capped by `deadline`.
 async fn run_tool_router(
     state: &DispatchState,
     os: &OsState,
@@ -389,70 +644,66 @@ async fn run_tool_router(
     approved: bool,
     agent: &str,
     deadline: Instant,
-) -> (String, Vec<OsStep>, Option<String>) {
-    let mut block = String::new();
-    let mut steps = Vec::new();
-    let mut last = None;
+    out: &mut Prefetch,
+) {
+    let norm = super::routing::normalize(text);
+    let offered: Vec<&super::mcp::ToolInfo> = tools.iter().filter(|t| router_keyword_ok(&t.server, &norm)).collect();
+    if offered.is_empty() {
+        return;
+    }
+    let list = offered.iter().map(|t| router_tool_line(t)).collect::<Vec<_>>().join("\n");
     let mut extra = String::new();
     for _ in 0..2 {
-        let left = deadline.saturating_duration_since(Instant::now());
-        if left.is_zero() {
-            break;
-        }
-        let list: Vec<String> = tools.iter().map(|t| format!("- {}({}): {}", t.name, t.args.join(", "), t.description)).collect();
         let router = format!(
-            "You route a request to at most ONE tool. Tools:\n{}\n\nLIVE DASHBOARD:\n{}{extra}\n\nReply ONLY with JSON: {{\"tool\": \"<tool name>\" or null, \"args\": {{…}}}}. \
+            "You route a request to at most ONE tool. Tools:\n{list}\n\nLIVE DASHBOARD:\n{}{extra}\n\nReply ONLY with JSON: {{\"tool\": \"<tool name>\" or null, \"args\": {{…}}}}. \
 Use null if the dashboard/previous tool result already answers it or no tool helps.",
-            list.join("\n"),
             context.chars().take(1500).collect::<String>()
         );
-        let router_secs = left.as_secs().clamp(1, 15);
-        let Ok(r) = run_chat(state, os, vec![ChatMessage::new("system", router), ChatMessage::new("user", text.to_string())], Priority::Interactive, None, Some(router_secs)).await else { break };
-        // A router reply that isn't usable JSON, or names a tool it wasn't
-        // offered, used to be silent (no step, turn just continued without a
-        // tool). Now it's a visible (non-error) step, then synthesis proceeds
-        // exactly as before — Part 6 §3's "push a non-error step and continue".
-        let Some(j) = extract_json(&r.content) else {
-            steps.push(step("tool", "os", "router", "no tool (router reply not JSON)", true, 0));
+        let mut msgs = vec![ChatMessage::new("system", router), ChatMessage::new("user", text.to_string())];
+        let mut replied = false;
+        let mut parsed = None;
+        for attempt in 0..2 {
+            let left = deadline.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                break;
+            }
+            let Ok(r) = run_chat(state, os, msgs.clone(), Priority::Interactive, None, Some(left.as_secs().clamp(1, 15))).await else { break };
+            replied = true;
+            if let Some(j) = extract_json(&r.content) {
+                parsed = Some(j);
+                break;
+            }
+            if attempt == 0 {
+                msgs.push(ChatMessage::new("assistant", r.content));
+                msgs.push(ChatMessage::new("user", "JSON only — reply with exactly one JSON object {\"tool\": …, \"args\": {…}} and nothing else."));
+            }
+        }
+        if !replied {
+            break;
+        }
+        // Not JSON / an unoffered tool is a visible (non-error) step; synthesis still proceeds.
+        let Some(j) = parsed else {
+            out.steps.push(step("tool", "os", "router", "no tool (router reply not JSON)", true, 0));
             break;
         };
         if j["tool"].is_null() {
             break; // router decided no tool is needed — expected, not a failure
         }
-        let Some(name) = j["tool"].as_str().filter(|n| tools.iter().any(|t| t.name == *n)).map(String::from) else {
-            steps.push(step("tool", "os", "router", format!("no tool (router named an unmatched tool: {})", j["tool"]), true, 0));
+        let Some(name) = j["tool"].as_str().filter(|n| offered.iter().any(|t| t.name == *n)).map(String::from) else {
+            out.steps.push(step("tool", "os", "router", format!("no tool (router named an unmatched tool: {})", j["tool"]), true, 0));
             break;
         };
         let args = if j["args"].is_object() { j["args"].clone() } else { json!({}) };
-        let t0 = Instant::now();
-        let call_secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(10));
+        let call_secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(15));
         if call_secs.is_zero() {
-            steps.push(step("tool", "os", &name, format!("{name} skipped — out of time"), false, 0));
+            out.steps.push(step("tool", "os", &name, format!("{name} skipped — out of time"), false, 0));
             break;
         }
-        match tokio::time::timeout(call_secs, super::mcp::call_tool(state, os, bridge, &name, &args, approved, agent)).await {
-            Ok(Ok(out)) => {
-                steps.push(step("tool", "os", &name, format!("{args}\n→ {}", out.chars().take(600).collect::<String>()), true, t0.elapsed().as_millis()));
-                let server = name.split('.').next().unwrap_or(&name);
-                block.push_str(&format!("\n\n[LIVE MCP TOOL DATA - {server}]:\n{}", out.chars().take(2000).collect::<String>()));
-                extra = format!("\n\nTool {name} already returned:\n{}", out.chars().take(500).collect::<String>());
-                last = Some(name);
-            }
-            Ok(Err(e)) if e.starts_with("PERMISSION_") => {
-                steps.push(step("tool", "os", &name, format!("blocked: {e}"), false, t0.elapsed().as_millis()));
-                break;
-            }
-            Ok(Err(e)) => {
-                steps.push(step("tool", "os", &name, format!("failed: {e}"), false, t0.elapsed().as_millis()));
-                break;
-            }
-            Err(_) => {
-                steps.push(step("tool", "os", &name, format!("{name} timed out"), false, t0.elapsed().as_millis()));
-                break;
-            }
+        match out.call(state, os, bridge, &name, &args, approved, agent, call_secs).await {
+            Some(res) => extra = format!("\n\nTool {name} already returned:\n{}", res.chars().take(500).collect::<String>()),
+            None => break,
         }
     }
-    (block, steps, last)
 }
 
 /// Fetch live tool data for `agent`'s upcoming turn (its own granted tools;
@@ -462,32 +713,36 @@ Use null if the dashboard/previous tool result already answers it or no tool hel
 /// restricted to that agent's tools. Mutating tools are never offered
 /// (`mcp::is_mutating_tool`, enforced inside `mcp::enabled_tools`). The whole
 /// thing is capped at ~20s so one dead server can't stall the turn.
-async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeState, cfg: &OsConfig, agent: &str, text: &str, context: &str, approved: bool) -> (String, Vec<OsStep>, Option<String>) {
+async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeState, cfg: &OsConfig, agent: &str, text: &str, context: &str, approved: bool) -> Prefetch {
+    let mut out = Prefetch::default();
     if cfg.permissions.mcp == super::bridge::Tier::Deny {
-        return (String::new(), Vec::new(), None);
+        return out;
     }
     let tools = super::mcp::enabled_tools(state, os, agent).await;
-    if tools.is_empty() {
-        return (String::new(), Vec::new(), None);
-    }
+    out.tools = tools.iter().map(|t| t.name.clone()).collect();
     let deadline = Instant::now() + Duration::from_secs(20);
     if let Some((name, args)) = deterministic_plan(text, &tools) {
-        let t0 = Instant::now();
-        let call_secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(12));
-        return match tokio::time::timeout(call_secs, super::mcp::call_tool(state, os, bridge, &name, &args, approved, agent)).await {
-            Ok(Ok(out)) => {
-                let step = step("tool", "os", &name, format!("{args}\n→ {}", out.chars().take(600).collect::<String>()), true, t0.elapsed().as_millis());
-                let server = name.split('.').next().unwrap_or(&name);
-                (format!("\n\n[LIVE MCP TOOL DATA - {server}]:\n{}", out.chars().take(2000).collect::<String>()), vec![step], Some(name))
+        let secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(18));
+        out.call(state, os, bridge, &name, &args, approved, agent, secs).await;
+        return out;
+    }
+    // Asked for email / Spotify but that server can't serve it (off / no
+    // backend / not connected): say why instead of letting the model invent a refusal.
+    let planners: [(&str, fn(&str, &[super::mcp::ToolInfo]) -> Option<(String, Value)>); 2] = [("gmail", gmail_plan), ("spotify", spotify_plan)];
+    for (id, plan) in planners {
+        let granted = cfg.mcps.iter().any(|m| m.id == id && (agent == "general" || m.grants(agent)));
+        if granted && !tools.iter().any(|t| t.server == id) && plan(text, &super::mcp::builtin_tools(id)).is_some() {
+            if let Some(reason) = super::mcp::unavailable_reason(state, cfg, id) {
+                out.steps.push(step("tool", "os", id, format!("failed: {reason}"), false, 0));
+                out.failure = Some((id.into(), reason));
+                return out;
             }
-            Ok(Err(e)) => (String::new(), vec![step("tool", "os", &name, format!("failed: {e}"), false, t0.elapsed().as_millis())], None),
-            Err(_) => (String::new(), vec![step("tool", "os", &name, format!("{name} timed out"), false, t0.elapsed().as_millis())], None),
-        };
+        }
     }
-    if wants_tools(text) {
-        return run_tool_router(state, os, bridge, &tools, context, text, approved, agent, deadline).await;
+    if !tools.is_empty() && wants_tools(text) {
+        run_tool_router(state, os, bridge, &tools, context, text, approved, agent, deadline, &mut out).await;
     }
-    (String::new(), Vec::new(), None)
+    out
 }
 
 // ── The turn ────────────────────────────────────────────────────────────────
@@ -618,20 +873,10 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     // target agent's own granted tools, and regardless of whether a
     // sub-agent later answers (that gate used to skip tools entirely). ──
     let prefetch_agent = if role == "general" { "general" } else { role.as_str() };
-    let (tool_raw, tool_steps, tool_used) = if comms_thread.is_none() {
-        prefetch_tools(state, os, bridge, &cfg, prefetch_agent, &text, &req.context, req.approved).await
-    } else {
-        (String::new(), Vec::new(), None)
-    };
-    steps.extend(tool_steps);
-    let tool_note = if tool_raw.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "{tool_raw}\n\nYou have live tool access through {}. The data above was fetched just now; answer from it directly. Never say you lack access to WhatsApp, email, files or the internet.",
-            cfg.os_name
-        )
-    };
+    let pre = if comms_thread.is_none() { prefetch_tools(state, os, bridge, &cfg, prefetch_agent, &text, &req.context, req.approved).await } else { Prefetch::default() };
+    steps.extend(pre.steps);
+    let tool_note = tool_note(&cfg.os_name, &pre.block, pre.failure.as_ref());
+    let tool_used = pre.used;
 
     // ── 2. Delegation ──
     let slug = cfg.anythingllm.workspaces.get(&role).filter(|s| !s.is_empty()).cloned();
@@ -708,7 +953,7 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     // The tool data for a delegated (non-general) turn already rode along in
     // the task above; Tony's own turns (role == "general") get it here, in
     // his own system prompt, since there was no delegated task to carry it.
-    let sys = system_prompt(&cfg, &req.context);
+    let sys = system_prompt(&cfg, &req.context, &pre.tools);
     let sys_tool_note = if role == "general" { tool_note.clone() } else { String::new() };
 
     let mut user_msg = text.clone();
@@ -1115,6 +1360,96 @@ mod tests {
         assert!(wants_tools("last message in my WhatsApp group"));
         assert!(wants_tools("any texts from Sam?"));
         assert!(wants_tools("what's in my inbox"));
+        // Generic verbs alone no longer wake the router.
+        assert!(!wants_tools("integrate this into Cloud Code"));
+        assert!(!wants_tools("open the latest status page"));
+        assert!(!wants_tools("find me a good name for the band"));
+    }
+
+    fn gmail_tools() -> Vec<super::super::mcp::ToolInfo> {
+        super::super::mcp::builtin_tools("gmail")
+    }
+
+    #[test]
+    fn gmail_plan_reads_recent_mail() {
+        let plan = |t: &str| gmail_plan(t, &gmail_tools());
+        assert_eq!(plan("Hey Tony, can you read me my last Gmail mail?"), Some(("gmail.recent".into(), json!({ "count": 1 }))));
+        assert_eq!(plan("what's my latest email"), Some(("gmail.recent".into(), json!({ "count": 1 }))));
+        assert_eq!(plan("read my last three e-mails"), Some(("gmail.recent".into(), json!({ "count": 3 }))));
+        assert_eq!(plan("most recent emails please"), Some(("gmail.recent".into(), json!({ "count": 5 }))));
+        assert_eq!(plan("check my inbox"), Some(("gmail.recent".into(), json!({ "count": 5 }))));
+        assert_eq!(plan("Hey Tony, check Gmail").unwrap().0, "gmail.recent");
+        assert_eq!(plan("check gmail").unwrap().0, "gmail.recent");
+        assert_eq!(plan("check inbox").unwrap().0, "gmail.recent");
+        assert_eq!(plan("open the inbox").unwrap().0, "gmail.recent");
+        assert_eq!(plan("check email").unwrap().0, "gmail.recent");
+        assert_eq!(plan("any new emails?"), Some(("gmail.recent".into(), json!({ "count": 5 }))));
+        assert_eq!(plan("do I have unread mail"), Some(("gmail.recent".into(), json!({ "count": 5 }))));
+        assert_eq!(plan("last 99 emails").unwrap().1["count"], 20);
+    }
+
+    #[test]
+    fn gmail_plan_searches_by_sender() {
+        assert_eq!(gmail_plan("any emails from Sam?", &gmail_tools()), Some(("gmail.search".into(), json!({ "query": "from:Sam", "limit": 5 }))));
+        assert_eq!(gmail_plan("show me emails from Maria Lopez about the shoot", &gmail_tools()).unwrap().1["query"], "from:\"Maria Lopez\"");
+        assert_eq!(gmail_plan("last email from sam@acme.ca.", &gmail_tools()).unwrap().1["query"], "from:sam@acme.ca");
+    }
+
+    #[test]
+    fn gmail_plan_needs_email_words_and_the_tool() {
+        assert!(gmail_plan("check my last 5 whatsapp messages", &gmail_tools()).is_none());
+        assert!(gmail_plan("what's the weather", &gmail_tools()).is_none());
+        assert!(gmail_plan("read my last email", &[]).is_none());
+        // Without gmail.search, a sender request falls back to recent mail.
+        let recent_only: Vec<_> = gmail_tools().into_iter().filter(|t| t.name == "gmail.recent").collect();
+        assert_eq!(gmail_plan("any new emails from Sam", &recent_only).unwrap().0, "gmail.recent");
+        // Email beats WhatsApp in the combined plan.
+        let mut all = gmail_tools();
+        all.extend(whatsapp_tool());
+        assert_eq!(deterministic_plan("read my last email", &all).unwrap().0, "gmail.recent");
+        assert_eq!(deterministic_plan("check my whatsapp", &all).unwrap().0, "whatsapp.list_messages");
+        assert_eq!(deterministic_plan("any unread messages in my WhatsApp inbox?", &all).unwrap().0, "whatsapp.list_messages");
+        assert_eq!(gmail_plan("any unread emails, not texts", &gmail_tools()).unwrap().0, "gmail.recent");
+    }
+
+    #[test]
+    fn router_keyword_gate() {
+        let n = super::super::routing::normalize;
+        assert!(router_keyword_ok("gmail", &n("anything in my E-mail?")));
+        assert!(router_keyword_ok("gmail", &n("check the inbox")));
+        assert!(!router_keyword_ok("gmail", &n("integrate this into Cloud Code")));
+        assert!(router_keyword_ok("whatsapp", &n("what did the group say on what's app")));
+        assert!(router_keyword_ok("whatsapp", &n("any new messages")));
+        assert!(!router_keyword_ok("whatsapp", &n("what's the weather")));
+        assert!(router_keyword_ok("weather", &n("anything")));
+    }
+
+    #[test]
+    fn router_lines_carry_args_and_an_example() {
+        let line = router_tool_line(&gmail_tools()[1]);
+        assert!(line.starts_with("- gmail.search(query, limit?): "), "{line}");
+        assert!(line.ends_with(r#"e.g. {"args":{"query":"<query>"},"tool":"gmail.search"}"#), "{line}");
+    }
+
+    #[test]
+    fn failure_note_is_honest() {
+        let failure = ("gmail.recent".to_string(), "Gmail: no backend — add it".to_string());
+        let note = tool_note("Tony", "", Some(&failure));
+        assert!(note.contains("[TOOL FAILURE - gmail.recent]: Gmail: no backend — add it. Tell the user in one sentence exactly what failed and how to fix it; never say you lack the tool or the skill."));
+        assert!(!note.contains("live tool access"));
+        let ok = tool_note("Tony", "\n\n[LIVE MCP TOOL DATA - gmail]:\n1 email", None);
+        assert!(ok.contains("You have live tool access through Tony") && !ok.contains("TOOL FAILURE"));
+        assert_eq!(tool_note("Tony", "", None), "");
+        assert_eq!(humanize_tool_error("PERMISSION_REQUIRED:mcp"), "the mcp permission is set to Ask and this turn wasn't approved");
+    }
+
+    #[test]
+    fn tools_section_lists_names_and_never_lacks_skill() {
+        let s = tools_section(&["gmail.recent".into(), "weather.current".into()]);
+        assert!(s.contains("TOOLS YOU HAVE THIS TURN: gmail.recent, weather.current."));
+        assert!(s.contains("never that you lack the tool or the skill"));
+        assert!(s.contains("don't claim it's done or queued"));
+        assert!(tools_section(&[]).contains("none switched on"));
     }
 
     #[test]
@@ -1178,6 +1513,70 @@ mod tests {
         assert!(whatsapp_plan("tell me a joke", &whatsapp_tool()).is_none());
     }
 
+    fn spotify_tools() -> Vec<super::super::mcp::ToolInfo> {
+        // What `enabled_tools` hands the planner: only the router-visible Spotify tools.
+        super::super::mcp::builtin_tools("spotify").into_iter().filter(|t| ["spotify.now_playing", "spotify.recent", "spotify.playlists"].contains(&t.name.as_str())).collect()
+    }
+
+    #[test]
+    fn spotify_plan_controls_and_reads() {
+        let plan = |t: &str| spotify_plan(t, &spotify_tools());
+        let tool = |t: &str| plan(t).map(|p| p.0);
+        assert_eq!(tool("What's playing?").as_deref(), Some("spotify.now_playing"));
+        assert_eq!(tool("hey tony what song is this").as_deref(), Some("spotify.now_playing"));
+        assert_eq!(tool("pause the music").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("Pause.").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("pause my music").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("stop playing music").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("turn off Spotify").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("Hey Tony, can you pause the music please").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("Pause the music, Tony.").as_deref(), Some("spotify.pause"));
+        assert_ne!(tool("how do I turn off spotify autoplay on my phone").as_deref(), Some("spotify.pause"));
+        assert_ne!(tool("remind me at 11 to stop playing my music").as_deref(), Some("spotify.pause"));
+        assert_eq!(tool("resume spotify").as_deref(), Some("spotify.resume"));
+        assert_eq!(tool("skip this song").as_deref(), Some("spotify.next"));
+        assert_eq!(tool("next track please").as_deref(), Some("spotify.next"));
+        assert_eq!(tool("go back a track").as_deref(), Some("spotify.previous"));
+        assert_eq!(tool("previous song").as_deref(), Some("spotify.previous"));
+        assert_eq!(tool("what have I been listening to").as_deref(), Some("spotify.recent"));
+        assert_eq!(tool("show my playlists").as_deref(), Some("spotify.playlists"));
+        assert_eq!(plan("spotify volume 30"), Some(("spotify.volume".into(), json!({ "percent": 30 }))));
+        assert_eq!(plan("set spotify to 45%"), Some(("spotify.volume".into(), json!({ "percent": 45 }))));
+        assert_eq!(plan("set the music volume to 150").unwrap().1["percent"], 100);
+    }
+
+    #[test]
+    fn spotify_plan_play_requests() {
+        let plan = |t: &str| spotify_plan(t, &spotify_tools());
+        assert_eq!(plan("play Woke Up This Morning on Spotify"), Some(("spotify.play".into(), json!({ "query": "Woke Up This Morning", "kind": "track" }))));
+        assert_eq!(plan("Hey Tony, play One More Time by Daft Punk").unwrap().1, json!({ "query": "One More Time Daft Punk", "kind": "track" }));
+        assert_eq!(plan("can you play some jazz").unwrap().1, json!({ "query": "jazz", "kind": "playlist" }));
+        assert_eq!(plan("play the album Discovery").unwrap().1, json!({ "query": "Discovery", "kind": "album" }));
+        assert_eq!(plan("play my Gym playlist on spotify").unwrap().1, json!({ "query": "Gym", "kind": "playlist" }));
+        assert_eq!(plan("play songs by Frank Sinatra").unwrap().1, json!({ "query": "Frank Sinatra", "kind": "artist" }));
+        assert_eq!(plan("play music").unwrap().0, "spotify.resume");
+        assert_eq!(plan("Play Daft Punk on Spotify, Tony.").unwrap().1["query"], "Daft Punk");
+        // Not music requests.
+        assert!(plan("play devil's advocate on my business plan").is_none());
+        assert!(plan("can you explain how the playoffs work").is_none());
+        assert!(plan("I want to play a game with you tonight after dinner").is_none());
+        assert!(plan("play it cool with the client").is_none());
+        assert!(plan("tell me a joke").is_none());
+    }
+
+    #[test]
+    fn spotify_plan_needs_the_server() {
+        assert!(spotify_plan("pause the music", &[]).is_none());
+        assert!(spotify_plan("play jazz on spotify", &[]).is_none());
+        let mut all = gmail_tools();
+        all.extend(spotify_tools());
+        assert_eq!(deterministic_plan("read my last email", &all).unwrap().0, "gmail.recent");
+        assert_eq!(deterministic_plan("what's playing", &all).unwrap().0, "spotify.now_playing");
+        assert!(wants_tools("what's playing on spotify"));
+        assert!(router_keyword_ok("spotify", &super::super::routing::normalize("put on some music")));
+        assert!(!router_keyword_ok("spotify", &super::super::routing::normalize("what's the weather")));
+    }
+
     #[test]
     fn time_plan_matches_only_with_the_tool() {
         let time_tool = vec![super::super::mcp::ToolInfo { name: "time.now".into(), description: "x".into(), server: "time".into(), args: vec![] }];
@@ -1224,7 +1623,7 @@ mod live {
             println!("TOOL weather: {:?}", super::super::mcp::call_tool(&state, &os, &bridge, "weather.current", &json!({}), false, "tony").await.map(|s| s.lines().next().unwrap_or("").to_string()));
 
             // 3. Answer from live context (no refusal)
-            let sys = system_prompt(&cfg, "Weather (Toronto): 5°C Overcast, wind 11 km/h");
+            let sys = system_prompt(&cfg, "Weather (Toronto): 5°C Overcast, wind 11 km/h", &[]);
             let t0 = Instant::now();
             let r = run_chat(&state, &os, vec![ChatMessage::new("system", sys), ChatMessage::new("user", "What's the weather like right now?")], Priority::Interactive, None, Some(90)).await;
             println!("CHAT ({}ms): {:?}", t0.elapsed().as_millis(), r.map(|x| format!("[{}] ({}) {}", x.provider_id, x.reason, x.content.chars().take(300).collect::<String>())));
@@ -1284,7 +1683,7 @@ mod live_droplet {
             let os = OsState::default();
             os.load_or_init(&dir, std::path::Path::new(&state.snapshot().gateway.workdir));
             let cfg = os.snapshot();
-            let sys = system_prompt(&cfg, "Weather (Toronto): 5°C Overcast, wind 11 km/h");
+            let sys = system_prompt(&cfg, "Weather (Toronto): 5°C Overcast, wind 11 km/h", &[]);
             let t0 = Instant::now();
             let r = run_chat(&state, &os, vec![ChatMessage::new("system", sys), ChatMessage::new("user", "Quick check — what's the weather, and email sam@acme.ca says what?")], Priority::Interactive, Some("droplet".into()), Some(120)).await;
             match r {

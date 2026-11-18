@@ -4,6 +4,7 @@
   /api/pipeline/*    Ideas & Tasks ledger + live pipeline progress (for the phone HUD)
   /api/comms/*       calls & texts: phone-bridge sync, unified inbox, outbox, recall search, WS push
   /api/os/inbox      phone → desktop Tony turns; /api/os/commands phone → desktop (kill switch, mode)
+  /api/spotify/*     Spotify OAuth redirect relay for `tauri dev` (Vite proxies /callback here)
 
 Ideas and Play Place cards live in the shared Command Center store (collections
 "ideas" and "playplace"), so they sync to every device and land in the vault.
@@ -21,7 +22,9 @@ import asyncio
 import os
 import hmac
 import json
+import logging
 import re
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -477,6 +480,82 @@ def inbox_result(qid: str, data: dict = Body(...)):
     with cc._db_lock, cc.db() as c:
         c.execute("UPDATE os_queue SET status=?, result=?, updated=? WHERE id=?", (status, json.dumps(data)[:200000], time.time(), qid))
     return {"ok": True}
+
+
+# ── Spotify OAuth callback relay (dev only) ─────────────────────────────────
+#
+# Spotify redirects to http://127.0.0.1:1420/callback. In a packaged build the
+# desktop app listens there itself; under `tauri dev` Vite owns :1420 and
+# proxies /callback here, and the app polls /pending for its one-time result.
+
+spotify_router = APIRouter(prefix="/api/spotify", tags=["spotify"])
+
+_SPOTIFY_STATE = re.compile(r"^[A-Za-z0-9_-]{32,128}$")
+_SPOTIFY_CODE = re.compile(r"^[A-Za-z0-9_.~-]{1,2048}$")
+_SPOTIFY_TTL = 300.0
+_SPOTIFY_MAX = 50
+_spotify_lock = threading.Lock()
+_spotify_results: dict[str, tuple[float, dict]] = {}
+
+
+def spotify_store(state: str, result: dict, now: Optional[float] = None) -> None:
+    now = time.time() if now is None else now
+    with _spotify_lock:
+        for k in [k for k, (ts, _) in _spotify_results.items() if now - ts > _SPOTIFY_TTL]:
+            del _spotify_results[k]
+        while len(_spotify_results) >= _SPOTIFY_MAX:
+            del _spotify_results[min(_spotify_results, key=lambda k: _spotify_results[k][0])]
+        _spotify_results[state] = (now, result)
+
+
+def spotify_take(state: str, now: Optional[float] = None) -> dict:
+    """One-time: the stored result for `state` (then forgotten), else {"pending": True}."""
+    now = time.time() if now is None else now
+    with _spotify_lock:
+        hit = _spotify_results.pop(state, None)
+    if hit is None or now - hit[0] > _SPOTIFY_TTL:
+        return {"pending": True}
+    return hit[1]
+
+
+def _spotify_page(message: str, status: int = 200) -> HTMLResponse:
+    body = ("<!doctype html><meta charset=\"utf-8\"><title>Spotify</title>"
+            "<body style=\"font-family:system-ui;background:#0b0d11;color:#e6e6e6;display:grid;place-items:center;height:100vh;margin:0\">"
+            f"<p>{message}</p></body>")
+    return HTMLResponse(body, status_code=status, headers={"Cache-Control": "no-store"})
+
+
+@spotify_router.get("/callback", response_class=HTMLResponse)
+def spotify_callback(state: str = "", code: str = "", error: str = ""):
+    if not _SPOTIFY_STATE.match(state) or not (code or error):
+        return _spotify_page("This Spotify sign-in link isn't valid — press Connect again in Settings.", 400)
+    if code:
+        if not _SPOTIFY_CODE.match(code):
+            return _spotify_page("Spotify sent an unexpected reply — press Connect again in Settings.", 400)
+        spotify_store(state, {"code": code})
+        return _spotify_page("Spotify connected — you can close this tab.")
+    spotify_store(state, {"error": re.sub(r"[^A-Za-z0-9_]", "", error)[:60] or "unknown"})
+    return _spotify_page("Spotify wasn't connected — you can close this tab.")
+
+
+@spotify_router.get("/pending")
+def spotify_pending(state: str = ""):
+    if not _SPOTIFY_STATE.match(state):
+        raise HTTPException(400, "invalid state")
+    return spotify_take(state)
+
+
+class _RedactSpotifyCode(logging.Filter):
+    """Keep the OAuth code out of uvicorn's access log."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) and args[2].startswith("/api/spotify/callback"):
+            record.args = args[:2] + (re.sub(r"([?&]code=)[^&]*", r"\1[redacted]", args[2]),) + args[3:]
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactSpotifyCode())
 
 
 # ── Local model library (D:\ drive scan → LM Studio / Bionic) ───────────────
