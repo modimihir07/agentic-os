@@ -9,6 +9,8 @@ import {
   HOLO_CAMERA,
   HOLO_FOV,
   HOLO_TARGET,
+  leaderElbow,
+  leaderPath,
   pedestal,
   e46Wireframe,
   fitDistance,
@@ -22,12 +24,15 @@ import {
   pulseCurve,
   pulsesFor,
   roundedRect,
+  TELEMETRY_NODES,
   UPPER_PROFILE,
+  WHEELS_LABEL,
   ZONE_VOLUMES,
   zoneAnchor,
   zoneFlash,
   zoneVolume,
 } from "./holo-geometry";
+import { faceProfileX } from "./e46-body";
 import { zoneOf } from "./trace-store";
 
 const step = (traceId: string, seq: number, hop: TraceStep["hop"], ok = true, at = 1000 + seq): TraceStep => ({ traceId, seq, hop, zone: zoneOf(hop), label: hop, ok, ms: 5, at });
@@ -47,15 +52,19 @@ describe("E46 Touring profile", () => {
     }
   });
 
-  it("has a wagon roofline: the roof runs almost to the tail before the hatch drops", () => {
-    const roof = UPPER_PROFILE.filter(([, y]) => y >= 1.4);
+  it("has a wagon roofline: the roof runs almost to the tail, then a raked (not fastback) hatch drops to the belt", () => {
+    const roof = UPPER_PROFILE.filter(([, y]) => y >= CAR.roof - 0.05);
     const rearmost = Math.min(...roof.map(([x]) => x));
     // A saloon's roof ends near the C-pillar (~-1.0 m); the Touring's reaches the D-pillar.
-    expect(rearmost).toBeLessThan(-1.9);
-    // The hatch is near vertical: from the roof's rear edge to the beltline in < 0.25 m of length.
-    const hatchTop = UPPER_PROFILE.find(([x, y]) => y >= 1.4 && x === rearmost)!;
+    expect(rearmost).toBeLessThan(-1.75);
+    // The hatch rakes: from the roof's rear edge to the beltline in 0.2-0.38 m of length.
+    const hatchTop = UPPER_PROFILE.find(([x, y]) => y >= CAR.roof - 0.05 && x === rearmost)!;
     const hatchBottom = UPPER_PROFILE.find(([, y]) => Math.abs(y - CAR.belt) < 0.01)!;
-    expect(Math.abs(hatchTop[0] - hatchBottom[0])).toBeLessThan(0.25);
+    const dx = Math.abs(hatchTop[0] - hatchBottom[0]);
+    expect(dx).toBeGreaterThan(0.2);
+    expect(dx).toBeLessThan(0.38);
+    // Below the belt the tailgate panel leans forward too.
+    expect(faceProfileX("rear", 0.98)).toBeGreaterThan(faceProfileX("rear", 0.6));
   });
 
   it("cuts both wheel arches over the axles into the lower edge", () => {
@@ -80,7 +89,7 @@ describe("e46Wireframe", () => {
   const w = e46Wireframe();
 
   it("emits whole segments (6 numbers each) in every colour group", () => {
-    for (const g of [w.base, w.cyan, w.amber]) {
+    for (const g of [w.base, w.cyan, w.amber, w.halo ?? []]) {
       expect(g.length).toBeGreaterThan(0);
       expect(g.length % 6).toBe(0);
       expect(g.every(Number.isFinite)).toBe(true);
@@ -94,7 +103,7 @@ describe("e46Wireframe", () => {
   });
 
   it("fits the car's bounding box", () => {
-    const pts = [...w.base, ...w.cyan, ...w.amber];
+    const pts = [...w.base, ...w.cyan, ...w.amber, ...(w.halo ?? [])];
     for (let i = 0; i < pts.length; i += 3) {
       expect(Math.abs(pts[i])).toBeLessThan(CAR.halfLength + 0.1);
       expect(pts[i + 1]).toBeGreaterThanOrEqual(-1e-9);
@@ -134,6 +143,22 @@ describe("shape helpers", () => {
     const g = groundGrid(2, 4);
     expect(g.length % 6).toBe(0);
     for (let i = 1; i < g.length; i += 3) expect(g[i]).toBe(0);
+  });
+});
+
+describe("telemetry nodes", () => {
+  it("pins the four wheel hubs on their outer faces, without becoming trace zones", () => {
+    expect(TELEMETRY_NODES.map((n) => n.id)).toEqual(["wheel-fl", "wheel-fr", "wheel-rl", "wheel-rr"]);
+    const zones: string[] = ZONE_VOLUMES.map((z) => z.zone);
+    for (const n of TELEMETRY_NODES) {
+      expect(zones).not.toContain(n.id);
+      expect(n.anchor[1]).toBe(CAR.wheelRadius);
+      expect([CAR.frontAxle, CAR.rearAxle]).toContain(n.anchor[0]);
+      expect(Math.abs(n.anchor[2])).toBeGreaterThan(CAR.track);
+      expect(Math.abs(n.anchor[2])).toBeLessThan(0.9);
+      expect(Math.sign(n.anchor[2])).toBe(n.id.endsWith("l") ? -1 : 1);
+    }
+    expect(WHEELS_LABEL).toBe('WHEELS // 18" · 225/40 · 255/35');
   });
 });
 
@@ -264,7 +289,7 @@ describe("camera fit", () => {
 
   it("the fit rings bound every car vertex", () => {
     const w = e46Wireframe();
-    for (const layer of [w.base, w.cyan, w.amber, w.inner ?? []]) {
+    for (const layer of [w.base, w.cyan, w.amber, w.halo ?? [], w.inner ?? []]) {
       for (let i = 0; i < layer.length; i += 3) {
         expect(Math.hypot(layer[i], layer[i + 2])).toBeLessThanOrEqual(CAR_PLAN_R);
         expect(layer[i + 1]).toBeLessThanOrEqual(CAR_TOP);
@@ -275,7 +300,7 @@ describe("camera fit", () => {
 
   it("keeps the car at every yaw and the whole pedestal inside the frame at any aspect (elevation-aware)", () => {
     const w = e46Wireframe();
-    const car: number[] = [...w.base, ...w.cyan, ...w.amber, ...(w.inner ?? [])];
+    const car: number[] = [...w.base, ...w.cyan, ...w.amber, ...(w.halo ?? []), ...(w.inner ?? [])];
     const p = pedestal();
     const ped: number[] = [...p.grid, ...p.rings, ...p.ticks];
     for (const aspect of [1.0, 1.4, 1.78, 2.2, 2.8, 3.0]) {
@@ -329,6 +354,46 @@ describe("callout leader lines", () => {
 
   it("draws nothing when the target is under the card", () => {
     expect(leaderStart(card, [50, 30])).toBeNull();
+    expect(leaderPath(card, [50, 30])).toBeNull();
+  });
+
+  it("leaderPath elbows: square off the card edge, then diagonal to the target", () => {
+    // Off the right edge: horizontal first.
+    expect(leaderPath(card, [300, 30])).toEqual([
+      [110, 30],
+      [128, 30],
+      [300, 30],
+    ]);
+    expect(leaderPath(card, [300, 200])).toEqual([
+      [110, 50],
+      [128, 50],
+      [300, 200],
+    ]);
+    // Above the card: vertical first, never past the target.
+    expect(leaderPath(card, [50, 0])).toEqual([
+      [50, 10],
+      [50, 0],
+      [50, 0],
+    ]);
+    expect(leaderPath(card, [60, -100], 24)).toEqual([
+      [60, 10],
+      [60, -14],
+      [60, -100],
+    ]);
+    // The path always starts where leaderStart does.
+    for (const p of [
+      [300, 30],
+      [-50, 80],
+      [70, 200],
+    ] as const)
+      expect(leaderPath(card, p)![0]).toEqual(leaderStart(card, p));
+  });
+
+  it("leaderElbow writes into a reused buffer (the frame loop's allocation-free path)", () => {
+    const buf = new Float64Array(4);
+    expect(leaderElbow(card, -50, 30, buf)).toBe(true);
+    expect([...buf]).toEqual([10, 30, -8, 30]);
+    expect(leaderElbow(card, 50, 30, buf)).toBe(false);
   });
 
   it("ndcToPx maps clip space to pixels (y down)", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   angelEyes,
+  ARCH_R,
   BELT,
   bodyShell,
   bodyWireframe,
@@ -13,18 +14,25 @@ import {
   doorCuts,
   faceProfileX,
   faceX,
+  floorY,
+  FOG,
   frameAt,
+  gateHW,
   GLASS_Y,
+  hatch,
+  HEADLIGHT,
   inArch,
   insideBody,
   pchip,
   planHW,
   resample,
+  roofRail,
   roundedPoly,
   SEC,
   SECTION_HALF,
   SECTION_LOOP,
   sectionLoop,
+  SIDE_INTAKE,
   sideGlass,
   sideHW,
   sideOutline,
@@ -36,7 +44,8 @@ import {
   X_NOSE,
   X_TAIL,
 } from "./e46-body";
-import { e46Wireframe, ZONE_VOLUMES } from "./holo-geometry";
+import { e46Wireframe, platePoint, rearPlate, ZONE_VOLUMES } from "./holo-geometry";
+import { WHEEL } from "./wheel-geometry";
 
 const pts3 = (a: readonly number[]) => Array.from({ length: a.length / 3 }, (_, i) => [a[3 * i], a[3 * i + 1], a[3 * i + 2]] as const);
 
@@ -118,11 +127,25 @@ describe("E46 side profile", () => {
     }
   });
 
-  it("has a long wagon roof, a raked windshield and a hood lower than the belt", () => {
-    expect(crownY(-1.9)).toBeGreaterThan(1.4);
-    expect(crownY(0)).toBeGreaterThan(1.42);
+  it("has a long wagon roof that droops to the rear, a raked hatch and windshield, and a hood lower than the belt", () => {
+    expect(crownY(-1.8)).toBeGreaterThan(CAR.roof - 0.05);
+    expect(crownY(0)).toBeGreaterThan(CAR.roof - 0.02);
+    // ~2-3 cm of droop from the crown to the spoiler, then the hatch falls away (not a box).
+    expect(crownY(0) - crownY(-1.8)).toBeGreaterThan(0.015);
+    expect(crownY(0) - crownY(-1.8)).toBeLessThan(0.04);
+    expect(crownY(-2.0)).toBeLessThan(crownY(-1.6) - 0.05);
     expect(crownY(0.7)).toBeLessThan(crownY(0.35));
     expect(crownY(1.6)).toBeLessThan(BELT);
+  });
+
+  it("sits low: the tyres stand on the ground with a coilover gap of 3-5 cm under the arches", () => {
+    expect(CAR.wheelRadius - WHEEL.tyreR).toBeCloseTo(0, 9);
+    const gap = CAR.wheelRadius + ARCH_R - (CAR.wheelRadius + WHEEL.tyreR);
+    expect(gap).toBeGreaterThan(0.03);
+    expect(gap).toBeLessThan(0.05);
+    expect(floorY(0)).toBeGreaterThanOrEqual(0.19);
+    expect(floorY(0)).toBeLessThanOrEqual(0.21);
+    expect(CAR.roof).toBeLessThanOrEqual(1.41);
   });
 
   it("closes the side silhouette: the sill and arches return to the profile's first point", () => {
@@ -136,11 +159,22 @@ describe("E46 side profile", () => {
     }
   });
 
-  it("puts the bumpers and the plate where the plate mesh expects them", () => {
+  it("puts the bumpers out at the ends and leans the tailgate panel forward", () => {
     expect(faceProfileX("rear", 0.5)).toBeLessThan(-2.2);
     expect(faceProfileX("front", 0.55)).toBeGreaterThan(2.2);
-    // The plate mesh sits at x = -2.238: the tail surface around it must stay in front of it.
-    for (const z of [-0.26, 0, 0.26]) for (const y of [0.81, 0.86, 0.91]) expect(faceX("rear", y, z)).toBeGreaterThanOrEqual(-2.235);
+    expect(faceProfileX("rear", 0.98)).toBeGreaterThan(faceProfileX("rear", 0.6) + 0.04);
+  });
+
+  it("lays the plate on the leaning tailgate panel: just outside the surface, never floating", () => {
+    const p = rearPlate();
+    expect(p.lean).toBeGreaterThan(0.05);
+    for (const u of [-p.w / 2, 0, p.w / 2])
+      for (const v of [-p.h / 2, 0, p.h / 2]) {
+        const [x, y] = platePoint(p, u, v);
+        const gap = faceX("rear", y, u) - x;
+        expect(gap).toBeGreaterThanOrEqual(-1e-9);
+        expect(gap).toBeLessThan(0.006);
+      }
   });
 });
 
@@ -171,6 +205,12 @@ describe("plan and sections", () => {
       }
     }
     expect(SECTION_LOOP).toBe(2 * SECTION_HALF - 2);
+  });
+
+  it("tapers the greenhouse in plan toward the tail", () => {
+    expect(frameAt(-2.0).a).toBeLessThan(frameAt(-1.0).a);
+    expect(frameAt(-1.85).a).toBeLessThan(frameAt(-1.0).a - 0.03);
+    expect(planHW(-2.15)).toBeLessThan(planHW(-1.0) - 0.05);
   });
 
   it("tucks the greenhouse in above the belt (tumblehome) with a step at the belt", () => {
@@ -205,7 +245,7 @@ describe("arches", () => {
     const { base } = bodyWireframe();
     for (const [x, y, z] of pts3(base)) {
       // Only side lines (outboard of the wheel's tyre face) could cross the opening.
-      if (Math.abs(z) > 0.7) expect(inArch(x, y, 0.4 - 1e-3)).toBe(false);
+      if (Math.abs(z) > 0.7) expect(inArch(x, y, ARCH_R - 1e-3)).toBe(false);
     }
   });
 });
@@ -234,6 +274,10 @@ describe("greenhouse", () => {
     for (const [x] of lowRear) expect(x).toBeGreaterThan(rearmost[0] + 0.05);
   });
 
+  it("keeps the quarter glass a D-pillar ahead of the raked hatch", () => {
+    for (const [x, y] of g.quarter) if (y > GLASS_Y + 0.01) expect(x).toBeGreaterThan(faceProfileX("rear", y) + 0.08);
+  });
+
   it("door cuts run from the belt down to the sill", () => {
     for (const cut of doorCuts()) {
       expect(cut[0][1]).toBe(BELT);
@@ -243,12 +287,86 @@ describe("greenhouse", () => {
 });
 
 describe("front and rear details", () => {
-  it("angel eyes sit on the nose (x > 2.1), two rings and two lenses per side", () => {
+  it("angel eyes sit on the nose (x > 2.1), two rings and two lenses per side, inside the headlight", () => {
     const rings = angelEyes();
     expect(rings).toHaveLength(8);
     for (const r of rings) for (const [x] of r) expect(x).toBeGreaterThan(2.1);
     const zs = rings.map((r) => r.reduce((s, p) => s + p[2], 0) / r.length);
     expect(zs.filter((z) => z > 0)).toHaveLength(4);
+    const zMin = Math.min(...HEADLIGHT.map(([z]) => z));
+    const zMax = Math.max(...HEADLIGHT.map(([z]) => z));
+    const yLow = Math.max(...HEADLIGHT.filter(([, y]) => y < 0.65).map(([, y]) => y));
+    const yHigh = Math.max(...HEADLIGHT.map(([, y]) => y));
+    for (const r of rings)
+      for (const [, y, z] of r) {
+        expect(Math.abs(z)).toBeGreaterThan(zMin);
+        expect(Math.abs(z)).toBeLessThan(zMax);
+        expect(y).toBeGreaterThan(yLow);
+        expect(y).toBeLessThan(yHigh);
+      }
+  });
+
+  it("the halo group carries the angel eyes on the nose, apart from the cyan lines", () => {
+    const { halo } = bodyWireframe();
+    expect(halo.length).toBe(angelEyes().reduce((n, r) => n + r.length * 6, 0));
+    for (const [x, y, z] of pts3(halo)) {
+      expect(x).toBeGreaterThan(2.1);
+      expect(x).toBeLessThan(CAR.halfLength + 0.05);
+      expect(y).toBeGreaterThan(0.55);
+      expect(Math.abs(z)).toBeLessThan(0.7);
+    }
+  });
+
+  it("the facelift headlight is notched: its inner top steps down below the top edge", () => {
+    const inner = HEADLIGHT.reduce((m, p) => (p[0] < m[0] ? p : m));
+    const top = Math.max(...HEADLIGHT.map(([, y]) => y));
+    expect(inner[1]).toBeLessThan(top - 0.02);
+    expect(inner[1]).toBeGreaterThan(Math.min(...HEADLIGHT.map(([, y]) => y)) + 0.04);
+  });
+
+  it("the M-Tech side intakes hold the fogs, sit inside the nose's plan width and mirror", () => {
+    const zs = SIDE_INTAKE.map(([z]) => z);
+    const ys = SIDE_INTAKE.map(([, y]) => y);
+    expect(FOG[0]).toBeGreaterThan(Math.min(...zs) + 0.05);
+    expect(FOG[0]).toBeLessThan(Math.max(...zs) - 0.05);
+    expect(FOG[1]).toBeGreaterThan(Math.min(...ys) + 0.05);
+    expect(FOG[1]).toBeLessThan(Math.max(...ys) - 0.05);
+    expect(Math.max(...zs)).toBeLessThan(planHW(X_NOSE) - 0.05);
+    // Both sides are drawn: the intakes' top edges at the same height on +z and -z.
+    const near = (s: 1 | -1) => pts3(bodyWireframe().base).filter(([x, y, z]) => x > 2.1 && Math.abs(y - 0.4) < 0.002 && Math.abs(z - s * 0.6) < 0.1);
+    expect(near(1).length).toBeGreaterThan(0);
+    expect(near(-1).length).toBe(near(1).length);
+  });
+
+  it("the hatch glass, tailgate and spoiler follow the raked hatch, between the belt and the roof", () => {
+    const h = hatch();
+    for (const [x, y, z] of [...h.glass, ...h.gate, ...h.spoiler]) {
+      expect(x).toBeLessThan(-1.8);
+      if (y > BELT + 0.01) {
+        // On or just above the hatch surface, inside the tumblehome.
+        expect(y - topY(x, z)).toBeGreaterThan(0);
+        expect(y - topY(x, z)).toBeLessThan(0.02);
+        expect(Math.abs(z)).toBeLessThan(frameAt(x).a);
+      }
+    }
+    const ys = h.glass.map(([, y]) => y);
+    expect(Math.min(...ys)).toBeGreaterThan(GLASS_Y);
+    expect(Math.max(...ys)).toBeLessThan(CAR.roof - 0.08);
+    // The tailgate stays inside the hatch's width.
+    for (const x of [-2.1, -2.0]) expect(gateHW(x)).toBeLessThan(frameAt(x).a);
+  });
+
+  it("the roof rails are low and follow the roof, ending before the spoiler", () => {
+    for (const s of [1, -1] as const) {
+      const r = roofRail(s);
+      for (const [x, y, z] of [...r.top, ...r.low]) {
+        expect(Math.sign(z)).toBe(s);
+        expect(y - topY(x, z)).toBeGreaterThanOrEqual(0);
+        expect(y - topY(x, z)).toBeLessThanOrEqual(0.036);
+        expect(x).toBeGreaterThan(-1.85);
+        expect(Math.abs(z)).toBeLessThan(frameAt(x).a);
+      }
+    }
   });
 
   it("the L tail lamp wraps onto the flank on the body surface and its tailgate leg reaches inboard", () => {
@@ -263,6 +381,16 @@ describe("front and rear details", () => {
         expect(x).toBeLessThan(-2);
         expect(Math.sign(z)).toBe(s);
       }
+      // The LED / halogen bars sit inside the lamp, on the rear face.
+      expect(lamp.bars).toHaveLength(3);
+      const ly = lamp.face.map(([, y]) => y);
+      for (const bar of lamp.bars)
+        for (const [x, y, z] of bar) {
+          expect(x).toBeLessThan(-2);
+          expect(Math.sign(z)).toBe(s);
+          expect(y).toBeGreaterThan(Math.min(...ly));
+          expect(y).toBeLessThan(Math.max(...ly));
+        }
     }
   });
 

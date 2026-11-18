@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { WHEEL, wheelGeometry } from "./wheel-geometry";
+import { REAR_TYRE, WHEEL, wheelGeometry } from "./wheel-geometry";
 
 const spec = { cx: 1.44, cy: 0.32, zc: 0.74, side: 1 as const };
 const pts = (a: readonly number[]) => Array.from({ length: a.length / 3 }, (_, i) => [a[3 * i], a[3 * i + 1], a[3 * i + 2]] as const);
@@ -49,5 +49,16 @@ describe("wheelGeometry", () => {
 
   it("is deterministic", () => {
     expect(wheelGeometry(spec)).toEqual(w);
+  });
+
+  it("staggers the rear: a wider 255 section of the same diameter, still inside |z| < 0.9", () => {
+    const rear = wheelGeometry({ ...spec, halfWidth: REAR_TYRE.halfWidth });
+    const zMax = (g: number[]) => Math.max(...pts(g).map(([, , z]) => z));
+    expect(zMax(rear.tyre)).toBeGreaterThan(zMax(w.tyre) + 0.01);
+    expect(zMax(rear.tyre)).toBeLessThan(0.9);
+    expect(Math.max(...pts(rear.tyre).map(radius))).toBeCloseTo(REAR_TYRE.tyreR, 9);
+    expect(Math.abs(REAR_TYRE.tyreR - WHEEL.tyreR)).toBeLessThan(0.002);
+    // The default is the front 225 wheel.
+    expect(wheelGeometry({ ...spec, halfWidth: WHEEL.halfWidth })).toEqual(w);
   });
 });

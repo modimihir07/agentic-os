@@ -145,7 +145,7 @@ export interface RearPlate {
   h: number;
 }
 
-const PLATE_Y = 0.86;
+const PLATE_Y = 0.85;
 
 /** The rear plate's frame: on the tailgate panel at the profile, leaning with it. */
 export function rearPlate(): RearPlate {

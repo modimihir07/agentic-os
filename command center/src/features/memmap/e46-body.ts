@@ -720,18 +720,17 @@ const HATCH_Y1 = CAR.roof - 0.11;
 const gateTopX = () => faceProfileX("rear", CAR.roof - 0.035);
 /** Tailgate half-width at its foot, between the tail lamps. */
 const GATE_FOOT = 0.495;
+/** The tailgate's inset from the hatch edge (the D-pillar), and the glass's inset from the tailgate. */
+const GATE_INSET = 0.05;
+const GLASS_INSET = 0.05;
 
-/** Tailgate half-width on the hatch at station x: between the lamps at the foot, out toward the D-pillars at the top. */
-export function gateHW(x: number): number {
-  const xt = gateTopX();
-  const top = frameAt(xt).a - 0.03;
-  return Math.min(frameAt(x).a - 0.03, lerp(GATE_FOOT, top, clamp((x - X_TAIL) / (xt - X_TAIL), 0, 1)));
-}
+/** Tailgate half-width on the hatch at station x: the hatch edge less the D-pillar, so it narrows with the greenhouse. */
+export const gateHW = (x: number): number => frameAt(x).a - GATE_INSET;
 
 export interface Hatch {
   /** The hatch glass, closed, on the raked hatch surface. */
   glass: V3[];
-  /** The tailgate shut line, closed: across the bumper top, up beside the lamps, along the hatch, across the roof's rear edge. */
+  /** The tailgate shut line, closed: across the bumper top, up between the lamps, out over them, along the hatch, across the roof's rear edge. */
   gate: V3[];
   /** The roof spoiler lip over the glass, closed. */
   spoiler: V3[];
@@ -747,13 +746,13 @@ export function hatch(): Hatch {
     const x = lerp(xa, xb, k / n);
     return onTop(x, z(x), up);
   });
-  const gw = (x: number) => gateHW(x) - 0.045;
+  const gw = (x: number) => gateHW(x) - GLASS_INSET;
   const glass: V3[] = [...sideRun(x0, x1, gw), ...across(x1, gw(x1), LIFT).slice(1, -1), ...sideRun(x1, x0, (x) => -gw(x)), ...across(x0, -gw(x0), LIFT).slice(1, -1)];
 
-  const cap = capFrame("rear");
+  // Up between the lamps from the bumper top, out over the lamps' top edge, then up the hatch.
   const yFoot = 0.63;
-  const yUp = cap.yEdge - 0.01;
-  const up = (s: Side) => [0.8, yUp].map((y) => onFace("rear", s * GATE_FOOT, y));
+  const yStep = LAMP_TOP + 0.012;
+  const up = (s: Side) => [onFace("rear", s * GATE_FOOT, 0.8), onFace("rear", s * GATE_FOOT, yStep), onFace("rear", s * (gateHW(X_TAIL) - 0.01), yStep)];
   const gate: V3[] = [
     ...Array.from({ length: 9 }, (_, k) => onFace("rear", lerp(-GATE_FOOT, GATE_FOOT, k / 8), yFoot)),
     ...up(1),
