@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Cloud, FolderOpen, Loader2, Plus, RefreshCw, Trash2, Wrench, X } from "lucide-react";
 import { Card, Field, Input, Select } from "@/components/ui";
 import { cmd, type AllmSyncReport, type McpServer, type ServerTools, type SkillInfo } from "@/lib/platform";
 import { SUB_AGENT_IDS, roleLabel, toggleGrant } from "@/features/dispatcher/roles";
 import { CfgError, SecretRow, useOsCfg } from "./os-ui";
+import { useOnIntegrationsChanged } from "@/features/integrations/changed";
+import { useSpotifyAuthRefresh } from "@/features/integrations/spotify-connect";
 
 /** Every id a skill or MCP server's "All" pill stands in for. Skills also
  * accept the special "claude" grant (the Overseer), which isn't one of the
@@ -129,6 +131,7 @@ export function McpRegistryCard() {
   const [adding, setAdding] = useState(false);
   const [testOut, setTestOut] = useState<Record<string, string>>({});
   const [sync, setSync] = useState<{ loading: boolean; report: AllmSyncReport | null; err: string | null }>({ loading: false, report: null, err: null });
+  const reloadOnAuth = useCallback(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const load = (refresh = false) => {
     setLoading(true);
     void cmd("mcp_list_tools", { refresh })
@@ -136,6 +139,9 @@ export function McpRegistryCard() {
       .finally(() => setLoading(false));
   };
   useEffect(() => load(), [cfg?.mcps.map((m) => `${m.id}:${m.enabled}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A key saved, Gmail imported or Spotify (dis)connected changes the builtins' status too.
+  useOnIntegrationsChanged(() => load());
+  useSpotifyAuthRefresh(reloadOnAuth);
   const syncAllm = () => {
     setSync((s) => ({ ...s, loading: true, err: null }));
     void cmd("mcp_sync_anythingllm")

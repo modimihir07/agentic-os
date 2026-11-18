@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { cmd, onNativeEvent, type SpotifyAuthEvent } from "@/lib/platform";
 import { spotifyErrorReply } from "@/features/os/media-reply";
 import { setMcpEnabled } from "./mcp-enable";
+import { notifyIntegrationsChanged } from "./changed";
 
 export interface ConnectOutcome {
   ok: boolean;
@@ -36,6 +37,7 @@ export async function connectSpotify(onUrl: (url: string) => void): Promise<Conn
       () => undefined,
       () => "Connected, but the Spotify tools couldn't be switched on — enable Spotify in the MCP registry.",
     );
+    notifyIntegrationsChanged();
     return { ok: true, account: e.account ?? null, warning };
   } catch (err) {
     return { ok: false, error: spotifyErrorReply(err) };
@@ -72,20 +74,33 @@ export function useSpotifyConnect(onDone?: (r: ConnectOutcome) => void) {
   const reset = () => {
     gen.current++;
     setState({ phase: "idle" });
+    notifyIntegrationsChanged(); // Disconnect
   };
   return { state, connect, reset };
 }
 
-/** Re-run `refresh` whenever any Spotify sign-in finishes, including one started by another
- * view or before this one mounted (the widget and the Settings card both show status). */
+/** Re-run `refresh` whenever any Spotify sign-in finishes (including one started by another
+ * view or before this one mounted) and whenever the window comes back into focus — the
+ * stored token can be revoked or replaced while a view sits open, and a status read once on
+ * mount would keep showing "Connected" (with no Connect button) after that. */
 export function useSpotifyAuthRefresh(refresh: () => void) {
   useEffect(() => {
     let off: (() => void) | undefined;
     let dead = false;
     void onNativeEvent<SpotifyAuthEvent>("spotify-auth", () => refresh()).then((u) => (dead ? u() : (off = u)));
+    let last = Date.now();
+    const onFocus = () => {
+      if (document.visibilityState !== "visible" || Date.now() - last < 2000) return; // focus + visibility fire together
+      last = Date.now();
+      refresh();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
     return () => {
       dead = true;
       off?.();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, [refresh]);
 }

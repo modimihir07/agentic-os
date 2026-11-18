@@ -6,6 +6,7 @@ import { cc, type CcConfig } from "@/lib/cc-api";
 import { syncCalendar } from "@/features/reminders/scheduler";
 import { setMcpEnabled } from "@/features/integrations/mcp-enable";
 import { useSpotifyAuthRefresh, useSpotifyConnect } from "@/features/integrations/spotify-connect";
+import { notifyIntegrationsChanged } from "@/features/integrations/changed";
 import { useProviders } from "./use-providers";
 import { SecretRow, Toggle, useOsCfg } from "./os-ui";
 
@@ -234,6 +235,7 @@ export function GmailCard() {
     run("import", async () => {
       const r = await cmd("gmail_import_anythingllm");
       refresh();
+      notifyIntegrationsChanged();
       setRev((n) => n + 1);
       return { ok: r.imported, text: r.detail };
     });
@@ -263,7 +265,38 @@ export function GmailCard() {
       <div key={rev}>
         <SecretRow name="gmail-script-id" label="Apps Script deployment ID" placeholder="AKfycb…" onChange={refresh} />
         <SecretRow name="gmail-script-key" label="Apps Script API key" onChange={refresh} />
+        <p className="mt-1 text-xs text-ink-3">Or set GMAIL_SCRIPT_ID and GMAIL_SCRIPT_KEY in the repo-root .env (used when the keychain pair isn't set; the keychain wins).</p>
       </div>
+      {out && <pre className={`well mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-[8px] p-2 text-[11px] ${out.ok ? "text-ink-2" : "text-alert"}`}>{out.text}</pre>}
+    </Card>
+  );
+}
+
+/** Brave Search: the `web.search` builtin. The key lives in the OS keychain (or `BRAVE_API_KEY`
+ * in the repo-root `.env`) and is read on every call, so saving it here works immediately. */
+export function BraveCard() {
+  const { cfg } = useOsCfg();
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null);
+  const server = cfg?.mcps.find((m) => m.id === "brave-search");
+  const test = async () => {
+    setBusy(true);
+    try {
+      const text = await cmd("mcp_call", { name: "web.search", args: { query: "Tony Soprano gabagool" }, approved: true, agent: "tony" });
+      setOut({ ok: true, text: text.slice(0, 400) });
+    } catch (e) {
+      setOut({ ok: false, text: String(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card title="Brave Search" hint="Web search for Tony and the Coder / Librarian. Get a key at api-dashboard.search.brave.com (the free plan is enough).">
+      {server && <Toggle on={server.enabled} onChange={(v) => void setMcpEnabled("brave-search", v)} label="Brave Search tools on" />}
+      <SecretRow name="brave" label="Brave Search API key" hint="Or set BRAVE_API_KEY in the repo-root .env — the keychain value wins." />
+      <button onClick={() => void test()} disabled={busy || !server?.enabled} className="pill-glass mt-1 !h-8 text-xs">
+        {busy ? <Loader2 size={13} className="animate-spin" /> : <FlaskConical size={13} />} Test search
+      </button>
       {out && <pre className={`well mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-[8px] p-2 text-[11px] ${out.ok ? "text-ink-2" : "text-alert"}`}>{out.text}</pre>}
     </Card>
   );
@@ -303,7 +336,7 @@ export function SpotifyCard() {
           {!status ? "…" : !status.configured ? "Not configured" : status.connected ? <>Connected{status.account ? <> as <b className="text-ink">{status.account}</b></> : null}</> : "Not connected"}
         </span>
         <button onClick={() => (setCopied(false), void connect())} disabled={waiting || !status?.configured} className="pill-primary ml-auto !h-8 text-xs">
-          {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {status?.connected ? "Reconnect" : "Connect"}
+          {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {status?.connected ? (status.problem ? "Re-authenticate" : "Reconnect") : "Connect"}
         </button>
         {status?.connected && (
           <button onClick={disconnect} className="pill-glass !h-8 text-xs">
@@ -328,6 +361,7 @@ export function SpotifyCard() {
       )}
       {state.phase === "done" && <p className={`text-xs ${state.warning ? "text-amber-light" : "text-teal"}`}>{state.warning ?? `Spotify connected${state.account ? ` as ${state.account}` : ""} — its tools are on.`}</p>}
       {state.phase === "error" && <p className="text-xs text-alert">{state.error}</p>}
+      {status?.problem && state.phase !== "waiting" && <p className="text-xs text-alert">{status.problem}</p>}
       {err && <p className="text-xs text-alert">{err}</p>}
       <ul className="mt-2 space-y-1 text-xs text-ink-3">
         {status && !status.configured && (

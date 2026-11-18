@@ -103,7 +103,7 @@ pub(crate) fn unavailable_reason(state: &DispatchState, cfg: &OsConfig, id: &str
 }
 
 fn listing(state: &DispatchState, id: &str) -> Result<Vec<ToolInfo>, String> {
-    builtin_listing(id, || super::gmail::source(state), || os_core::os_secret("brave").is_some(), || super::spotify::readiness(state))
+    builtin_listing(id, || super::gmail::source(state), || brave_key(state).is_some(), || super::spotify::readiness(state))
 }
 
 // ── Listing ─────────────────────────────────────────────────────────────────
@@ -517,8 +517,14 @@ fn kg_search(query: &str) -> Result<String, String> {
     Ok(hits.into_iter().take(10).map(|h| h.1).collect::<Vec<_>>().join("\n"))
 }
 
+/// The keychain entry Settings saves (read fresh each call, so a new key works without a
+/// restart), else `BRAVE_API_KEY` from the environment / repo-root `.env`.
+fn brave_key(state: &DispatchState) -> Option<String> {
+    os_core::os_secret("brave").or_else(|| super::envfile::env_or_file(state, "BRAVE_API_KEY"))
+}
+
 async fn brave(state: &DispatchState, q: &str) -> Result<String, String> {
-    let key = os_core::os_secret("brave").ok_or("add a Brave Search API key in Settings → Integrations")?;
+    let key = brave_key(state).ok_or("add a Brave Search API key in Settings → Integrations")?;
     let v: Value = state
         .http
         .get("https://api.search.brave.com/res/v1/web/search")

@@ -33,6 +33,7 @@ pub(crate) const NOT_CONFIGURED: &str = "Spotify isn't set up — add SPOTIFY_CL
 pub(crate) const NOT_CONNECTED: &str = "Spotify isn't connected — connect it in Settings → Integrations";
 const NO_DEVICE: &str = "Open Spotify on this PC or your phone first";
 const PREMIUM: &str = "Spotify playback control needs Premium";
+const OWNER_PREMIUM: &str = "Spotify is blocking this app: the Spotify account that owns it in the Developer Dashboard needs an active Premium subscription (Spotify's rule for development-mode apps; it can take a few hours to clear after subscribing). Reconnecting won't help";
 const KILL_SWITCH: &str = "kill switch is on — Spotify is a cloud service";
 
 struct Access {
@@ -305,6 +306,9 @@ fn api_error(status: u16, body: &str) -> ApiError {
     let msg: String = v["error"]["message"].as_str().or_else(|| v["error"].as_str()).unwrap_or("").chars().take(200).collect();
     match status {
         404 if reason == "NO_ACTIVE_DEVICE" || msg.to_ascii_lowercase().contains("no active device") => ApiError::NoDevice,
+        // Development-mode apps: Spotify refuses EVERY call (even /me) unless the account that
+        // owns the app in the Developer Dashboard has Premium. Not fixable by reconnecting.
+        403 if msg.to_ascii_lowercase().contains("owner of the app") => ApiError::Msg(OWNER_PREMIUM.into()),
         403 if reason == "PREMIUM_REQUIRED" || msg.contains("Premium") => ApiError::Msg(PREMIUM.into()),
         401 => ApiError::Msg("Spotify session expired — connect it again in Settings → Integrations".into()),
         429 => ApiError::Msg("Spotify is rate-limiting requests — try again in a minute".into()),
@@ -769,18 +773,29 @@ pub struct SpotifyStatus {
     configured: bool,
     connected: bool,
     account: Option<String>,
+    /// A stored token exists but Spotify refuses it (owner needs Premium, rate limit, …):
+    /// shown on the card so "Connected" never hides a failing integration.
+    problem: Option<String>,
 }
 
 #[tauri::command]
 pub async fn spotify_status(state: State<'_, DispatchState>, os: State<'_, OsState>) -> Result<SpotifyStatus, String> {
     let configured = config(&state).is_ok();
     let mut account = ACCOUNT.lock().unwrap().clone();
-    if configured && account.is_none() && os_core::os_secret(SECRET_REFRESH).is_some() && !os.snapshot().privacy.kill_switch {
-        account = tokio::time::timeout(Duration::from_secs(5), fetch_account(&state)).await.ok().and_then(Result::ok);
+    let mut problem = None;
+    // Validate a stored token on every status check (the card asks on mount and on window
+    // focus, not on a timer): a token that Spotify revoked, or one minted for a different
+    // Client ID, must read "Not connected" with a Connect button, not a stale "Connected".
+    if configured && os_core::os_secret(SECRET_REFRESH).is_some() && !os.snapshot().privacy.kill_switch {
+        match tokio::time::timeout(Duration::from_secs(5), fetch_account(&state)).await {
+            Ok(Ok(name)) => account = Some(name),
+            Ok(Err(e)) => problem = Some(e),
+            Err(_) => {} // slow network: keep the cached name, don't call it broken
+        }
     }
     // The account lookup drops a revoked refresh token, so check it afterwards.
     let connected = os_core::os_secret(SECRET_REFRESH).is_some();
-    Ok(SpotifyStatus { configured, connected, account: account.filter(|_| connected) })
+    Ok(SpotifyStatus { configured, connected, account: account.filter(|_| connected), problem: problem.filter(|_| connected) })
 }
 
 #[tauri::command]
@@ -899,6 +914,11 @@ mod tests {
         assert_eq!(api_error(403, r#"{"error":{"status":403,"message":"Player command failed: Premium required","reason":"PREMIUM_REQUIRED"}}"#), ApiError::Msg(PREMIUM.into()));
         assert_eq!(api_error(403, r#"{"error":{"status":403,"message":"Player command failed: Restriction violated"}}"#), ApiError::Msg("Spotify error (HTTP 403): Player command failed: Restriction violated".into()));
         assert_eq!(api_error(500, ""), ApiError::Msg("Spotify error (HTTP 500)".into()));
+        // The exact body Spotify returns for a dev-mode app whose owner has no Premium.
+        assert_eq!(
+            api_error(403, r#"{"error":{"status":403,"message":"Active premium subscription required for the owner of the app. When the subscription status changes, it can take a few hours before requests are allowed again."}}"#),
+            ApiError::Msg(OWNER_PREMIUM.into())
+        );
         assert_eq!(ApiError::NoDevice.text(), NO_DEVICE);
     }
 

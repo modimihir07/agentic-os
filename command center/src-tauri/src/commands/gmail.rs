@@ -29,8 +29,18 @@ pub(crate) enum Source {
     None,
 }
 
+/// The Apps Script deployment ID + key: the keychain pair Settings saves (or the AnythingLLM
+/// import writes), else `GMAIL_SCRIPT_ID` / `GMAIL_SCRIPT_KEY` from the environment or the
+/// repo-root `.env`. Read on every call, so a change takes effect without a restart.
+fn creds(state: &DispatchState) -> Option<(String, String)> {
+    match (os_core::os_secret(SECRET_ID), os_core::os_secret(SECRET_KEY)) {
+        (Some(id), Some(key)) => Some((id, key)),
+        _ => Some((super::envfile::env_or_file(state, "GMAIL_SCRIPT_ID")?, super::envfile::env_or_file(state, "GMAIL_SCRIPT_KEY")?)),
+    }
+}
+
 pub(crate) fn source(state: &DispatchState) -> Source {
-    if os_core::os_secret(SECRET_ID).is_some() && os_core::os_secret(SECRET_KEY).is_some() {
+    if creds(state).is_some() {
         return Source::Script;
     }
     let wfs = state.snapshot().n8n_workflows;
@@ -59,7 +69,7 @@ fn parse_script_reply(status: u16, body: &str) -> Result<Value, String> {
 }
 
 async fn script(state: &DispatchState, action: &str, args: Value, secs: u64) -> Result<Value, String> {
-    let (Some(id), Some(key)) = (os_core::os_secret(SECRET_ID), os_core::os_secret(SECRET_KEY)) else {
+    let Some((id, key)) = creds(state) else {
         return Err(NO_BACKEND.into());
     };
     let id = id.trim().to_string();

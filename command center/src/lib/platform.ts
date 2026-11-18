@@ -609,6 +609,8 @@ export interface SpotifyStatus {
   configured: boolean;
   connected: boolean;
   account: string | null;
+  /** A token is stored but Spotify refuses it (e.g. the app owner needs Premium). */
+  problem: string | null;
 }
 /** `track` is null when nothing is playing (Spotify answered 204). */
 export interface SpotifyNowPlaying {
