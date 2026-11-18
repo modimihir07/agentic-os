@@ -7,13 +7,14 @@ import type { TraceZone } from "@/lib/platform";
 import { usePrefersReducedMotion } from "@/lib/use-media-query";
 import { useTrace } from "./trace-store";
 import { useZoneUi } from "./zone-store";
-import { e46Wireframe, fitDistance, freshSteps, HOLO_CAMERA, HOLO_FOV, HOLO_TARGET, leaderStart, ndcToPx, pedestal, pointAt, PULSE_MS, pulseCurve, pulsesFor, sweepFan, ZONE_VOLUMES, zoneAnchor, zoneFlash, type Rect, type V3, type ZoneVolume } from "./holo-geometry";
+import { e46Wireframe, fitDistance, freshSteps, HOLO_CAMERA, HOLO_FOV, HOLO_TARGET, leaderElbow, pedestal, platePoint, pointAt, PULSE_MS, pulseCurve, pulsesFor, rearPlate, sweepFan, TELEMETRY_NODES, WHEELS_LABEL, ZONE_VOLUMES, zoneAnchor, zoneFlash, type Rect, type V3, type ZoneVolume } from "./holo-geometry";
 
 /**
- * HOLO VIEWPORT (plan §3): a procedural 2004 E46 325i Touring as a glowing holographic
- * blueprint — Orient Blue body lines, cyan glass/wheels/lamps/angel eyes, amber tail lamps
- * and exhaust, a dim cyan x-ray of the chassis and drivetrain inside, and a "GABAGOUL" rear
- * plate drawn into a CanvasTexture (no asset, nothing fetched). It stands on a glowing
+ * HOLO VIEWPORT (plan §3): a procedural 2004 E46 325i Touring (facelift, M-Tech bumper,
+ * coilover stance) as a glowing holographic blueprint — Orient Blue body lines, cyan
+ * glass/wheels/lamps, angel eyes in their own brighter group with a glow pass, amber tail
+ * lamps and exhaust, a dim cyan x-ray of the chassis and drivetrain inside, and a "GABAGOUL"
+ * rear plate drawn into a CanvasTexture (no asset, nothing fetched). It stands on a glowing
  * pedestal: a clipped tech grid, rim rings, radial ticks and a scanning sweep.
  *
  * Depth: the lofted body skin is drawn depth-only first (colorWrite off, polygon offset), so
@@ -29,12 +30,15 @@ import { e46Wireframe, fitDistance, freshSteps, HOLO_CAMERA, HOLO_FOV, HOLO_TARG
  *   the zone, click opens its ZoneInspector.
  * - PulseLayer: each new trace step sends a dot along an arc from the previous step's zone
  *   to its own (`useTrace`), flashing the zone on arrival.
- * - Leader lines from the callout cards (`[data-zone]` in `stage`) to the projected zone
- *   anchors, updated per frame straight on the SVG (no React re-render).
+ * - Elbowed leader lines from the callout cards (`[data-zone]` in `stage`) to node rings at
+ *   the projected zone anchors, plus a WHEELS pin on whichever wheel faces the camera (a
+ *   label only: no card, no inspector, not a trace zone). Updated per frame straight on the
+ *   SVG (no React re-render, no per-frame allocation beyond the attribute strings).
  */
 
-const CYAN = "#00d2ff";
-const AMBER = "#f59e0b";
+// The car's own palette (the System Map cards keep --color-holo / --color-ember).
+const CYAN = "#00f0ff";
+const AMBER = "#ffaa00";
 const ALERT = "#ff5a5f";
 /** BMW Orient Blue, lifted so it reads as light on the carbon background. */
 const ORIENT = "#3a64b8";
@@ -49,6 +53,10 @@ const RESUME_MS = 4000;
 const MAX_PULSES = 16;
 /** A pulse's travel + its trail's fade. */
 const PULSE_LIFE = PULSE_MS + 650;
+/** The wheels pin: how far its label sits up and out from the hub, and where the leader bends (px). */
+const PIN_RISE = 40;
+const PIN_ELBOW = 28;
+const PIN_RUN = 40;
 /** The car starts 3/4 from the rear (camera behind and to the right). */
 const CAMERA: V3 = HOLO_CAMERA;
 const TARGET: V3 = HOLO_TARGET;
@@ -96,6 +104,7 @@ export function HoloViewport({ stage }: { stage: RefObject<HTMLDivElement | null
   const hovered = useZoneUi((s) => s.hovered);
   const cards = useRef(new Map<TraceZone, Rect>());
   const leaders = useRef(new Map<TraceZone, SVGGElement>());
+  const pin = useRef<SVGGElement>(null);
   const invalidate = useRef<() => void>(() => undefined);
 
   // Callout card rects, relative to the viewport (re-measured whenever the stage or a card resizes).
@@ -134,10 +143,10 @@ export function HoloViewport({ stage }: { stage: RefObject<HTMLDivElement | null
         flat
         camera={{ position: [...CAMERA], fov: FOV, near: 0.1, far: 80 }}
         gl={{ antialias: true, alpha: true }}
-        style={{ filter: "drop-shadow(0 0 3px rgba(0,210,255,0.45))" }}
+        style={{ filter: "drop-shadow(0 0 3px rgba(0,240,255,0.45))" }}
         onPointerMissed={() => useZoneUi.getState().hover(null)}
       >
-        <Scene reduced={reduced} running={running} cards={cards} leaders={leaders} invalidateOut={invalidate} />
+        <Scene reduced={reduced} running={running} cards={cards} leaders={leaders} pin={pin} invalidateOut={invalidate} />
       </Canvas>
       <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
         {CALLOUT_ZONES.map((z) => (
@@ -149,10 +158,19 @@ export function HoloViewport({ stage }: { stage: RefObject<HTMLDivElement | null
             }}
             style={{ display: "none" }}
           >
-            <polyline fill="none" stroke={CYAN} strokeOpacity={0.45} strokeWidth={1} />
+            <polyline fill="none" stroke={CYAN} strokeOpacity={0.45} strokeWidth={1} strokeLinejoin="round" />
+            <circle r={4} fill="none" stroke={CYAN} strokeWidth={1} />
             <circle r={2.5} fill={CYAN} />
           </g>
         ))}
+        <g ref={pin} style={{ display: "none" }}>
+          <polyline fill="none" stroke={CYAN} strokeOpacity={0.55} strokeWidth={1} strokeLinejoin="round" />
+          <circle r={4} fill="none" stroke={CYAN} strokeOpacity={0.8} strokeWidth={1} />
+          <circle r={1.8} fill={CYAN} />
+          <text fill={CYAN} fillOpacity={0.85} fontSize={9.5} letterSpacing={1.2} dominantBaseline="middle" className="font-mono">
+            {WHEELS_LABEL}
+          </text>
+        </g>
       </svg>
     </div>
   );
@@ -163,10 +181,11 @@ interface SceneProps {
   running: boolean;
   cards: MutableRefObject<Map<TraceZone, Rect>>;
   leaders: MutableRefObject<Map<TraceZone, SVGGElement>>;
+  pin: RefObject<SVGGElement | null>;
   invalidateOut: MutableRefObject<() => void>;
 }
 
-function Scene({ reduced, running, cards, leaders, invalidateOut }: SceneProps) {
+function Scene({ reduced, running, cards, leaders, pin, invalidateOut }: SceneProps) {
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const width = useThree((s) => s.size.width);
@@ -174,6 +193,8 @@ function Scene({ reduced, running, cards, leaders, invalidateOut }: SceneProps) 
   const car = useRef<Group>(null);
   const drag = useRef({ active: false, resumeAt: 0 });
   const tmp = useMemo(() => new Vector3(), []);
+  /** The elbow leader's [start, elbow] for the zone being drawn: reused every frame. */
+  const elbow = useMemo(() => new Float64Array(4), []);
   const fit = useMemo(() => fitDistance(FOV, width / Math.max(1, height), { camera: CAMERA, target: TARGET }), [width, height]);
 
   // Keep the whole car in frame at any stage size (3/4 rear view, along the initial camera ray).
@@ -206,30 +227,75 @@ function Scene({ reduced, running, cards, leaders, invalidateOut }: SceneProps) 
     g.updateMatrixWorld();
     state.camera.updateMatrixWorld();
 
-    // Leader lines: callout card edge → projected zone anchor.
+    // Leader lines: callout card edge → elbow → node ring at the projected zone anchor.
     const { width, height } = state.size;
     const { hovered, selected } = useZoneUi.getState();
-    for (const z of CALLOUT_ZONES) {
+    for (let i = 0; i < CALLOUT_ZONES.length; i++) {
+      const z = CALLOUT_ZONES[i];
       const el = leaders.current.get(z);
       if (!el) continue;
       const rect = cards.current.get(z);
-      tmp.set(...zoneAnchor(z)).applyMatrix4(g.matrixWorld).project(state.camera);
-      const p = ndcToPx(tmp.x, tmp.y, width, height);
-      const start = rect && tmp.z < 1 ? leaderStart(rect, p) : null;
-      if (!start) {
+      const a = zoneAnchor(z);
+      tmp.set(a[0], a[1], a[2]).applyMatrix4(g.matrixWorld).project(state.camera);
+      const px = ((tmp.x + 1) / 2) * width;
+      const py = ((1 - tmp.y) / 2) * height;
+      if (!rect || tmp.z >= 1 || !leaderElbow(rect, px, py, elbow)) {
         el.style.display = "none";
         continue;
       }
       el.style.display = "";
       const hot = hovered === z || selected === z;
-      const line = el.firstElementChild as SVGPolylineElement;
-      const dot = el.lastElementChild as SVGCircleElement;
-      line.setAttribute("points", `${start[0].toFixed(1)},${start[1].toFixed(1)} ${p[0].toFixed(1)},${p[1].toFixed(1)}`);
-      line.setAttribute("stroke", selected === z ? AMBER : CYAN);
+      const color = selected === z ? AMBER : CYAN;
+      const line = el.children[0];
+      const ring = el.children[1];
+      const dot = el.children[2];
+      line.setAttribute("points", `${elbow[0].toFixed(1)},${elbow[1].toFixed(1)} ${elbow[2].toFixed(1)},${elbow[3].toFixed(1)} ${px.toFixed(1)},${py.toFixed(1)}`);
+      line.setAttribute("stroke", color);
       line.setAttribute("stroke-opacity", hot ? "0.9" : "0.4");
-      dot.setAttribute("cx", p[0].toFixed(1));
-      dot.setAttribute("cy", p[1].toFixed(1));
-      dot.setAttribute("fill", selected === z ? AMBER : CYAN);
+      const cx = px.toFixed(1);
+      const cy = py.toFixed(1);
+      ring.setAttribute("cx", cx);
+      ring.setAttribute("cy", cy);
+      dot.setAttribute("cx", cx);
+      dot.setAttribute("cy", cy);
+      ring.setAttribute("stroke", color);
+      ring.setAttribute("stroke-opacity", hot ? "0.95" : "0.55");
+      dot.setAttribute("fill", color);
+    }
+
+    // The WHEELS pin: on the wheel hub nearest the camera (smallest NDC depth), its label up and outward.
+    const p = pin.current;
+    if (p) {
+      let bz = Infinity;
+      let bx = 0;
+      let by = 0;
+      for (let i = 0; i < TELEMETRY_NODES.length; i++) {
+        const a = TELEMETRY_NODES[i].anchor;
+        tmp.set(a[0], a[1], a[2]).applyMatrix4(g.matrixWorld).project(state.camera);
+        if (tmp.z < bz) {
+          bz = tmp.z;
+          bx = tmp.x;
+          by = tmp.y;
+        }
+      }
+      if (bz >= 1 || Math.abs(bx) > 1 || Math.abs(by) > 1) {
+        p.style.display = "none";
+      } else {
+        p.style.display = "";
+        const hx = ((bx + 1) / 2) * width;
+        const hy = ((1 - by) / 2) * height;
+        const dir = hx < width / 2 ? -1 : 1;
+        const ly = hy - PIN_RISE;
+        p.children[0].setAttribute("points", `${hx.toFixed(1)},${hy.toFixed(1)} ${(hx + dir * PIN_ELBOW).toFixed(1)},${ly.toFixed(1)} ${(hx + dir * PIN_RUN).toFixed(1)},${ly.toFixed(1)}`);
+        for (let k = 1; k <= 2; k++) {
+          p.children[k].setAttribute("cx", hx.toFixed(1));
+          p.children[k].setAttribute("cy", hy.toFixed(1));
+        }
+        const label = p.children[3];
+        label.setAttribute("x", (hx + dir * (PIN_RUN + 4)).toFixed(1));
+        label.setAttribute("y", ly.toFixed(1));
+        label.setAttribute("text-anchor", dir < 0 ? "end" : "start");
+      }
     }
   });
 
@@ -294,7 +360,10 @@ function CarWire() {
       shell.setIndex(w.shell.index);
       shell.computeVertexNormals();
     }
-    return { base: lineGeometry(w.base), cyan: lineGeometry(w.cyan), amber: lineGeometry(w.amber), inner: lineGeometry(w.inner ?? []), shell };
+    const halo = w.halo ?? [];
+    // The glow pass draws the same rings as fat lines (LineSegments2): point pairs, built once.
+    const glow = Array.from({ length: halo.length / 3 }, (_, i) => [halo[3 * i], halo[3 * i + 1], halo[3 * i + 2]] as [number, number, number]);
+    return { base: lineGeometry(w.base), cyan: lineGeometry(w.cyan), amber: lineGeometry(w.amber), halo: lineGeometry(halo), inner: lineGeometry(w.inner ?? []), shell, glow };
   }, []);
   const fresnel = useMemo(
     () =>
@@ -312,7 +381,7 @@ function CarWire() {
   );
   useEffect(
     () => () => {
-      Object.values(geos).forEach((g) => g.dispose());
+      for (const g of [geos.base, geos.cyan, geos.amber, geos.halo, geos.inner, geos.shell]) g.dispose();
       fresnel.dispose();
     },
     [geos, fresnel],
@@ -346,6 +415,13 @@ function CarWire() {
       <lineSegments geometry={geos.amber} raycast={noRaycast}>
         <lineBasicMaterial color={AMBER} transparent opacity={0.95} blending={AdditiveBlending} depthWrite={false} toneMapped={false} />
       </lineSegments>
+      {/* Angel eyes: full-brightness rings plus a wide, faint additive glow around them. */}
+      <lineSegments geometry={geos.halo} raycast={noRaycast}>
+        <lineBasicMaterial color={CYAN} transparent opacity={1} blending={AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </lineSegments>
+      {geos.glow.length > 0 && (
+        <Line segments points={geos.glow} color={CYAN} lineWidth={4} transparent opacity={0.3} blending={AdditiveBlending} depthWrite={false} toneMapped={false} raycast={noRaycast} />
+      )}
     </>
   );
 }
@@ -433,11 +509,15 @@ function Plate() {
       tex.dispose();
     };
   }, [tex, invalidate]);
+  // On the tailgate panel, a hair outside it, leaning forward with it.
+  const plate = useMemo(() => rearPlate(), []);
   return (
-    <mesh position={[-2.238, 0.86, 0]} rotation={[0, -Math.PI / 2, 0]}>
-      <planeGeometry args={[0.52, 0.114]} />
-      <meshBasicMaterial map={tex} transparent side={DoubleSide} toneMapped={false} />
-    </mesh>
+    <group position={[...platePoint(plate, 0, 0, 0.007)]} rotation={[0, 0, -plate.lean]}>
+      <mesh rotation={[0, -Math.PI / 2, 0]}>
+        <planeGeometry args={[plate.w, plate.h]} />
+        <meshBasicMaterial map={tex} transparent side={DoubleSide} toneMapped={false} />
+      </mesh>
+    </group>
   );
 }
 
