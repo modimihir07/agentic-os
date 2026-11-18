@@ -1,5 +1,5 @@
 //! CLI Hub: status + install/repair for the agent CLIs the OS can run
-//! (opencode, claude, gemini, llm, gh, hermes, agy).
+//! (opencode, claude, gemini, llm, gh, agy).
 //!
 //! Windows note: npm and uv install `.cmd` / `.exe` shims that a plain
 //! `Command::new("opencode")` can't find (no PATHEXT lookup) — that was the
@@ -23,13 +23,12 @@ struct Cli {
     how: &'static str,
 }
 
-const CLIS: [Cli; 7] = [
+const CLIS: [Cli; 6] = [
     Cli { name: "opencode", label: "opencode", version_args: &["--version"], install: Some(("npm.cmd", &["install", "-g", "opencode-ai@latest"])), how: "npm install -g opencode-ai@latest" },
     Cli { name: "claude", label: "Claude Code", version_args: &["--version"], install: Some(("npm.cmd", &["install", "-g", "@anthropic-ai/claude-code@latest"])), how: "npm install -g @anthropic-ai/claude-code" },
     Cli { name: "gemini", label: "Gemini CLI", version_args: &["--version"], install: Some(("npm.cmd", &["install", "-g", "@google/gemini-cli@latest"])), how: "npm install -g @google/gemini-cli" },
     Cli { name: "llm", label: "llm (Simon Willison)", version_args: &["--version"], install: Some(("uv", &["tool", "install", "--force", "llm", "--with", "llm-anthropic", "--with", "llm-gemini"])), how: "uv tool install llm --with llm-anthropic --with llm-gemini" },
     Cli { name: "gh", label: "GitHub CLI", version_args: &["--version"], install: Some(("winget", &["install", "--id", "GitHub.cli", "-e", "--silent", "--accept-package-agreements", "--accept-source-agreements"])), how: "winget install GitHub.cli" },
-    Cli { name: "hermes", label: "Hermes Agent", version_args: &["--version"], install: None, how: "Microsoft Store: Hermes Agent (then `hermes config set model.provider lmstudio`)" },
     Cli { name: "agy", label: "agy (Antigravity)", version_args: &["--version"], install: None, how: "Install Antigravity and enable its CLI from the app" },
 ];
 

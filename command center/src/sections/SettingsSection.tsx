@@ -5,7 +5,7 @@ import { VoiceOrb } from "@/features/voice/VoiceOrb";
 import { isTauri } from "@/lib/platform";
 import { Card, Field, Input, Select, SubTabs } from "@/components/ui";
 import { GatewayStatusCard, OrchestratorCard, VerifierCard } from "./settings/ServicesSettings";
-import { SttCard, TtsCard } from "./settings/VoiceSettings";
+import { AgentVoiceRoster, SttCard, TtsCard } from "./settings/VoiceSettings";
 import { GoogleCard, LocalLlmCard, N8nCard } from "./settings/IntegrationSettings";
 import { BridgeCard, PipelinesCard } from "./settings/PipelineSettings";
 import { ComputeCard, DropletCard, MarketDataCard, OsIdentityCard, OsPermissionsCard, OverseerCard, PrivacyShieldCard, WorkspacesCard } from "./settings/OsSettings";
@@ -14,6 +14,7 @@ import { MemoryLifecycleCard } from "./settings/MemorySettings";
 import { AiProvidersCard, CliHubCard, ComputeRouterCard, ModelLabCard, ModelLibraryCard } from "./settings/HubSettings";
 import { CueStudio } from "./settings/CueStudio";
 import { VoiceDetectionCard } from "./settings/VadSettings";
+import { RoutingSettings } from "./settings/RoutingSettings";
 import { GlassOpacitySlider } from "@/features/os/OsControls";
 
 type Tab = "services" | "voice" | "integrations" | "business" | "appearance";
@@ -62,7 +63,16 @@ export function SettingsSection() {
       {tab === "voice" && (
         <>
           <VoiceDetectionCard />
-          {desktop ? <><SttCard /><TtsCard /></> : <DesktopOnly what="Whisper / Kokoro / XTTS selection (the phone uses the browser's voice for now)" />}
+          {desktop ? (
+            <>
+              <SttCard />
+              <TtsCard />
+              <AgentVoiceRoster />
+              <RoutingSettings />
+            </>
+          ) : (
+            <DesktopOnly what="Whisper / Kokoro / XTTS selection (the phone uses the browser's voice for now)" />
+          )}
           <CueStudio />
         </>
       )}
@@ -134,6 +144,7 @@ function GatewayCard() {
       {!isTauri() && (
         <Field label="Gateway token (network lock)" className="mt-2">
           <Input type="password" value={s.gatewayToken} onChange={(e) => s.set({ gatewayToken: e.target.value })} placeholder="From desktop → Settings → Integrations → New phone token" className="font-mono" autoComplete="off" />
+          <p className="mt-1 text-xs text-ink-3">Not saved to this device — re-enter it each session so it never sits in plaintext storage.</p>
         </Field>
       )}
       <GatewayStatusCard />

@@ -3,8 +3,11 @@ import { collections, useCollection } from "@/lib/cc-api";
 import { useNav, SECTIONS, type Section } from "@/stores/nav";
 import { useVoice, THREADS, type ThreadId } from "@/features/voice/voice-store";
 import { useToasts } from "@/features/reminders/notify";
+import { parseOsIntent } from "@/features/os/os-intent-parse";
+import { useSettings } from "@/stores/settings";
 import { DEFAULT_CUES, type CueWidget } from "./types";
-import { runCue, useCueRun } from "./player";
+import { norm } from "./gaba";
+import { cueRecentlyActive, runCue, stopAllAudio, useCueRun } from "./player";
 
 /**
  * Cue triggers: voice/text phrase, time of day, app startup. The voice
@@ -19,20 +22,15 @@ export const registerCueIO = (s: Speak, p: Prompt) => {
   prompt = p;
 };
 
-/** Whisper hears "gabagool" a dozen ways: gaba gu, gabagoul, gabba gool, gabbagool… */
-const GABA = /gab+a\s*-?\s*g(?:oo|ou|u|o)(?:l|le|ul)?|gab+agoo?u?l/g;
-const norm = (s: string) =>
-  s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim().replace(GABA, "gabagool");
+/** Whisper hears "gabagool" a dozen ways (gaba gool, gobble, cabbage cool…): see gaba.ts. */
+export { norm };
 
 /**
- * "stop gabagool mode", "stop gaba gu mode", "end the music", "kill the theme"… — or a
- * bare "stop" / "enough" while a cue is playing.
+ * "turn off gaba goom mode", "stop gabagool", "exit gobble"… — or a bare "stop" /
+ * "turn off" / "kill the music" while a cue is playing or fired in the last 10 minutes.
  */
 export function isStopCue(text: string): boolean {
-  const t = norm(text);
-  const verb = /(stop|end|exit|quit|kill|cancel|turn off|shut off|shut it off|leave|enough|cut)/.test(t);
-  if (verb && /(gabagool|music|theme|song|cue)/.test(t)) return true;
-  return !!useCueRun.getState().running && /^(hey tony |yo tony |tony )?(stop|stop it|enough|that s enough|cut it|kill it|shut it off|turn it off)$/.test(t);
+  return parseOsIntent(text, { osName: useSettings.getState().osName, cueActive: cueRecentlyActive() })?.kind === "gabagool-off";
 }
 
 /** A cue whose phrase is in what the user said/typed ("hey tony, enter gabagool mode"). */
@@ -65,7 +63,7 @@ export function fireCue(w: CueWidget) {
 
 /** Toggle from the top-bar pill: stop if running, else start Gabagool Mode. */
 export function toggleGabagool() {
-  if (useCueRun.getState().running) return useCueRun.getState().stopAll();
+  if (useCueRun.getState().running) return stopAllAudio();
   const w = collections.snapshot<CueWidget>("cues").find((c) => c.builtin === "gabagool" && !c._deleted);
   if (w) fireCue(w);
   else useToasts.getState().push({ title: "Gabagool Mode", body: "Set it up in Settings → Voice & Triggers.", tone: "info" });

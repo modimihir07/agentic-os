@@ -12,6 +12,7 @@ pub mod os_core;
 pub mod pipeline;
 pub mod pipelines;
 pub mod privacy;
+pub mod routing;
 pub mod scheduler;
 pub mod secrets;
 pub mod services;

@@ -1,4 +1,4 @@
-import { api } from "@/lib/gateway";
+import { api, GatewayError } from "@/lib/gateway";
 import { cc } from "@/lib/cc-api";
 import { cmd, type ChatMessage } from "@/lib/platform";
 import { SUB_AGENTS } from "@/features/dispatcher/agents";
@@ -17,10 +17,12 @@ export interface ExecutionResult {
  * Routing:
  *   read-only        → dispatch() chat (local model / cloud fallback / gateway)
  *   mutating + n8n   → named n8n webhook (Rust, URL from providers.json)
- *   mutating + agent → Agentic OS agent via the gateway (hermes/opencode/agy
- *                      have real tools). A plain chat model has NO tools and
- *                      would only *claim* it acted, so it is never used to
- *                      "execute" a mutating action.
+ *   mutating + agent → Agentic OS agent via the gateway (opencode has real
+ *                      tools). A plain chat model has NO tools and would
+ *                      only *claim* it acted, so it is never used to
+ *                      "execute" a mutating action. Before sending, the
+ *                      agent's health is checked so an uninstalled CLI never
+ *                      shows a fake reply.
  */
 export async function execute(plan: ActionPlan, history: ChatMessage[]): Promise<ExecutionResult> {
   const agent = SUB_AGENTS[plan.role];
@@ -70,6 +72,15 @@ export async function execute(plan: ActionPlan, history: ChatMessage[]): Promise
     };
   }
 
+  // Guard: never send to a gateway agent that isn't installed — fail with a plain
+  // message instead of letting the gateway's "⚠ CLI not installed" text show as a
+  // reply (server.py now returns 503 for that too; this check avoids the round trip).
+  const health = await api.agentsHealth().catch(() => null);
+  const status = health?.agents.find((a) => a.name === agent.gatewayAgent)?.status;
+  if (status && status !== "online") {
+    throw new Error(`Nothing was done — the ${agent.gatewayAgent} CLI isn't installed.`);
+  }
+
   const started = performance.now();
   const message = [
     `[${agent.label} — action APPROVED by the user]`,
@@ -79,6 +90,9 @@ export async function execute(plan: ActionPlan, history: ChatMessage[]): Promise
     "Carry out exactly this action and nothing more. If you cannot complete it, say so plainly — do not claim success. Reply in one or two sentences.",
   ].join("\n");
   const res = await api.chat(agent.gatewayAgent, message).catch((e) => {
+    if (e instanceof GatewayError && e.status === 503) {
+      throw new Error(`Nothing was done — the ${agent.gatewayAgent} CLI isn't installed.`);
+    }
     throw new Error(`Executor unreachable (${e instanceof Error ? e.message : e}) — nothing was done.`);
   });
   return {

@@ -1,5 +1,9 @@
 import { cmd, isTauri, type ChatMessage, type WorkflowInfo } from "@/lib/platform";
-import { SUB_AGENTS, classify, type AgentRole } from "@/features/dispatcher/agents";
+import { SUB_AGENTS, type AgentRole } from "@/features/dispatcher/agents";
+import { DEFAULT_ROUTING_CONFIG, resolve as resolveRoute } from "@/features/dispatcher/router";
+import { extractJson } from "@/features/orchestrator/extract-json";
+import { isOsControlPhrase } from "@/features/os/os-intent-parse";
+import { useOs } from "@/features/os/os-store";
 import { useSettings } from "@/stores/settings";
 import type { ThreadId } from "@/features/voice/voice-store";
 
@@ -46,6 +50,10 @@ export interface ActionPlan {
   thread?: ThreadId;
   /** The user picked the agent's tab — talk to it directly. */
   explicitRole?: boolean;
+  /** How `role` was resolved ("Named" | "Domain" | "Tab" | "Default"). A Named
+   * route is the user naming an agent directly — the model planner may never
+   * override it, even if its own keyword read looks stronger. */
+  routeKind?: string;
   /** In-memory only: for bridge plans, what to run once approved / when cancelled. */
   run?: () => Promise<{ text: string; meta: string }>;
   onCancel?: () => void;
@@ -109,10 +117,22 @@ function readBackFor(p: Pick<ActionPlan, "role" | "intent" | "target" | "missing
   return `${s} Proceed?`;
 }
 
+/** Deterministic routing fallback when the caller didn't already resolve a role
+ * (every voice-controller.ts call site does; this only covers direct callers
+ * like gate.ts/Reminders.tsx that always pass their own role, plus belt-and-suspenders). */
+function fallbackRole(utterance: string): AgentRole {
+  const routingCfg = useOs.getState().cfg?.routing ?? DEFAULT_ROUTING_CONFIG;
+  const route = resolveRoute(utterance, routingCfg);
+  return (route.role as AgentRole) ?? "general";
+}
+
 export function heuristicPlan(utterance: string, role?: AgentRole): ActionPlan {
-  const r = role ?? classify(utterance);
+  const r = role ?? fallbackRole(utterance);
   const intent = cleanIntent(utterance);
-  const mutating = looksMutating(utterance);
+  // "turn off gabagool mode" matches MUTATING's `turn (on|off)`, but the OS-control
+  // intent layer (voice-controller.ts) owns these phrases before the plan is ever
+  // built — they must never become a mutating plan for a gateway agent.
+  const mutating = looksMutating(utterance) && !isOsControlPhrase(utterance, useSettings.getState().osName);
   const plan: ActionPlan = {
     id: crypto.randomUUID(),
     utterance,
@@ -142,11 +162,14 @@ async function n8nWorkflows(): Promise<WorkflowInfo[]> {
   return workflowsCache.list;
 }
 
+const ROLE_PROMPT_ORDER: AgentRole[] = ["general", "booking", "prompter", "coder", "designer", "librarian", "ops"];
+
 function plannerPrompt(workflows: WorkflowInfo[]): string {
   const wf = workflows.map((w) => `"${w.name}"${w.description ? ` (${w.description})` : ""}`).join(", ");
-  const roles = Object.values(SUB_AGENTS).map((a) => `"${a.role}" (${a.label})`).join(", ");
+  const roles = ROLE_PROMPT_ORDER.map((r) => `"${r}" (${SUB_AGENTS[r].label})`).join(", ");
   return [
     `You are the Master Dispatcher of ${useSettings.getState().osName || "Tony"}. Convert the user's request into ONE JSON object and nothing else.`,
+    "If the request names an agent directly (\"tell my booking agent to…\", \"ask the coder…\"), that agent wins — never pick a different role, even if its keywords look stronger.",
     "Schema:",
     `{"role": one of ${roles},`,
     ` "intent": imperative verb phrase in second person, max 12 words (e.g. "cancel your 7pm dinner with Sam"),`,
@@ -160,17 +183,6 @@ function plannerPrompt(workflows: WorkflowInfo[]): string {
     "mutating = true if the action would change, send, book, buy, pay, delete, cancel, schedule, post, deploy, start/stop anything, or otherwise affect anything outside this conversation. When unsure: true.",
     "NEVER invent names, dates, times, amounts or recipients. Unknown values go in \"missing\", not in payload.",
   ].join("\n");
-}
-
-function extractJson(text: string): Record<string, unknown> | null {
-  const a = text.indexOf("{"), b = text.lastIndexOf("}");
-  if (a < 0 || b <= a) return null;
-  try {
-    const v = JSON.parse(text.slice(a, b + 1));
-    return v && typeof v === "object" ? (v as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
 }
 
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -191,7 +203,8 @@ async function modelPlan(base: ActionPlan, history: ChatMessage[]): Promise<Acti
   const j = extractJson(res.content);
   if (!j) throw new Error("planner returned no JSON");
 
-  const role = (Object.keys(SUB_AGENTS) as AgentRole[]).includes(j.role as AgentRole) ? (j.role as AgentRole) : base.role;
+  // A route the user named directly always wins — the model never overrides it.
+  const role = base.routeKind !== "Named" && (Object.keys(SUB_AGENTS) as AgentRole[]).includes(j.role as AgentRole) ? (j.role as AgentRole) : base.role;
   const t = j.target as { kind?: string; workflow?: string } | undefined;
   const wfInfo = t?.kind === "n8n" ? workflows.find((w) => w.name === t.workflow) : undefined;
   const target: PlanTarget = wfInfo ? { kind: "n8n", workflow: wfInfo.name } : { kind: "agent" };

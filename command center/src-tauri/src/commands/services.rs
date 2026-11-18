@@ -150,7 +150,7 @@ pub async fn provider_models(state: State<'_, DispatchState>, id: String) -> Res
     let p = state.provider(&id).ok_or("unknown provider")?;
     match p.kind {
         // Only the CLIs actually installed (the gateway resolves .cmd/.exe shims).
-        Kind::AgenticOs => Ok(["opencode", "claude", "gemini", "llm", "hermes", "agy"].iter().filter(|n| super::clihub::resolve(n).is_some()).map(|n| n.to_string()).collect()),
+        Kind::AgenticOs => Ok(["opencode", "claude", "gemini", "llm", "agy"].iter().filter(|n| super::clihub::resolve(n).is_some()).map(|n| n.to_string()).collect()),
         Kind::Stt if p.engine.as_deref() == Some("whispercpp") => {
             // Variants with a model file present (if modelsDir is set), else the standard list.
             if let Some(dir) = p.models_dir.as_deref() {
@@ -165,7 +165,11 @@ pub async fn provider_models(state: State<'_, DispatchState>, id: String) -> Res
             }
             Ok(WHISPER_VARIANTS.iter().map(|v| v.to_string()).collect())
         }
-        Kind::Tts if p.engine.as_deref() == Some("elevenlabs") => Ok(super::elevenlabs::MODELS.iter().map(|m| m.to_string()).collect()),
+        // Live list (Part 3), falling back to the static MODELS on any failure (no key, offline…).
+        Kind::Tts if p.engine.as_deref() == Some("elevenlabs") => match super::elevenlabs::list_models(&state, &p).await {
+            Ok(ids) if !ids.is_empty() => Ok(ids),
+            _ => Ok(super::elevenlabs::MODELS.iter().map(|m| m.to_string()).collect()),
+        },
         Kind::Tts | Kind::N8n | Kind::Integration => Ok(vec![]),
         _ => {
             let mut rb = state.http.get(format!("{}/models", p.base_url.trim_end_matches('/'))).timeout(Duration::from_secs(5));

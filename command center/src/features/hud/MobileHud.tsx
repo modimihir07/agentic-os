@@ -197,7 +197,7 @@ function TonyTab() {
         <span className={`size-2 shrink-0 rounded-full ${STATE_DOT[state]}`} />
         <MicButton size={48} />
         <div className="flex-1">
-          <CommandInput role={thread === "general" ? undefined : (thread as AgentRole)} placeholder={`Talk to ${thread === "general" ? name : SUB_AGENTS[thread as AgentRole].label}…`} />
+          <CommandInput thread={thread} placeholder={`Talk to ${thread === "general" ? name : SUB_AGENTS[thread as AgentRole].label}…`} />
         </div>
       </div>
     </div>

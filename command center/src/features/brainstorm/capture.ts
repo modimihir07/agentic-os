@@ -3,6 +3,9 @@ import { cc, collections } from "@/lib/cc-api";
 import { platform } from "@/lib/platform";
 import { useSettings } from "@/stores/settings";
 import { WebSpeechStt, WhisperStt, type SttEngine } from "@/features/voice/engines";
+import { LISTEN_PROFILES } from "./listen-profiles";
+
+export { LISTEN_PROFILES };
 
 export interface BrainstormNote {
   title: string;
@@ -38,11 +41,17 @@ interface CaptureState {
   error: string | null;
   start: (noteId?: string) => Promise<void>;
   stop: () => Promise<void>;
+  /** Flush the current utterance and restart the loop with the (possibly just-changed) profile. No-op when not listening. */
+  restartProfile: () => void;
   organize: (id?: string) => Promise<void>;
 }
 
 let engine: SttEngine | null = null;
 const getEngine = () => (engine ??= ((w) => (w.supported ? w : new WebSpeechStt()))(new WhisperStt()));
+
+/** Resolves once the in-flight utterance (if any) has been transcribed and appended. `stop()` awaits this instead of discarding it. */
+let pendingFinal: Promise<void> = Promise.resolve();
+let resolvePendingFinal: (() => void) | null = null;
 
 export const useBrainstorm = create<CaptureState>((set, get) => ({
   noteId: null,
@@ -70,9 +79,18 @@ export const useBrainstorm = create<CaptureState>((set, get) => ({
 
   stop: async () => {
     set({ listening: false, phase: "idle" });
-    engine?.abort();
+    // Flush (not abort): transcribe whatever was captured since the last pause instead of
+    // throwing it away, and wait for it to land before organizing.
+    engine?.stop();
+    await pendingFinal;
     const id = get().noteId;
     if (id && get().sinceOrganize > 0) await get().organize(id);
+  },
+
+  restartProfile: () => {
+    // The in-flight onFinal handler re-invokes loop() with the freshly-read profile once it
+    // resolves, as long as we're still listening — so flushing here is enough.
+    if (get().listening) engine?.stop();
   },
 
   organize: async (id) => {
@@ -94,23 +112,34 @@ export const useBrainstorm = create<CaptureState>((set, get) => ({
 function loop(noteId: string) {
   const s = useBrainstorm.getState();
   if (!s.listening || s.noteId !== noteId) return;
+  pendingFinal = new Promise<void>((resolve) => (resolvePendingFinal = resolve));
+  const settle = () => {
+    resolvePendingFinal?.();
+    resolvePendingFinal = null;
+  };
+  const profile = useSettings.getState().brainstorm.listenProfile;
   getEngine().start(
     {
       onPartial: () => undefined,
       onPhase: (phase) => useBrainstorm.setState({ phase }),
       onFinal: (text) => {
         void (async () => {
-          if (text) await append(noteId, text);
-          // Keep listening until the user turns it off.
+          try {
+            if (text) await append(noteId, text);
+          } finally {
+            settle();
+          }
+          // Keep listening until the user turns it off (or re-reads a just-changed profile).
           if (useBrainstorm.getState().listening) setTimeout(() => loop(noteId), 120);
         })();
       },
       onError: (e) => {
+        settle();
         useBrainstorm.setState({ error: e });
         if (useBrainstorm.getState().listening) setTimeout(() => loop(noteId), 1500);
       },
     },
-    { maxSilenceStartMs: 30_000 },
+    LISTEN_PROFILES[profile],
   );
 }
 

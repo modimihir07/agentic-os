@@ -6,7 +6,13 @@ import { useBrainstorm, type BrainstormNote } from "@/features/brainstorm/captur
 import { VoiceOrb } from "@/features/voice/VoiceOrb";
 import { parseWhen } from "@/features/reminders/when";
 import type { Reminder } from "@/features/reminders/types";
-import { useSettings } from "@/stores/settings";
+import { useSettings, type ListenProfile } from "@/stores/settings";
+
+const LISTEN_PROFILE_OPTIONS: { id: ListenProfile; label: string }[] = [
+  { id: "snappy", label: "Snappy 1s" },
+  { id: "relaxed", label: "Relaxed 3s" },
+  { id: "continuous", label: "Continuous (push-to-talk)" },
+];
 
 /**
  * Brainstorming Mode: a continuous voice scratchpad. Raw transcript is always
@@ -18,7 +24,8 @@ export function BrainstormSection() {
   const cap = useBrainstorm();
   const [selected, setSelected] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const every = useSettings((s) => s.brainstorm.autoOrganizeEvery);
+  const brainstorm = useSettings((s) => s.brainstorm);
+  const { autoOrganizeEvery: every, listenProfile: profile } = brainstorm;
   const setSettings = useSettings((s) => s.set);
 
   const notes = useMemo(
@@ -88,16 +95,40 @@ export function BrainstormSection() {
                     ? "Transcribing that thought…"
                     : cap.phase === "speech"
                       ? "Hearing you…"
-                      : "Listening. Pause between thoughts; each one is saved as you go."
+                      : profile === "continuous"
+                        ? "Recording until you press Stop."
+                        : profile === "snappy"
+                          ? "Listening. A short pause ends each thought."
+                          : "Listening. Pause between thoughts; each one is saved as you go."
                   : "Think out loud. Nothing is sent as a command — it's just captured, then organized."}
               </p>
               {cap.error && <p className="mt-1 text-xs text-alert">{cap.error}</p>}
             </div>
             <label className="flex items-center gap-2 text-xs text-ink-2">
               Organize every
-              <input type="number" min={0} max={50} value={every} onChange={(e) => setSettings({ brainstorm: { autoOrganizeEvery: Number(e.target.value) } })} className="field !h-8 !w-16 !py-1 font-mono text-[12px]" aria-label="Auto-organize every N segments" />
+              <input type="number" min={0} max={50} value={every} onChange={(e) => setSettings({ brainstorm: { ...brainstorm, autoOrganizeEvery: Number(e.target.value) } })} className="field !h-8 !w-16 !py-1 font-mono text-[12px]" aria-label="Auto-organize every N segments" />
               thoughts
             </label>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="Dictation profile">
+            {LISTEN_PROFILE_OPTIONS.map(({ id, label }) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={profile === id}
+                onClick={() => {
+                  if (profile === id) return;
+                  setSettings({ brainstorm: { ...brainstorm, listenProfile: id } });
+                  // Changing it mid-listen restarts the loop so the new pause/cap applies right away.
+                  if (cap.listening) cap.restartProfile();
+                }}
+                className={`flex h-8 items-center rounded-full border px-3 text-[12px] transition-colors ${
+                  profile === id ? "border-amber/60 bg-amber/15 text-ink" : "border-white/10 bg-[rgba(11,13,17,0.45)] text-ink-2 backdrop-blur-md hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </Card>
 

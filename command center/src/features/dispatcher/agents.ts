@@ -17,7 +17,7 @@ export interface SubAgent {
   label: string;
   icon: LucideIcon;
   /** Agentic OS backend agent to use when running as a PWA via the gateway. */
-  gatewayAgent: "opencode" | "hermes" | "agy";
+  gatewayAgent: "opencode" | "agy";
   priority: Priority;
   keywords: string[];
   systemPrompt: string;
@@ -32,7 +32,7 @@ export const SUB_AGENTS: Record<AgentRole, SubAgent> = {
     role: "prompter",
     label: "Prompter",
     icon: ListTree,
-    gatewayAgent: "hermes",
+    gatewayAgent: "opencode",
     priority: "interactive",
     keywords: ["break down", "breakdown", "spec", "requirements", "user stories", "prompt for", "write a prompt", "task list", "roadmap"],
     get systemPrompt() {
@@ -43,7 +43,7 @@ export const SUB_AGENTS: Record<AgentRole, SubAgent> = {
     role: "designer",
     label: "Designer",
     icon: Palette,
-    gatewayAgent: "hermes",
+    gatewayAgent: "opencode",
     priority: "interactive",
     keywords: ["design", "ui", "ux", "mockup", "wireframe", "layout", "palette", "typography", "landing page", "screen", "component", "brand", "logo", "aesthetic"],
     get systemPrompt() {
@@ -54,7 +54,7 @@ export const SUB_AGENTS: Record<AgentRole, SubAgent> = {
     role: "librarian",
     label: "Librarian",
     icon: BookOpen,
-    gatewayAgent: "agy",
+    gatewayAgent: "opencode",
     priority: "interactive",
     keywords: ["find", "search", "summar", "email", "gmail", "doc", "note", "remember", "research", "what did", "file"],
     get systemPrompt() {
@@ -76,7 +76,7 @@ export const SUB_AGENTS: Record<AgentRole, SubAgent> = {
     role: "booking",
     label: "Booking Desk",
     icon: CalendarCheck,
-    gatewayAgent: "hermes",
+    gatewayAgent: "opencode",
     priority: "interactive",
     keywords: [
       "book", "reserve", "reservation", "schedule", "meeting", "calendar", "event", "appointment", "remind",
@@ -90,7 +90,7 @@ export const SUB_AGENTS: Record<AgentRole, SubAgent> = {
     role: "ops",
     label: "Ops",
     icon: Radar,
-    gatewayAgent: "hermes",
+    gatewayAgent: "opencode",
     priority: "background",
     keywords: ["docker", "container", "netbird", "n8n", "workflow", "webhook", "droplet", "server", "uptime", "gpu", "vram"],
     get systemPrompt() {
@@ -103,8 +103,9 @@ export const SUB_AGENTS: Record<AgentRole, SubAgent> = {
       return osName();
     },
     icon: Sparkles,
-    // Hermes owns channels, schedules and skills — the best general executor.
-    gatewayAgent: "hermes",
+    // opencode is the CLI actually installed; it's the only gateway executor every
+    // role can rely on being there (see execute.ts's online-agent guard).
+    gatewayAgent: "opencode",
     priority: "interactive",
     keywords: [],
     get systemPrompt() {

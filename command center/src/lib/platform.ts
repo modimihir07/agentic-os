@@ -44,14 +44,20 @@ export interface NativeCommands {
   provider_add: { args: { provider: NewProvider }; result: ProvidersView };
   provider_remove: { args: { id: string }; result: ProvidersView };
   policy_update: { args: { patch: PolicyPatch }; result: ProvidersView };
+  /** Settings → Voice: edit one agent's roster row ("tony" is an alias of "general"). */
+  agent_voice_update: { args: { role: string; patch: AgentVoicePatch }; result: ProvidersView };
   dispatch_chat: { args: { req: DispatchRequest }; result: DispatchResult };
   services_health: { args: undefined; result: ServiceHealth[] };
   provider_models: { args: { id: string }; result: string[] };
   gateway_ensure: { args: undefined; result: GatewayStatus };
   stt_configure: { args: { model?: string; language?: string }; result: string };
-  /** Returns raw audio bytes (mp3 for Kokoro, wav for XTTS). `voice` overrides for previews. */
-  tts_synthesize: { args: { text: string; voice?: string }; result: ArrayBuffer };
-  tts_voices: { args: undefined; result: VoicesView };
+  /** Returns raw audio bytes (mp3 for Kokoro, wav for XTTS). `voice` overrides for previews;
+   * `agent` (Part 3) picks a voice-roster entry when no explicit `voice` is given.
+   * `previousText` (Part 6 §2) is the sentence spoken right before this one in the
+   * same reply, for ElevenLabs prosody continuity; ignored by local engines. */
+  tts_synthesize: { args: { text: string; voice?: string; agent?: string; previousText?: string }; result: ArrayBuffer };
+  /** `engine` previews an engine's voices even when it isn't the current `policy.tts`. */
+  tts_voices: { args: { engine?: string }; result: VoicesView };
   n8n_workflows: { args: undefined; result: WorkflowInfo[] };
   n8n_workflows_set: { args: { workflows: WorkflowInfo[] }; result: WorkflowInfo[] };
   n8n_trigger: { args: { name: string; payload: Record<string, unknown> }; result: string };
@@ -76,7 +82,8 @@ export interface NativeCommands {
   os_turn: { args: { req: OsTurnRequest }; result: OsTurnResult };
   overseer_ask: { args: { req: { question: string; transcript: ChatMessage[]; context: string; engine?: string } }; result: { answer: string; engine: string; latencyMs: number; redacted: boolean } };
   mcp_list_tools: { args: { refresh?: boolean }; result: ServerTools[] };
-  mcp_call: { args: { name: string; args: Record<string, unknown>; approved?: boolean }; result: string };
+  mcp_call: { args: { name: string; args: Record<string, unknown>; approved?: boolean; agent?: string }; result: string };
+  mcp_sync_anythingllm: { args: undefined; result: AllmSyncReport };
   skills_scan: { args: undefined; result: SkillInfo[] };
   memory_harvest: { args: { req: { month?: string } }; result: LedgerEntry };
   memory_flush: { args: { req: { month: string; includeLocal?: boolean; approved?: boolean } }; result: string[] };
@@ -113,7 +120,7 @@ export async function nativeRaw<T>(cmdName: "stt_transcribe" | "tts_voice_upload
 }
 
 /** Subscribe to a Rust → webview event. Returns an unsubscribe function. No-op on the PWA. */
-export async function onNativeEvent<P = unknown>(event: "voice-toggle" | "memory-progress" | "pipeline-step" | "pipeline-failed" | "gpu-slot" | "droplet-status" | "tony-token", handler: (payload: P) => void): Promise<() => void> {
+export async function onNativeEvent<P = unknown>(event: "voice-toggle" | "memory-progress" | "pipeline-step" | "pipeline-failed" | "gpu-slot" | "droplet-status" | "tony-token" | "tts-fallback", handler: (payload: P) => void): Promise<() => void> {
   if (!isTauri()) return () => undefined;
   const { listen } = await import("@tauri-apps/api/event");
   return listen<P>(event, (e) => handler(e.payload));
@@ -173,9 +180,21 @@ export interface Policy {
   tts: string;
 }
 
+/** Part 3: one agent's voice ("general" = Tony). `voice`/`model` unset =
+ * use the matching provider's own `voice`/`model`. */
+export interface AgentVoice {
+  engine: "elevenlabs" | "kokoro";
+  voice?: string;
+  model?: string;
+  autoSpeak: boolean;
+}
+export type AgentVoicePatch = Partial<Pick<AgentVoice, "engine" | "voice" | "model" | "autoSpeak">>;
+
 export interface ProvidersView {
   providers: ProviderInfo[];
   policy: Policy;
+  /** Part 3: the voice roster, by role id ("general" = Tony); missing role = no override. */
+  agentVoices: Record<string, AgentVoice>;
 }
 
 export type ProviderPatch = { id: string } & Partial<Pick<ProviderInfo, "label" | "baseUrl" | "model" | "voice" | "language" | "engine" | "modelsDir" | "voicesDir">>;
@@ -346,6 +365,15 @@ export type ComputeMode = "local" | "hybrid" | "cloud";
 export type OsSecret = "anthropic" | "gemini" | "brave" | "twelvedata" | "vault" | "gateway-token" | "anythingllm-remote";
 export type OverseerEngine = "claude-cli" | "claude-api" | "gemini-cli" | "gemini-api" | "droplet" | "local";
 
+export interface AgentTriggers {
+  names: string[];
+  domains: string[];
+}
+export interface RoutingConfig {
+  autoSwitch: boolean;
+  agents: Record<string, AgentTriggers>;
+}
+
 export interface McpServer {
   id: string;
   name: string;
@@ -357,6 +385,15 @@ export interface McpServer {
   enabled: boolean;
   builtin: boolean;
   description: string;
+  /** Part 2 per-agent grants: `null`/missing/containing `"all"` = every agent.
+   * Tony (general/tony) always has every enabled server regardless of this. */
+  agents?: string[] | null;
+}
+
+export interface AllmSyncReport {
+  added: string[];
+  kept: string[];
+  skipped: string[];
 }
 
 export interface OsConfig {
@@ -369,6 +406,7 @@ export interface OsConfig {
   anythingllm: { baseUrl: string; workspaces: Record<string, string>; timeoutSecs: number };
   skills: { dir: string; grants: Record<string, string[]> };
   mcps: McpServer[];
+  routing: RoutingConfig;
   fsRoots: string[];
   permissions: { delegation: Tier; mcp: Tier; filesystem: Tier; cloud: Tier };
   privacy: { diffuser: boolean; networkLock: boolean; killSwitch: boolean; destructiveGate: boolean; sensitiveTerms: string[] };
@@ -462,6 +500,9 @@ export interface OsTurnRequest {
   text: string;
   role: string;
   explicit?: boolean;
+  /** How the caller already classified this turn ("Named" | "Domain" | "Tab" | "Llm" | "Default"). */
+  routeKind?: string;
+  routeReason?: string;
   history?: ChatMessage[];
   context?: string;
   approved?: boolean;
@@ -521,6 +562,11 @@ export interface OsTurnResult {
   reason: string;
   redacted: boolean;
   commsThread?: string;
+  /** Final role this turn was routed to (after the Rust safety net, if it fired). */
+  routedRole: string;
+  routeReason: string;
+  /** "Named" | "Domain" | "Tab" | "Llm" | "Default". */
+  routeKind: string;
 }
 
 export interface ToolInfo {

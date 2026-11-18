@@ -261,16 +261,98 @@ def llm_chat(messages: list[dict], *, model: str = "", max_tokens: int = 1200, t
     return out["choices"][0]["message"]["content"] or ""
 
 
+_SMART_QUOTES = {"“": '"', "”": '"', "‘": "'", "’": "'"}
+_TRAILING_COMMA_RE = re.compile(r",\s*([}\]])")
+_FENCED_JSON_RE = re.compile(r"```json\s*(.*?)```", re.S | re.I)
+_TOOL_CALL_TAG_RE = re.compile(r"</?tool_call>", re.I)
+
+
+def _strip_think_loose(text: str) -> str:
+    """Remove every closed <think>...</think>; drop an unclosed one (and
+    everything after it) — a never-finished scratchpad has no usable JSON
+    trailing it."""
+    text = text or ""
+    while True:
+        a, b = text.find("<think>"), text.find("</think>")
+        if a >= 0 and b > a:
+            text = text[:a] + text[b + len("</think>") :]
+            continue
+        if a >= 0 and b < 0:
+            text = text[:a]
+        break
+    return text.strip()
+
+
+def _balanced_spans(text: str) -> list[tuple[int, int]]:
+    """Every outermost `{...}` span, skipping braces inside quoted strings."""
+    spans: list[tuple[int, int]] = []
+    i, n = 0, len(text)
+    while i < n:
+        if text[i] == "{":
+            depth, in_str, escape, j, end = 0, False, False, i, None
+            while j < n:
+                c = text[j]
+                if in_str:
+                    if escape:
+                        escape = False
+                    elif c == "\\":
+                        escape = True
+                    elif c == '"':
+                        in_str = False
+                else:
+                    if c == '"':
+                        in_str = True
+                    elif c == "{":
+                        depth += 1
+                    elif c == "}":
+                        depth -= 1
+                        if depth == 0:
+                            end = j
+                            break
+                j += 1
+            if end is not None:
+                spans.append((i, end))
+                i = end + 1
+                continue
+        i += 1
+    return spans
+
+
+def _light_repair(s: str) -> str:
+    for bad, good in _SMART_QUOTES.items():
+        s = s.replace(bad, good)
+    return _TRAILING_COMMA_RE.sub(r"\1", s)
+
+
+def _normalize_tool_shape(v: dict) -> dict:
+    if "tool" not in v and isinstance(v.get("name"), str) and "arguments" in v:
+        v = {**v, "tool": v["name"], "args": v["arguments"]}
+    return v
+
+
 def extract_json(text: str) -> Optional[dict]:
-    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.S)  # reasoning models
-    a, b = text.find("{"), text.rfind("}")
-    if a < 0 or b <= a:
-        return None
-    try:
-        v = json.loads(text[a : b + 1])
-        return v if isinstance(v, dict) else None
-    except json.JSONDecodeError:
-        return None
+    """Model-agnostic JSON / tool-call extraction (Part 6 §3) — mirrors
+    `extract_json` in the Tauri app's `dispatch.rs` and TS `extract-json.ts`.
+    Survives a reasoning scratchpad next to the JSON, a ```json fence, more
+    than one `{...}` span, trailing commas / smart quotes, and either
+    `{"tool","args"}` or the OpenAI-style `{"name","arguments"}` shape."""
+    cleaned = _strip_think_loose(text)
+    candidates: list[str] = []
+    fenced = _FENCED_JSON_RE.search(cleaned)
+    if fenced:
+        candidates.append(fenced.group(1).strip())
+    without_tool_tags = _TOOL_CALL_TAG_RE.sub("", cleaned)
+    for a, b in _balanced_spans(without_tool_tags):
+        candidates.append(without_tool_tags[a : b + 1])
+    for c in candidates:
+        for attempt in (c, _light_repair(c)):
+            try:
+                v = json.loads(attempt)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(v, dict):
+                return _normalize_tool_shape(v)
+    return None
 
 
 def embed(texts: list[str]) -> tuple[list[list[float]], str]:
@@ -721,7 +803,19 @@ def organize(req: OrganizeRequest):
         raise HTTPException(503, f"Local LLM unavailable: {_why(e)}")
     organized = extract_json(out)
     if not organized:
-        raise HTTPException(502, "Model returned no JSON")
+        # One retry with a blunt nudge before giving up on clean JSON.
+        try:
+            out = llm_chat(
+                [{"role": "system", "content": ORGANIZE_PROMPT}, {"role": "user", "content": raw[-24000:]}, {"role": "user", "content": "Return ONLY JSON, nothing else."}],
+                max_tokens=1600,
+            )
+            organized = extract_json(out)
+        except Exception:
+            organized = None
+    if not organized:
+        # Still no clean JSON: don't fail the whole note over formatting —
+        # fall back to a plain summary from whatever text came back.
+        organized = {"title": note.get("title") or "Untitled", "summary": out.strip()[:600], "categories": [], "actions": [], "tags": []}
     patch = {"organized": organized, "organizedAt": time.time()}
     if not note.get("titleLocked") and organized.get("title"):
         patch["title"] = organized["title"]
@@ -742,6 +836,16 @@ def llm_json(req: JsonGenRequest):
     except Exception as e:
         raise HTTPException(503, f"Local LLM unavailable: {_why(e)}")
     j = extract_json(out)
+    if j is None:
+        # One retry with a blunt nudge before giving up.
+        try:
+            out = llm_chat(
+                [{"role": "system", "content": req.system}, {"role": "user", "content": req.prompt}, {"role": "user", "content": "Return ONLY JSON, nothing else."}],
+                max_tokens=1200,
+            )
+            j = extract_json(out)
+        except Exception:
+            j = None
     if j is None:
         raise HTTPException(502, "Model returned no JSON")
     return j

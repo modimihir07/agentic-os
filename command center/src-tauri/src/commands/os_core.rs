@@ -92,6 +92,73 @@ impl Default for AnythingLlmConfig {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase", default)]
+pub struct AgentTriggers {
+    /// Phrases that name this agent directly ("booking desk", "casting").
+    pub names: Vec<String>,
+    /// Topic phrases that imply this agent ("whatsapp", "write code").
+    pub domains: Vec<String>,
+}
+
+fn trig(names: &[&str], domains: &[&str]) -> AgentTriggers {
+    AgentTriggers { names: names.iter().map(|s| s.to_string()).collect(), domains: domains.iter().map(|s| s.to_string()).collect() }
+}
+
+/// The user's exact default trigger matrix (Part 1 spec). Keyed by role id.
+pub fn default_routing_agents() -> BTreeMap<String, AgentTriggers> {
+    let mut m = BTreeMap::new();
+    m.insert(
+        "booking".to_string(),
+        trig(
+            &["booking", "booking desk", "booking agent", "casting", "audition", "talent agent", "B&Co"],
+            &["whatsapp", "messages", "last 5 messages", "check my texts", "casting call", "self-tape", "wardrobe", "availability", "draft email to agent"],
+        ),
+    );
+    m.insert(
+        "prompter".to_string(),
+        trig(
+            &["prompter", "prompt builder", "spec writer", "architect prompt"],
+            &["write a prompt", "build a prompt", "break it into phases", "master prompt", "prompt for claude"],
+        ),
+    );
+    m.insert(
+        "coder".to_string(),
+        trig(
+            &["coder", "developer", "dev agent", "engineer"],
+            &["write code", "fix bug", "tauri", "rust", "typescript", "react", "git commit", "repo", "script", "terminal"],
+        ),
+    );
+    m.insert(
+        "designer".to_string(),
+        trig(&["designer", "ui agent", "ux agent"], &["ui", "ux", "layout", "css", "color palette", "prototype", "play place", "mockup", "animation"]),
+    );
+    m.insert(
+        "librarian".to_string(),
+        trig(&["librarian", "memory", "vault", "researcher"], &["search vault", "rag", "knowledge graph", "find document", "notes", "lookup"]),
+    );
+    m.insert(
+        "ops".to_string(),
+        trig(&["ops", "operations", "business", "finance"], &["invoice", "receipt", "bf supplements", "contracting", "quote", "schedule", "calendar", "droplet"]),
+    );
+    m.insert("general".to_string(), trig(&["tony"], &["system status", "switch model"]));
+    m
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RoutingConfig {
+    /// Switch the visible Agents tab to a delegated agent automatically.
+    pub auto_switch: bool,
+    /// Role → its name/domain triggers (Part 1 routing matrix).
+    pub agents: BTreeMap<String, AgentTriggers>,
+}
+impl Default for RoutingConfig {
+    fn default() -> Self {
+        Self { auto_switch: true, agents: default_routing_agents() }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", default)]
 pub struct SkillsConfig {
@@ -139,6 +206,64 @@ pub struct McpServer {
     pub builtin: bool,
     #[serde(default)]
     pub description: String,
+    /// Part 2 per-agent grant list: which sub-agents (plus Tony's own fallback
+    /// tool router) may use this server's tools. `None`, an empty list, or a
+    /// list containing `"all"` all mean "every agent". Missing on disk for any
+    /// config saved before this field existed — `load_or_init` backfills it
+    /// per id from `default_mcp_grants`. Tony (`general`/`tony`) always has
+    /// every enabled server regardless of this list; see `OsState`/`mcp.rs`.
+    #[serde(default)]
+    pub agents: Option<Vec<String>>,
+}
+
+impl McpServer {
+    /// Does this server's grant list cover `agent`? Does NOT special-case
+    /// Tony/general — callers that must give Tony everything check that
+    /// themselves (he always does, regardless of this list).
+    pub fn grants(&self, agent: &str) -> bool {
+        match &self.agents {
+            None => true,
+            Some(v) if v.is_empty() => true,
+            Some(v) => agent_matches(v, agent),
+        }
+    }
+}
+
+/// `"tony"` is accepted as an alias of `"general"` everywhere a role id is
+/// compared (ground rule) — never renamed on disk, just treated the same.
+fn canon_agent(a: &str) -> &str {
+    if a == "tony" {
+        "general"
+    } else {
+        a
+    }
+}
+
+/// True if `agent` is covered by a grant list: an explicit `"all"` entry or
+/// an id match (treating `"tony"`/`"general"` as the same id). Used for both
+/// MCP server grants and skill grants (`SkillsConfig.grants`), both of which
+/// accept `"all"` as a wildcard.
+pub fn agent_matches(list: &[String], agent: &str) -> bool {
+    let agent = canon_agent(agent);
+    list.iter().any(|a| a == "all" || canon_agent(a) == agent)
+}
+
+/// Part 2's default per-agent MCP grants, by server id (the user's exact
+/// list). Any id not named here — `weather`, and any future built-in or
+/// user-added server — defaults to every agent ("all").
+pub fn default_mcp_grants(id: &str) -> Vec<String> {
+    let list: &[&str] = match id {
+        "whatsapp" => &["booking", "ops"],
+        "gmail" => &["booking", "ops"],
+        "time" => &["booking", "coder", "ops"],
+        "filesystem" => &["booking", "coder", "librarian", "prompter", "designer", "ops"],
+        "knowledge-graph" => &["booking", "librarian", "prompter", "ops"],
+        "git" => &["coder"],
+        "fetch" => &["coder", "librarian", "prompter", "designer"],
+        "brave-search" => &["coder", "librarian"],
+        _ => &["all"],
+    };
+    list.iter().map(|s| s.to_string()).collect()
 }
 
 fn builtin(id: &str, name: &str, enabled: bool, description: &str) -> McpServer {
@@ -153,11 +278,12 @@ fn builtin(id: &str, name: &str, enabled: bool, description: &str) -> McpServer 
         enabled,
         builtin: true,
         description: description.into(),
+        agents: None,
     }
 }
 
 pub fn default_mcps() -> Vec<McpServer> {
-    vec![
+    let mut v = vec![
         builtin("weather", "Weather / Open-Meteo", true, "Live conditions and 3-day forecast for any place."),
         builtin("time", "Time (America/Toronto)", true, "Current local date and time."),
         builtin("fetch", "Fetch", true, "Download a web page as plain text."),
@@ -177,8 +303,13 @@ pub fn default_mcps() -> Vec<McpServer> {
             enabled: false,
             builtin: true,
             description: "lharries/whatsapp-mcp — start the Go bridge (whatsapp-bridge) first.".into(),
+            agents: None,
         },
-    ]
+    ];
+    for m in &mut v {
+        m.agents = Some(default_mcp_grants(&m.id));
+    }
+    v
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -282,6 +413,7 @@ pub struct OsConfig {
     pub anythingllm: AnythingLlmConfig,
     pub skills: SkillsConfig,
     pub mcps: Vec<McpServer>,
+    pub routing: RoutingConfig,
     pub fs_roots: Vec<String>,
     pub permissions: OsPermissions,
     pub privacy: PrivacyConfig,
@@ -302,6 +434,7 @@ impl Default for OsConfig {
             anythingllm: AnythingLlmConfig::default(),
             skills: SkillsConfig::default(),
             mcps: default_mcps(),
+            routing: RoutingConfig::default(),
             fs_roots: vec![r"C:\ai-hub".into()],
             permissions: OsPermissions::default(),
             privacy: PrivacyConfig::default(),
@@ -359,6 +492,20 @@ impl OsState {
         // …and new role → workspace mappings (Phase 2: designer).
         for (role, slug) in AnythingLlmConfig::default().workspaces {
             cfg.anythingllm.workspaces.entry(role).or_insert(slug);
+        }
+        // Routing matrix (Part 1): add any role missing from an older config
+        // without touching triggers the user already edited.
+        for (role, triggers) in default_routing_agents() {
+            cfg.routing.agents.entry(role).or_insert(triggers);
+        }
+        // Per-agent MCP grants (Part 2): back-fill ids saved before this field
+        // existed (agents == None on disk) from the same by-id defaults used
+        // for fresh installs. A server the user has already edited keeps
+        // whatever list they set, "all" included.
+        for m in cfg.mcps.iter_mut() {
+            if m.agents.is_none() {
+                m.agents = Some(default_mcp_grants(&m.id));
+            }
         }
         // Designer starts with the UI/UX pack attached (taste, impeccable, Kowalski motion, Stitch).
         if !cfg.skills.grants.values().any(|a| a.iter().any(|x| x == "designer")) {
@@ -470,6 +617,17 @@ fn validate(c: &OsConfig) -> Result<(), String> {
             return Err(format!("invalid workspace mapping {role} → {slug}"));
         }
     }
+    for (role, triggers) in &c.routing.agents {
+        if !super::dispatch::valid_id(role) {
+            return Err(format!("invalid routing role id: {role}"));
+        }
+        if triggers.names.len() > 200 || triggers.domains.len() > 200 {
+            return Err(format!("routing.{role}: at most 200 triggers per list"));
+        }
+        if triggers.names.iter().any(|s| s.trim().is_empty()) || triggers.domains.iter().any(|s| s.trim().is_empty()) {
+            return Err(format!("routing.{role}: triggers cannot be empty strings"));
+        }
+    }
     let mut ids = std::collections::HashSet::new();
     for m in &c.mcps {
         if !super::dispatch::valid_id(&m.id) || !ids.insert(m.id.clone()) {
@@ -480,6 +638,16 @@ fn validate(c: &OsConfig) -> Result<(), String> {
             "stdio" if !m.command.trim().is_empty() => {}
             "http" if super::dispatch::valid_url(&m.url) => {}
             _ => return Err(format!("MCP {}: stdio needs a command, http needs a URL", m.name)),
+        }
+        if let Some(agents) = &m.agents {
+            if agents.len() > 20 {
+                return Err(format!("MCP {}: at most 20 agent grants", m.name));
+            }
+            for a in agents {
+                if a != "all" && !super::dispatch::valid_id(a) {
+                    return Err(format!("MCP {}: invalid agent grant \"{a}\"", m.name));
+                }
+            }
         }
     }
     Ok(())
@@ -627,7 +795,28 @@ pub fn os_config_get(os: State<'_, OsState>) -> OsConfig {
     os.snapshot()
 }
 
-/// Shallow-merge a JSON patch (top-level sections are merged one level deep).
+/// Recursively merge `src` into `dst` (objects merge key by key at every
+/// depth; arrays and scalars replace wholesale). Used so a patch to a deeply
+/// nested section — e.g. `routing.agents.booking.names` — never wipes its
+/// siblings (every other role, every other field) the way a shallow merge would.
+fn merge_json(dst: &mut serde_json::Value, src: &serde_json::Value) {
+    match (dst, src) {
+        (serde_json::Value::Object(d), serde_json::Value::Object(s)) => {
+            for (k, v) in s {
+                match d.get_mut(k) {
+                    Some(slot) => merge_json(slot, v),
+                    None => {
+                        d.insert(k.clone(), v.clone());
+                    }
+                }
+            }
+        }
+        (d, s) => *d = s.clone(),
+    }
+}
+
+/// Deep-merge a JSON patch into the config (objects merge at every depth;
+/// arrays and scalars replace wholesale — see `merge_json`).
 #[tauri::command]
 pub fn os_config_update(os: State<'_, OsState>, state: State<'_, DispatchState>, bridge: State<'_, BridgeState>, patch: serde_json::Value) -> Result<OsConfig, String> {
     let before = os.snapshot();
@@ -635,14 +824,9 @@ pub fn os_config_update(os: State<'_, OsState>, state: State<'_, DispatchState>,
         let mut cur = serde_json::to_value(&*cfg).map_err(|e| e.to_string())?;
         let (Some(dst), Some(src)) = (cur.as_object_mut(), patch.as_object()) else { return Err("patch must be an object".into()) };
         for (k, v) in src {
-            match (dst.get_mut(k), v) {
-                (Some(serde_json::Value::Object(d)), serde_json::Value::Object(s)) => {
-                    for (k2, v2) in s {
-                        d.insert(k2.clone(), v2.clone());
-                    }
-                }
-                (Some(slot), _) => *slot = v.clone(),
-                (None, _) => return Err(format!("unknown setting: {k}")),
+            match dst.get_mut(k) {
+                Some(slot) => merge_json(slot, v),
+                None => return Err(format!("unknown setting: {k}")),
             }
         }
         *cfg = serde_json::from_value(cur).map_err(|e| format!("invalid settings: {e}"))?;
@@ -927,4 +1111,142 @@ pub async fn droplet_link(os: State<'_, OsState>, state: State<'_, DispatchState
 #[tauri::command]
 pub fn gpu_slot_view(os: State<'_, OsState>) -> super::scheduler::SlotView {
     os.slot.view()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn merge_json_is_recursive_and_keeps_siblings() {
+        let mut dst = json!({
+            "routing": {
+                "autoSwitch": true,
+                "agents": {
+                    "booking": { "names": ["booking"], "domains": ["whatsapp"] },
+                    "coder": { "names": ["coder"], "domains": ["rust"] }
+                }
+            },
+            "osName": "Tony"
+        });
+        // A patch touching only booking.names must not disturb coder, booking.domains or autoSwitch.
+        let patch = json!({ "routing": { "agents": { "booking": { "names": ["booking", "casting"] } } } });
+        merge_json(&mut dst, &patch);
+        assert_eq!(dst["routing"]["autoSwitch"], json!(true));
+        assert_eq!(dst["routing"]["agents"]["booking"]["names"], json!(["booking", "casting"]));
+        assert_eq!(dst["routing"]["agents"]["booking"]["domains"], json!(["whatsapp"]));
+        assert_eq!(dst["routing"]["agents"]["coder"]["names"], json!(["coder"]));
+        assert_eq!(dst["osName"], json!("Tony"));
+    }
+
+    #[test]
+    fn merge_json_replaces_arrays_wholesale() {
+        let mut dst = json!({ "a": [1, 2, 3] });
+        merge_json(&mut dst, &json!({ "a": [9] }));
+        assert_eq!(dst["a"], json!([9]));
+    }
+
+    #[test]
+    fn routing_defaults_cover_every_role() {
+        let agents = default_routing_agents();
+        for role in ["booking", "prompter", "coder", "designer", "librarian", "ops", "general"] {
+            let t = agents.get(role).unwrap_or_else(|| panic!("missing default routing role {role}"));
+            assert!(!t.names.is_empty(), "{role} has no name triggers");
+        }
+        assert!(agents["booking"].domains.contains(&"whatsapp".to_string()));
+    }
+
+    #[test]
+    fn validate_rejects_empty_trigger_strings() {
+        let mut c = OsConfig::default();
+        c.routing.agents.get_mut("coder").unwrap().names.push("  ".into());
+        assert!(validate(&c).is_err());
+    }
+
+    #[test]
+    fn mcp_grants_match_the_users_exact_table() {
+        let cases: [(&str, &[&str]); 8] = [
+            ("whatsapp", &["booking", "ops"]),
+            ("gmail", &["booking", "ops"]),
+            ("time", &["booking", "coder", "ops"]),
+            ("filesystem", &["booking", "coder", "librarian", "prompter", "designer", "ops"]),
+            ("knowledge-graph", &["booking", "librarian", "prompter", "ops"]),
+            ("git", &["coder"]),
+            ("fetch", &["coder", "librarian", "prompter", "designer"]),
+            ("brave-search", &["coder", "librarian"]),
+        ];
+        for (id, want) in cases {
+            assert_eq!(default_mcp_grants(id), want.iter().map(|s| s.to_string()).collect::<Vec<_>>(), "{id}");
+        }
+        assert_eq!(default_mcp_grants("weather"), vec!["all".to_string()]);
+        assert_eq!(default_mcp_grants("some-future-server"), vec!["all".to_string()]);
+    }
+
+    #[test]
+    fn mcp_server_grants_is_all_or_list() {
+        let open = McpServer { agents: None, ..blank_mcp() };
+        assert!(open.grants("coder"));
+        assert!(open.grants("anyone"));
+
+        let all = McpServer { agents: Some(vec!["all".into()]), ..blank_mcp() };
+        assert!(all.grants("coder"));
+
+        let scoped = McpServer { agents: Some(vec!["coder".into(), "ops".into()]), ..blank_mcp() };
+        assert!(scoped.grants("coder"));
+        assert!(scoped.grants("ops"));
+        assert!(!scoped.grants("booking"));
+        // Tony is NOT special-cased by grants() itself — callers check that separately.
+        assert!(!scoped.grants("general"));
+    }
+
+    fn blank_mcp() -> McpServer {
+        McpServer { id: "x".into(), name: "X".into(), transport: "builtin".into(), command: String::new(), args: vec![], env: BTreeMap::new(), url: String::new(), enabled: true, builtin: true, description: String::new(), agents: None }
+    }
+
+    #[test]
+    fn default_mcps_carry_exact_grants() {
+        let mcps = default_mcps();
+        let whatsapp = mcps.iter().find(|m| m.id == "whatsapp").unwrap();
+        assert_eq!(whatsapp.agents, Some(vec!["booking".to_string(), "ops".to_string()]));
+        let weather = mcps.iter().find(|m| m.id == "weather").unwrap();
+        assert_eq!(weather.agents, Some(vec!["all".to_string()]));
+    }
+
+    #[test]
+    fn load_or_init_backfills_agents_only_when_missing() {
+        // Simulates an os.json saved before this field existed: `agents` is
+        // absent entirely (serde default → None after parsing), AND a server
+        // the user has already edited (agents: Some(["booking"])) must be
+        // left exactly as they set it.
+        let raw = r#"{"mcps":[
+            {"id":"whatsapp","name":"WhatsApp Bridge","transport":"stdio","command":"uv","args":[],"env":{},"url":"","enabled":false,"builtin":true,"description":""},
+            {"id":"git","name":"Git","transport":"builtin","command":"","args":[],"env":{},"url":"","enabled":true,"builtin":true,"description":"","agents":["booking"]}
+        ]}"#;
+        let mut cfg: OsConfig = serde_json::from_str(raw).unwrap();
+        assert_eq!(cfg.mcps[0].agents, None);
+        for m in cfg.mcps.iter_mut() {
+            if m.agents.is_none() {
+                m.agents = Some(default_mcp_grants(&m.id));
+            }
+        }
+        assert_eq!(cfg.mcps[0].agents, Some(vec!["booking".to_string(), "ops".to_string()]));
+        assert_eq!(cfg.mcps[1].agents, Some(vec!["booking".to_string()])); // untouched: user-edited value kept
+    }
+
+    #[test]
+    fn validate_rejects_bad_agent_grant() {
+        let mut c = OsConfig::default();
+        c.mcps[0].agents = Some(vec!["not a valid id!".into()]);
+        assert!(validate(&c).is_err());
+        c.mcps[0].agents = Some(vec!["all".into()]);
+        assert!(validate(&c).is_ok());
+    }
+
+    #[test]
+    fn agent_matches_accepts_all_or_exact() {
+        assert!(agent_matches(&["all".to_string()], "coder"));
+        assert!(agent_matches(&["coder".to_string()], "coder"));
+        assert!(!agent_matches(&["coder".to_string()], "booking"));
+    }
 }

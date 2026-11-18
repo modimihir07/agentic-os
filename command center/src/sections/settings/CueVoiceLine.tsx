@@ -9,7 +9,7 @@ import type { CueWidget } from "@/features/cues/types";
 let voicesP: Promise<VoicesView> | null = null;
 const loadVoices = (fresh = false) => {
   if (fresh || !voicesP) {
-    voicesP = cmd("tts_voices");
+    voicesP = cmd("tts_voices", {});
     voicesP.catch(() => (voicesP = null));
   }
   return voicesP;

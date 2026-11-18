@@ -57,7 +57,7 @@ export default function VoiceConsole({ size }: WidgetProps) {
 
       {tall && (
         <div className="mt-3">
-          <CommandInput />
+          <CommandInput thread="auto" />
         </div>
       )}
     </div>

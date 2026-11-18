@@ -73,7 +73,7 @@ export function VoiceHUD() {
           <>
             <Transcript className="max-h-56 border-t border-white/5 px-4 py-3" />
             <div className="px-4 pb-3 pt-1">
-              <CommandInput autoFocus />
+              <CommandInput thread="auto" autoFocus />
             </div>
             <p className="flex items-center gap-2 px-4 pb-3 font-mono text-[10px] text-ink-3">
               {!voiceCaps.stt && <MicOff size={11} />}

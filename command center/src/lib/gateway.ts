@@ -52,7 +52,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ task }),
     }),
-  chat: (agent: "opencode" | "hermes" | "agy", message: string) =>
+  chat: (agent: "opencode" | "agy", message: string) =>
     gateway<{ status: string; response: { content: string; agent: string; timestamp: string } }>("/api/chat", {
       method: "POST",
       body: JSON.stringify({ agent, message }),

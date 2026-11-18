@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { gateway } from "@/lib/gateway";
 import { cmd, isTauri, type OsConfig, type OsConfigPatch } from "@/lib/platform";
 import { useSettings } from "@/stores/settings";
+import { roleLabel } from "@/features/dispatcher/roles";
 
 /**
  * The OS core config (identity, compute mode, droplet, skills/MCP, privacy,
@@ -73,9 +74,17 @@ export function agentBadge(id: string): string {
       return "LIBRARIAN";
     case "ops":
       return "OPS AGENT";
+    case "prompter":
+      return "PROMPTER";
+    case "designer":
+      return "DESIGNER";
+    case "general":
+      return osName().toUpperCase();
     case "user":
       return "YOU";
     default:
-      return id.toUpperCase();
+      // Any role id not special-cased above (e.g. one added to roles.ts later) still
+      // gets a real display label instead of a raw-id fallback.
+      return roleLabel(id).toUpperCase();
   }
 }

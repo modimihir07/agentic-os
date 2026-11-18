@@ -15,7 +15,7 @@ use std::time::Duration;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::State;
 
-use super::dispatch::{short, DispatchState, Kind, Provider};
+use super::dispatch::{canon_role, short, AgentVoice, DispatchState, Kind, Provider};
 use super::elevenlabs;
 
 const MAX_AUDIO_BYTES: usize = 16 * 1024 * 1024; // ~8 min of 16 kHz mono PCM
@@ -70,7 +70,9 @@ pub async fn stt_transcribe(state: State<'_, DispatchState>, request: Request<'_
     let mut rb = state
         .http
         .post(format!("{}/audio/transcriptions", p.base_url.trim_end_matches('/')))
-        .timeout(Duration::from_secs(60))
+        // Relaxed/continuous Brainstorm dictation can hand Whisper up to a ~2 min clip
+        // (MAX_AUDIO_BYTES ≈ 8 min of audio); 60 s was too tight for that on a slow CPU.
+        .timeout(Duration::from_secs(180))
         .multipart(form);
     if let Some(k) = key {
         rb = rb.bearer_auth(k);
@@ -156,9 +158,15 @@ pub struct VoicesView {
 }
 
 /// Every voice the TTS server reports, plus custom files in voicesDir.
+/// `engine` (Part 3: the voice roster, previewing an engine the global
+/// `policy.tts` isn't currently set to) picks that provider by its `engine`
+/// field instead of the policy default; omit it for the old behaviour.
 #[tauri::command]
-pub async fn tts_voices(state: State<'_, DispatchState>) -> Result<VoicesView, String> {
-    let p = tts_provider(&state)?;
+pub async fn tts_voices(state: State<'_, DispatchState>, engine: Option<String>) -> Result<VoicesView, String> {
+    let p = match engine.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+        Some(want) => state.snapshot().providers.into_iter().find(|x| x.kind == Kind::Tts && x.engine.as_deref() == Some(want)).ok_or_else(|| format!("no TTS provider configured for engine '{want}'"))?,
+        None => tts_provider(&state)?,
+    };
     let engine = p.engine.clone().unwrap_or_else(|| "kokoro".into());
 
     // ElevenLabs: the account's voices (cloned first), fetched live.
@@ -270,14 +278,62 @@ pub async fn tts_voice_upload(state: State<'_, DispatchState>, request: Request<
     Ok(stem)
 }
 
+/// The roster entry to speak `agent` with: that agent's own entry, else
+/// Tony's ("general"), else `None`. Only consulted when `agent` is actually
+/// named — a call that never identifies a speaker (a cue clip's own voice, a
+/// Settings preview) skips the roster entirely and keeps using the single
+/// global `policy.tts` provider, exactly as before Part 3's roster existed.
+/// `agent` is already canonicalized ("tony" → "general") by the caller.
+fn roster_entry_for<'a>(agent_voices: &'a std::collections::BTreeMap<String, AgentVoice>, agent: Option<&str>) -> Option<&'a AgentVoice> {
+    let agent = agent?;
+    agent_voices.get(agent).or_else(|| agent_voices.get("general"))
+}
+
+/// 1–2000 *characters* (was bytes — a non-ASCII reply under the character
+/// cap could still be rejected as "too long").
+fn text_len_ok(s: &str) -> bool {
+    (1..=2000).contains(&s.chars().count())
+}
+
 #[tauri::command]
-pub async fn tts_synthesize(state: State<'_, DispatchState>, os: State<'_, super::os_core::OsState>, text: String, voice: Option<String>) -> Result<Response, String> {
+pub async fn tts_synthesize(
+    state: State<'_, DispatchState>,
+    os: State<'_, super::os_core::OsState>,
+    app: tauri::AppHandle,
+    text: String,
+    voice: Option<String>,
+    agent: Option<String>,
+    // Part 6 §2: the sentence spoken immediately before this one in the same
+    // reply, so ElevenLabs can keep prosody continuous across the
+    // sentence-by-sentence calls the streaming pipeline makes. Ignored by
+    // local engines (Kokoro/XTTS) and by previews/cue clips that don't pass it.
+    previous_text: Option<String>,
+) -> Result<Response, String> {
+    use tauri::Emitter;
     let text = text.trim();
-    if text.is_empty() || text.len() > 2000 {
+    if !text_len_ok(text) {
         return Err("text must be 1–2000 characters".into());
     }
-    let p = tts_provider(&state)?;
+    // `explicit` is the caller's own `voice` argument (previews, cue clips) —
+    // it keeps deciding whether a failed ElevenLabs call may fall back to a
+    // local engine, exactly as before the roster existed. The roster below
+    // only decides WHICH provider/voice/model a plain live reply uses.
     let explicit = voice.filter(|v| !v.is_empty());
+
+    // Part 3: per-agent voice roster — that agent's entry, else Tony's
+    // ("general"), else nothing (today's single `policy.tts` provider).
+    let cfg = state.snapshot();
+    let role = agent.as_deref().map(canon_role);
+    let roster = roster_entry_for(&cfg.agent_voices, role.as_deref()).cloned();
+    let (p, roster_voice, roster_model) = match &roster {
+        Some(av) => match cfg.providers.iter().find(|x| x.kind == Kind::Tts && x.engine.as_deref() == Some(av.engine.as_str())).cloned() {
+            Some(b) => (b, av.voice.clone(), av.model.clone()),
+            // The roster names an engine with no matching provider configured:
+            // fall back to the policy provider rather than erroring the whole turn.
+            None => (tts_provider(&state)?, av.voice.clone(), av.model.clone()),
+        },
+        None => (tts_provider(&state)?, None, None),
+    };
 
     // Kill switch / LOCAL ONLY: never send speech text to the cloud — speak locally.
     // Only the kill switch silences ElevenLabs. LOCAL ONLY is about where the *thinking*
@@ -289,16 +345,21 @@ pub async fn tts_synthesize(state: State<'_, DispatchState>, os: State<'_, super
         return Ok(Response::new(bytes));
     }
     if p.engine.as_deref() == Some("elevenlabs") {
-        let chosen = explicit.clone().or_else(|| p.voice.clone()).ok_or("pick an ElevenLabs voice in Settings → Voice")?;
-        match elevenlabs::synthesize(&state, &p, text, &chosen).await {
+        let chosen = explicit.clone().or_else(|| roster_voice.clone()).or_else(|| p.voice.clone()).ok_or("pick an ElevenLabs voice in Settings → Voice")?;
+        let model = roster_model.as_deref().filter(|m| !m.is_empty());
+        match elevenlabs::synthesize(&state, &p, text, &chosen, model, previous_text.as_deref()).await {
             Ok(bytes) => return Ok(Response::new(bytes)),
-            // Live speech (no explicit voice = a real reply, not a preview): fall back to a
-            // local TTS so Jarvis still talks when ElevenLabs is offline or out of quota.
+            // Live speech (no explicit voice = a real reply, not a preview — a roster
+            // voice counts as live here): fall back to local TTS so Jarvis still talks
+            // when ElevenLabs is offline or out of quota.
             Err(e) if explicit.is_none() => {
                 let local = state.snapshot().providers.into_iter().find(|x| x.kind == Kind::Tts && x.engine.as_deref() != Some("elevenlabs"));
                 if let Some(local) = local {
                     if let Ok(bytes) = synth_local(&state, &local, text, local.voice.clone()).await {
                         eprintln!("[tts] ElevenLabs failed ({e}); spoke with {} instead", local.label);
+                        // Reported to the UI (not only stderr) so a silent voice swap
+                        // is visible; best-effort — a missing listener is harmless.
+                        let _ = app.emit("tts-fallback", serde_json::json!({ "from": "elevenlabs", "to": local.id, "reason": e }));
                         return Ok(Response::new(bytes));
                     }
                 }
@@ -307,7 +368,7 @@ pub async fn tts_synthesize(state: State<'_, DispatchState>, os: State<'_, super
             Err(e) => return Err(e),
         }
     }
-    let bytes = synth_local(&state, &p, text, explicit).await?;
+    let bytes = synth_local(&state, &p, text, explicit.or(roster_voice)).await?;
     Ok(Response::new(bytes))
 }
 
@@ -337,4 +398,61 @@ async fn synth_local(state: &DispatchState, p: &Provider, text: &str, voice: Opt
     }
     let bytes = rb.send().await.map_err(short)?.error_for_status().map_err(short)?.bytes().await.map_err(short)?;
     Ok(bytes.to_vec())
+}
+
+#[cfg(test)]
+mod part3_tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn av(engine: &str, voice: &str) -> AgentVoice {
+        AgentVoice { engine: engine.into(), voice: Some(voice.into()), model: None, auto_speak: false }
+    }
+
+    #[test]
+    fn roster_entry_prefers_the_named_agent() {
+        let mut m = BTreeMap::new();
+        m.insert("general".into(), av("elevenlabs", "tony-voice"));
+        m.insert("booking".into(), av("kokoro", "booking-voice"));
+        let got = roster_entry_for(&m, Some("booking")).unwrap();
+        assert_eq!(got.voice.as_deref(), Some("booking-voice"));
+    }
+
+    #[test]
+    fn roster_entry_falls_back_to_general() {
+        let mut m = BTreeMap::new();
+        m.insert("general".into(), av("elevenlabs", "tony-voice"));
+        // "coder" has no entry of its own.
+        let got = roster_entry_for(&m, Some("coder")).unwrap();
+        assert_eq!(got.voice.as_deref(), Some("tony-voice"));
+    }
+
+    #[test]
+    fn roster_entry_skips_the_roster_when_no_agent_is_named() {
+        // A cue clip's own voice or a bare Settings preview never names a
+        // speaker — the roster (including its "general" fallback) must not
+        // kick in, so `policy.tts` keeps deciding exactly as before Part 3.
+        let mut m = BTreeMap::new();
+        m.insert("general".into(), av("kokoro", "tony-voice"));
+        assert!(roster_entry_for(&m, None).is_none());
+    }
+
+    #[test]
+    fn roster_entry_none_when_roster_is_empty() {
+        let m: BTreeMap<String, AgentVoice> = BTreeMap::new();
+        assert!(roster_entry_for(&m, Some("general")).is_none());
+        assert!(roster_entry_for(&m, None).is_none());
+    }
+
+    #[test]
+    fn text_len_counts_characters_not_bytes() {
+        // Multi-byte text that is well under 2000 *characters* but would be
+        // over 2000 *bytes* at a much shorter character count — the old
+        // `.len()` (byte) check could reject a short, valid reply like this.
+        let s: String = "é".repeat(1999); // 1999 chars, 3998 bytes
+        assert!(text_len_ok(&s));
+        assert!(!text_len_ok(""));
+        assert!(!text_len_ok(&"x".repeat(2001)));
+        assert!(text_len_ok(&"x".repeat(2000)));
+    }
 }

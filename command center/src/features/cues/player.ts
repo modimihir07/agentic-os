@@ -115,6 +115,10 @@ function ramp(g: GainNode, to: number, ms: number) {
 
 interface CueRun {
   running: string | null;
+  /** Built-in id of the running cue ("gabagool"), if any. */
+  builtin: string | null;
+  /** When a cue last fired (ms epoch, 0 = never): bare "stop"/"turn off" stop it for 10 min. */
+  lastCueAt: number;
   stopAll: () => void;
 }
 let current: Playing[] = [];
@@ -122,13 +126,40 @@ let generation = 0;
 
 export const useCueRun = create<CueRun>((set) => ({
   running: null,
+  builtin: null,
+  lastCueAt: 0,
   stopAll: () => {
     generation++;
     current.forEach((p) => p.stop(400));
     current = [];
-    set({ running: null });
+    set({ running: null, builtin: null });
   },
 }));
+
+/** Gabagool mode = the built-in Gabagool cue is playing. */
+export const gabagoolOn = (s: Pick<CueRun, "running" | "builtin"> = useCueRun.getState()) => !!s.running && s.builtin === "gabagool";
+
+/** A cue is playing or fired within `windowMs` (default 10 min). */
+export function cueRecentlyActive(windowMs = 10 * 60_000, now = Date.now()): boolean {
+  const s = useCueRun.getState();
+  return !!s.running || (s.lastCueAt > 0 && now - s.lastCueAt < windowMs);
+}
+
+// Tony's TTS lives in the voice controller; it registers its cancel here (no import cycle).
+let cancelSpeech: () => void = () => undefined;
+export const registerSpeechCancel = (f: () => void) => {
+  cancelSpeech = f;
+};
+
+/** Stop every cue clip AND Tony's speech (the intro line keeps talking otherwise). */
+export function stopAllAudio() {
+  useCueRun.getState().stopAll();
+  try {
+    cancelSpeech();
+  } catch {
+    /* best-effort */
+  }
+}
 
 async function introText(w: CueWidget): Promise<string> {
   if (w.intro.mode === "static" || !w.intro.text.trim()) return w.intro.text;
@@ -151,7 +182,7 @@ async function introText(w: CueWidget): Promise<string> {
 export async function runCue(w: CueWidget, speak: (text: string, voice?: string) => Promise<void>, onAction?: (w: CueWidget) => void) {
   useCueRun.getState().stopAll();
   const gen = ++generation;
-  useCueRun.setState({ running: w.name });
+  useCueRun.setState({ running: w.name, builtin: w.builtin ?? null, lastCueAt: Date.now() });
   const alive = () => gen === generation;
   try {
     audio();
@@ -174,6 +205,6 @@ export async function runCue(w: CueWidget, speak: (text: string, voice?: string)
     if (alive()) onAction?.(w);
     if (themePlay && !theme?.loop) await themePlay.done;
   } finally {
-    if (alive() && !(w.theme?.loop)) useCueRun.setState({ running: null });
+    if (alive() && !(w.theme?.loop)) useCueRun.setState({ running: null, builtin: null });
   }
 }

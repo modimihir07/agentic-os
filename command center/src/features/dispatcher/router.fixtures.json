@@ -1,0 +1,131 @@
+[
+  {
+    "desc": "explicit delegation verb + two-word name + connective, remainder becomes task",
+    "text": "hey tony, tell my booking agent to check my last five whatsapp messages",
+    "role": "booking",
+    "kind": "Named",
+    "taskContains": "check"
+  },
+  {
+    "desc": "explicit delegation verb (have) + single-word name",
+    "text": "can you have the coder fix the bug in the voice controller",
+    "role": "coder",
+    "kind": "Named",
+    "taskContains": "fix"
+  },
+  {
+    "desc": "explicit delegation verb (send) + single-word name, no agent/desk suffix",
+    "text": "send it to the ops team for a status check",
+    "role": "ops",
+    "kind": "Named"
+  },
+  {
+    "desc": "vocative address form: NAME (please)? VERB at the start of the utterance",
+    "text": "booking desk, please check my calendar for tomorrow",
+    "role": "booking",
+    "kind": "Named",
+    "taskContains": "check"
+  },
+  {
+    "desc": "vocative address form without comma or please",
+    "text": "coder fix the broken build",
+    "role": "coder",
+    "kind": "Named"
+  },
+  {
+    "desc": "name mentioned mid-sentence with no delegation verb pattern",
+    "text": "my booking agent hasn't replied yet",
+    "role": "booking",
+    "kind": "Named"
+  },
+  {
+    "desc": "a bare mention of an ambiguous trigger (ops names include finance)",
+    "text": "any update from finance on the invoice",
+    "role": "ops",
+    "kind": "Named"
+  },
+  {
+    "desc": "delegation verb present but no name follows — falls through to domain/default",
+    "text": "tell me a joke",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "domain trigger only: coder topic words",
+    "text": "can you check the tauri and rust build errors",
+    "role": "coder",
+    "kind": "Domain"
+  },
+  {
+    "desc": "domain trigger via whisper mangle 'what sapp' -> whatsapp",
+    "text": "what sapp messages came in today",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "domain trigger via whisper mangle 'whats up' -> whatsapp",
+    "text": "check whats up for new messages",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "number-word normalization feeding a multi-word domain phrase",
+    "text": "give me the last five messages",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "domain score tie broken by role order (booking before ops)",
+    "text": "schedule a reminder about my messages",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "designer domain trigger",
+    "text": "redo the color palette and layout for the landing page",
+    "role": "designer",
+    "kind": "Domain"
+  },
+  {
+    "desc": "librarian domain trigger (no overlap with its own name triggers)",
+    "text": "find document about that contract",
+    "role": "librarian",
+    "kind": "Domain"
+  },
+  {
+    "desc": "prompter domain trigger",
+    "text": "help me build a prompt for claude",
+    "role": "prompter",
+    "kind": "Domain"
+  },
+  {
+    "desc": "ops domain trigger",
+    "text": "pull up the invoice and the quote",
+    "role": "ops",
+    "kind": "Domain"
+  },
+  {
+    "desc": "nothing matches any trigger",
+    "text": "what's the weather like today",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "plain greeting, no triggers",
+    "text": "good morning",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "'book' is a substring of 'booking' but must not match as a whole-word trigger on its own",
+    "text": "please book a table for two tonight",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "'ui' domain trigger must not fire on 'quick' (substring collision guard)",
+    "text": "give me a quick summary of today",
+    "role": null,
+    "kind": "Default"
+  }
+]

@@ -129,7 +129,7 @@ export function Transcript({ max = 50, className = "", thread }: { max?: number;
   );
 }
 
-export function CommandInput({ role, placeholder = "Type a command for the dispatcher…", autoFocus }: { role?: AgentRole; placeholder?: string; autoFocus?: boolean }) {
+export function CommandInput({ thread, placeholder = "Type a command for the dispatcher…", autoFocus }: { thread?: ThreadId; placeholder?: string; autoFocus?: boolean }) {
   const [text, setText] = useState("");
   const state = useVoice((s) => s.state);
   const pending = useVoice((s) => !!s.pending);
@@ -142,7 +142,7 @@ export function CommandInput({ role, placeholder = "Type a command for the dispa
         const t = text.trim();
         if (!t || busy) return;
         setText("");
-        void handleInput(t, { channel: "text", role });
+        void handleInput(t, { channel: "text", thread });
       }}
     >
       <input

@@ -27,5 +27,5 @@ Generates a morning briefing with current project status, recent changes, pendin
 Morning briefing markdown with: yesterday's work, today's priorities, blockers
 
 ## Agent Assignment
-- Primary: hermes
-- Fallback: opencode
+- Primary: opencode
+- Fallback: claude

@@ -138,7 +138,11 @@ export const useVoice = create<VoiceStore>()(
       name: "cc.voice.threads",
       version: 1,
       // Only the conversation persists; live voice state always boots idle.
-      partialize: (s) => ({ turns: s.turns, activeThread: s.activeThread }),
+      // `activeThread` is NOT persisted — the main bars (VoiceConsole/VoiceHUD)
+      // always pass thread "auto" explicitly, and a resumed session should
+      // never silently inherit whatever tab was open when it was last closed
+      // (that's how a stale "Prompter" tab used to swallow every request).
+      partialize: (s) => ({ turns: s.turns }),
     },
   ),
 );

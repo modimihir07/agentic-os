@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Agentic OS — FastAPI Backend
-Multi-agent orchestration server for opencode, Hermes, agy CLI
+Multi-agent orchestration server for opencode, agy, claude, gemini and llm CLIs
 """
 import argparse
 import json
@@ -44,16 +44,6 @@ async def lifespan(app: FastAPI):
             pass
 
 app = FastAPI(title="Agentic OS", version="4.0", lifespan=lifespan)
-
-# Load OpenRouter API key from Hermes .env
-HERMES_ENV = Path.home() / ".hermes" / ".env"
-if HERMES_ENV.exists():
-    for line in HERMES_ENV.read_text().splitlines():
-        line = line.strip()
-        if line and not line.startswith("#") and "=" in line:
-            k, v = line.split("=", 1)
-            if k == "OPENROUTER_API_KEY":
-                os.environ[k] = v  # last value wins (matches shell sourcing)
 
 # CORS for local dev
 app.add_middleware(
@@ -300,7 +290,17 @@ app.add_middleware(SecurityHeadersMiddleware)
 # ─── Agent Discovery (instant filesystem checks) ────────────────────
 
 # CLI agents the gateway can run. claude / gemini / llm added in v5 (Phase 2 CLI hub).
-AGENT_NAMES = ["opencode", "hermes", "agy", "claude", "gemini", "llm"]
+# (A CLI that is not installed makes /api/chat return 503, never a fake 200 reply.)
+AGENT_NAMES = ["opencode", "agy", "claude", "gemini", "llm"]
+
+
+class AgentNotInstalled(Exception):
+    """The requested agent's CLI isn't on this machine. Callers map this to HTTP 503 so
+    clients (and the Command Center provider chain) treat it as a failure, never a reply."""
+
+    def __init__(self, agent: str):
+        self.agent = agent
+        super().__init__(f"⚠ Agent '{agent}' CLI not installed. Install it and try again.")
 
 
 def resolve_cli(name: str) -> str | None:
@@ -461,8 +461,9 @@ def run_skill(name: str, req: Optional[SkillRunRequest] = None):
         response_text = execute_agent(agent_choice, prompt)
     except subprocess.TimeoutExpired:
         response_text = f"⏱ Skill '{name}' timed out on agent '{agent_choice}'."
-    except FileNotFoundError:
-        response_text = f"⚠ Agent '{agent_choice}' CLI not installed. Install it and try again."
+    except AgentNotInstalled as e:
+        # 503, and nothing is written to learnings.md: a missing CLI is not a skill run.
+        raise HTTPException(503, str(e))
     except Exception as e:
         response_text = f"⚠ Error executing skill: {str(e)}"
 
@@ -930,7 +931,7 @@ def save_chat_message(msg: dict):
     CHAT_HISTORY_FILE.write_text(json.dumps(history, indent=2))
 
 def run_cli(args: list, timeout: int = 30, stdin_text: str | None = None) -> tuple:
-    # stdin=DEVNULL: CLIs that hit a first-run prompt (hermes) must fail fast,
+    # stdin=DEVNULL: CLIs that hit a first-run prompt must fail fast,
     # not hang or read EOF mid-prompt. UTF-8 with replace: Windows consoles
     # default to cp1252 and choke on box-drawing glyphs.
     # Windows: CreateProcess ignores PATHEXT, so "opencode" (really opencode.cmd) raised
@@ -941,32 +942,11 @@ def run_cli(args: list, timeout: int = 30, stdin_text: str | None = None) -> tup
                        encoding="utf-8", errors="replace")
     return r.returncode, r.stdout, r.stderr
 
-def clean_hermes_output(raw: str) -> str:
-    """Strip CLI metadata from Hermes output, returning only the AI response."""
-    if not raw:
-        return ""
-    lines = raw.split('\n')
-    in_box = False
-    content_lines = []
-    for line in lines:
-        if '╭─' in line:
-            in_box = True
-            continue
-        if '╰─' in line:
-            in_box = False
-            continue
-        if in_box:
-            # Remove ANSI escape codes and leading whitespace
-            cleaned = line.strip()
-            if cleaned:
-                content_lines.append(cleaned)
-    if content_lines:
-        return '\n'.join(content_lines)
-    # Fallback: if no box found, return last non-metadata line
-    non_meta = [l.strip() for l in lines if l.strip() and not l.strip().startswith(('Query:', 'Initializing', '──', 'Resume', 'Session:', 'session_id:', 'Duration:', 'Messages:'))]
-    return '\n'.join(non_meta[-5:]) or raw
-
 def execute_agent(agent: str, message: str) -> str:
+    """Run one CLI agent. Raises AgentNotInstalled when its CLI is missing (never returns
+    that as text: a 200 "⚠ Agent … not installed" body used to be shown as a real reply)."""
+    if agent in AGENT_NAMES and not resolve_cli(agent):
+        raise AgentNotInstalled(agent)
     try:
         if agent == "opencode":
             try:
@@ -992,27 +972,6 @@ def execute_agent(agent: str, message: str) -> str:
                 return f"**opencode**\n\nProcessed your message.\n\n**Message:** {message[:100]}"
             err_msg = (err or "").strip()
             return err_msg or f"opencode returned exit code {code}"
-
-        elif agent == "hermes":
-            try:
-                code, out, err = run_cli(["hermes", "chat", "-Q", "-q", message], timeout=180)
-            except subprocess.TimeoutExpired:
-                return f"⏱ Hermes timed out.\n\nThe model took too long to respond. Try a shorter query or check your OpenRouter rate limits.\n\n**Message:** {message[:100]}"
-            if code == 0:
-                cleaned = clean_hermes_output(out or "")
-                if cleaned:
-                    return cleaned
-                # Empty response from model - return useful fallback
-                return f"**Hermes**\n\nReceived your message but the model returned an empty response. Try rephrasing your query.\n\n**Message:** {message}"
-            err_msg = (err or "").strip()
-            out_msg = (out or "").strip()
-            if "isn't configured" in out_msg or "hermes setup" in out_msg:
-                return ("**Hermes needs setup** — no model provider configured.\n\n"
-                        "Point it at local Bionic: `hermes config set model.provider lmstudio`, "
-                        "`hermes config set model.base_url http://127.0.0.1:1235/v1`.")
-            if "invalid choice" in err_msg or "usage:" in err_msg:
-                return f"**Hermes needs setup**\n\nRun `hermes setup` or check your config.\n\n**Details:** {err_msg[:200]}"
-            return err_msg or out_msg[-400:] or f"hermes returned exit code {code}"
 
         elif agent == "agy":
             try:
@@ -1041,7 +1000,7 @@ def execute_agent(agent: str, message: str) -> str:
     except subprocess.TimeoutExpired:
         return f"⏱ Agent '{agent}' timed out.\n\nRun `{agent} --help` in your terminal for CLI usage.\n\n**Message:** {message[:100]}"
     except FileNotFoundError:
-        return f"⚠ Agent '{agent}' CLI not installed. Install it and try again."
+        raise AgentNotInstalled(agent)
     except Exception as e:
         return f"⚠ Error communicating with {agent}: {str(e)}"
 
@@ -1049,7 +1008,7 @@ def execute_agent(agent: str, message: str) -> str:
 def chat(req: ChatRequest):
     agent = req.agent.lower().strip()
     if agent not in AGENT_NAMES:
-        raise HTTPException(400, "Agent must be one of: opencode, hermes, agy")
+        raise HTTPException(400, f"Agent must be one of: {', '.join(AGENT_NAMES)}")
     message = (req.message or "").strip()
     if not message:
         raise HTTPException(400, "Message cannot be empty")
@@ -1063,9 +1022,12 @@ def chat(req: ChatRequest):
         "content": message,
         "timestamp": get_timestamp(),
     }
+    try:
+        response_text = execute_agent(agent, message)
+    except AgentNotInstalled as e:
+        # 503 (not 200): the Command Center chain must fall through, not speak this.
+        raise HTTPException(503, str(e))
     save_chat_message(user_msg)
-
-    response_text = execute_agent(agent, message)
 
     agent_msg = {
         "id": str(uuid.uuid4())[:8],
@@ -1126,7 +1088,7 @@ async def chat_upload(
     """Chat with an optional file attachment (multipart/form-data, v4.0)."""
     agent = agent.lower().strip()
     if agent not in AGENT_NAMES:
-        raise HTTPException(400, "Agent must be one of: opencode, hermes, agy")
+        raise HTTPException(400, f"Agent must be one of: {', '.join(AGENT_NAMES)}")
 
     raw = await file.read(UPLOAD_MAX_BYTES + 1)
     if len(raw) > UPLOAD_MAX_BYTES:
@@ -1162,8 +1124,11 @@ async def chat_upload(
         "content": full_message,
         "timestamp": get_timestamp(),
     }
+    try:
+        response_text = execute_agent(agent, full_message)
+    except AgentNotInstalled as e:
+        raise HTTPException(503, str(e))
     save_chat_message(user_msg)
-    response_text = execute_agent(agent, full_message)
     agent_msg = {
         "id": str(uuid.uuid4())[:8],
         "role": "assistant",
@@ -1633,7 +1598,6 @@ def refresh_agent_health():
 
 ROUTER_RULES = {
     "opencode": ["code", "devops", "deploy", "git", "file", "terraform", "docker", "test", "build", "infra", "script"],
-    "hermes": ["memory", "schedule", "channel", "skill", "cron", "reminder", "brain", "plugin", "backup"],
     "agy": ["research", "analyze", "search", "compare", "explain", "study", "learn", "document", "report", "review"],
 }
 
@@ -1732,15 +1696,6 @@ def list_sessions():
                     "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
                     "source": "opencode",
                 })
-        hermes_sessions = Path.home() / ".hermes" / "sessions.json"
-        if hermes_sessions.exists():
-            sessions.append({
-                "id": "hermes-sessions",
-                "name": "Hermes Session Archive",
-                "size": hermes_sessions.stat().st_size,
-                "modified": datetime.fromtimestamp(hermes_sessions.stat().st_mtime).isoformat(),
-                "source": "hermes",
-            })
         return {"sessions": sessions}
     except Exception as e:
         return {"sessions": [], "error": str(e)}

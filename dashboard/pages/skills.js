@@ -159,7 +159,6 @@ async function quickRunSkill(encodedName) {
       <select id="qrsAgent" class="form-select">
         <option value="auto">Auto-detect</option>
         <option value="opencode">opencode</option>
-        <option value="hermes">Hermes</option>
         <option value="agy">agy (Antigravity)</option>
       </select>
     </div>

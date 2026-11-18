@@ -4,7 +4,7 @@ async function renderChat() {
     <div class="page-header">
       <div class="page-header-left">
         <h1 class="page-title">AI Chat</h1>
-        <p class="page-subtitle">Talk to opencode, Hermes, and agy CLI</p>
+        <p class="page-subtitle">Talk to opencode and agy CLI</p>
       </div>
       <div class="btn-group">
         <button class="btn" onclick="clearChat()">🗑 Clear</button>
@@ -19,13 +19,6 @@ async function renderChat() {
           <div>
             <div class="chat-agent-name">opencode</div>
             <div class="chat-agent-desc">Code & DevOps</div>
-          </div>
-        </div>
-        <div class="chat-agent" data-agent="hermes" onclick="selectAgent('hermes')">
-          <div class="agent-dot online"></div>
-          <div>
-            <div class="chat-agent-name">Hermes</div>
-            <div class="chat-agent-desc">Memory & Scheduling</div>
           </div>
         </div>
         <div class="chat-agent" data-agent="agy" onclick="selectAgent('agy')">
@@ -47,7 +40,6 @@ async function renderChat() {
             <div class="chat-welcome-desc">Select an agent on the left and start a conversation.<br>Each agent has different capabilities — choose the right one for your task.</div>
             <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;justify-content:center">
               <button class="btn btn-sm" onclick="sendQuickPrompt('opencode','Check the system status and running processes')">🔍 System Check</button>
-              <button class="btn btn-sm" onclick="sendQuickPrompt('hermes','What did I work on recently?')">🧠 Recall Memory</button>
               <button class="btn btn-sm" onclick="sendQuickPrompt('agy','Research the latest trends in AI agents')">📊 Research</button>
             </div>
           </div>
@@ -135,7 +127,7 @@ async function sendChatMessage() {
   // Show typing indicator
   const typingId = showTypingIndicator(agent);
 
-  // Client-side timeout: 200s (slightly more than Hermes' 180s backend timeout)
+  // Client-side timeout: 200s (slightly more than the 180s backend CLI timeout)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 200000);
 

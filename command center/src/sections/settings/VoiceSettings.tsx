@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Play, RefreshCw, Upload } from "lucide-react";
 import { Card, Field, Input, Select } from "@/components/ui";
-import { cmd, nativeRaw, type VoicesView } from "@/lib/platform";
+import { cmd, nativeRaw, type AgentVoice, type AgentVoicePatch, type VoicesView } from "@/lib/platform";
+import { roleLabel } from "@/features/dispatcher/roles";
 import { useSettings } from "@/stores/settings";
 import { audioContext } from "@/features/voice/engines";
 import { modelsFor, useProviders } from "./use-providers";
@@ -117,7 +118,7 @@ export function TtsCard() {
 
   const load = async () => {
     try {
-      setVoices(await cmd("tts_voices"));
+      setVoices(await cmd("tts_voices", {}));
       setErr(null);
     } catch (e) {
       setErr(String(e));
@@ -180,8 +181,8 @@ export function TtsCard() {
       title="Text-to-speech · voices"
       hint={
         eleven
-          ? "Your ElevenLabs account's voices, fetched live — cloned voices first. Tony speaks with exactly the voice ID you pick. If ElevenLabs is offline or out of quota, live replies fall back to local Kokoro."
-          : "Kokoro ships dozens of voices; Coqui XTTS clones a voice from a few seconds of reference audio. Custom files are saved to the voices folder — mount it into the TTS container so it can load them."
+          ? "Your ElevenLabs account's voices, fetched live — cloned voices first. This is the fallback voice: any agent below with no roster row of its own (and Tony, until his own row is set) speaks with it. If ElevenLabs is offline or out of quota, live replies fall back to local Kokoro."
+          : "Kokoro ships dozens of voices; Coqui XTTS clones a voice from a few seconds of reference audio. Custom files are saved to the voices folder — mount it into the TTS container so it can load them. This is the fallback voice for any agent below with no roster row of its own."
       }
     >
       <div className="grid gap-2 sm:grid-cols-[1.4fr_auto]">
@@ -269,6 +270,135 @@ export function TtsCard() {
       )}
       {busy && <p className={`mt-2 text-xs ${/fail/i.test(busy) ? "text-alert" : "text-teal"}`}>{busy}</p>}
     </Card>
+  );
+}
+
+/** Row order the spec gives: Tony first, then the sub-agents. */
+const ROSTER_ORDER = ["general", "prompter", "designer", "coder", "booking", "librarian", "ops"] as const;
+
+/** Per-agent voice roster (Part 3): engine, voice, model and auto-speak, one row
+ * per agent. Tony's own row ("general") doubles as the fallback for any agent
+ * with no row of its own — see `tts_synthesize`'s roster resolution in Rust. */
+export function AgentVoiceRoster() {
+  const { view, agentVoice } = useProviders();
+  if (!view) return null;
+  const defaultEngine = view.providers.find((p) => p.id === view.policy.tts)?.engine ?? "kokoro";
+
+  return (
+    <Card
+      title="Agent voice roster"
+      hint="Give each agent its own engine, voice and model. A row left on “Default” speaks with the Text-to-speech card above; auto-speak reads that agent's reply aloud even when you typed instead of talked."
+    >
+      <div className="-mx-1 overflow-x-auto">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead>
+            <tr className="label-caps text-[11px] text-ink-3">
+              <th className="px-1 py-1.5">Agent</th>
+              <th className="px-1 py-1.5">Engine</th>
+              <th className="px-1 py-1.5">Voice</th>
+              <th className="px-1 py-1.5">Model</th>
+              <th className="px-1 py-1.5">Preview</th>
+              <th className="px-1 py-1.5">Auto-speak</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ROSTER_ORDER.map((role) => (
+              <RosterRow key={role} role={role} entry={view.agentVoices[role]} defaultEngine={defaultEngine} onPatch={(patch) => void agentVoice(role, patch)} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entry: AgentVoice | undefined; defaultEngine: string; onPatch: (p: AgentVoicePatch) => void }) {
+  const engine = entry?.engine ?? defaultEngine;
+  const [voices, setVoices] = useState<VoicesView | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    void cmd("tts_voices", { engine })
+      .then(setVoices)
+      .catch(() => setVoices(null));
+  }, [engine]);
+  useEffect(() => {
+    if (engine === "elevenlabs") void modelsFor("elevenlabs").then((r) => setModels(r.models));
+  }, [engine]);
+
+  const list = voices?.voices ?? [];
+  const current = entry?.voice ?? "";
+
+  const preview = async () => {
+    setBusy("Previewing…");
+    try {
+      const bytes = await cmd("tts_synthesize", { text: `Hey Nic, ${roleLabel(role)} online. What are we building?`, agent: role });
+      const ac = await audioContext();
+      const buf = await ac.decodeAudioData(bytes);
+      const src = ac.createBufferSource();
+      src.buffer = buf;
+      src.connect(ac.destination);
+      src.start();
+      setBusy(null);
+    } catch (e) {
+      setBusy(`Failed: ${String(e)}`);
+    }
+  };
+
+  return (
+    <tr className="border-t border-white/[0.06]">
+      <td className="px-1 py-1.5 font-medium text-ink">{roleLabel(role)}</td>
+      <td className="px-1 py-1.5">
+        <Select value={engine} onChange={(e) => onPatch({ engine: e.target.value as AgentVoice["engine"] })} className="!h-8 !w-36 !text-xs">
+          <option value="elevenlabs">ElevenLabs (cloud)</option>
+          <option value="kokoro">Kokoro (local)</option>
+        </Select>
+      </td>
+      <td className="px-1 py-1.5">
+        <Select value={current} onChange={(e) => onPatch({ voice: e.target.value })} className="!h-8 !w-40 !text-xs">
+          <option value="">Default</option>
+          {!list.some((v) => v.id === current) && current && <option value={current}>{current}</option>}
+          {list.map((v) => (
+            <option key={v.id} value={v.id}>
+              {engine === "elevenlabs" ? v.label ?? v.id : v.file ? `${v.id} (${v.file})` : v.id}
+            </option>
+          ))}
+        </Select>
+      </td>
+      <td className="px-1 py-1.5">
+        {engine === "elevenlabs" ? (
+          <Select value={entry?.model ?? ""} onChange={(e) => onPatch({ model: e.target.value })} className="!h-8 !w-32 !text-xs">
+            <option value="">Default</option>
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </Select>
+        ) : (
+          <span className="text-ink-3">—</span>
+        )}
+      </td>
+      <td className="px-1 py-1.5">
+        <button type="button" className="pill-glass !h-8 !px-2.5 text-xs" onClick={() => void preview()} disabled={busy === "Previewing…"} title="Preview this agent's voice">
+          <Play size={12} />
+        </button>
+        {busy && busy !== "Previewing…" && <span className="ml-1.5 text-[10px] text-alert">{busy}</span>}
+      </td>
+      <td className="px-1 py-1.5">
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!!entry?.autoSpeak}
+          aria-label={`Auto-speak ${roleLabel(role)}`}
+          onClick={() => onPatch({ autoSpeak: !entry?.autoSpeak })}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${entry?.autoSpeak ? "bg-teal/80" : "bg-white/15"}`}
+        >
+          <span className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-[left] duration-200 ${entry?.autoSpeak ? "left-[18px]" : "left-0.5"}`} />
+        </button>
+      </td>
+    </tr>
   );
 }
 

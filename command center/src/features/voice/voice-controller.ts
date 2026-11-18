@@ -1,17 +1,22 @@
 import { SUB_AGENTS, type AgentRole } from "@/features/dispatcher/agents";
+import { roleLabel } from "@/features/dispatcher/roles";
+import { DEFAULT_ROUTING_CONFIG, resolve as resolveRoute, type Route } from "@/features/dispatcher/router";
 import { execute } from "@/features/orchestrator/execute";
 import { parseConfirmation, planIntent, stripWake, type ActionPlan } from "@/features/orchestrator/plan";
 import { handleLocalIntent } from "@/features/reminders/intents";
 import { gated } from "@/features/bridge/gate";
 import { liveContext } from "@/features/os/context";
+import { handleOsIntent } from "@/features/os/os-intents";
 import { useOs } from "@/features/os/os-store";
 import { runPipeline, usePipelines } from "@/features/os/pipeline-store";
 import { fireCue, isStopCue, matchCue, registerCueIO } from "@/features/cues/cue-runtime";
-import { useCueRun } from "@/features/cues/player";
+import { registerSpeechCancel, stopAllAudio } from "@/features/cues/player";
 import { cc } from "@/lib/cc-api";
-import { cmd, isTauri, onNativeEvent, type ChatMessage, type OsTurnResult } from "@/lib/platform";
+import { cmd, isTauri, onNativeEvent, type ChatMessage, type OsTurnResult, type RoutingConfig } from "@/lib/platform";
+import { useProviders } from "@/sections/settings/use-providers";
+import { useNav } from "@/stores/nav";
 import { useSettings } from "@/stores/settings";
-import { createEngines } from "./engines";
+import { createEngines, type SpeakOpts } from "./engines";
 import { useVoice, type Channel, type ThreadId, type VoiceTurn } from "./voice-store";
 
 /**
@@ -47,13 +52,26 @@ const history = (thread: ThreadId = store().activeThread): ChatMessage[] =>
     .slice(-8)
     .map((t) => ({ role: t.who === "user" ? "user" : "assistant", content: t.text }));
 
-async function say(text: string, voice?: string) {
+/** Defaults to Tony ("general") when the caller names neither a voice nor an agent —
+ * every plain Tony line (confirmations, reminders, cancellations…) outside `osRun`'s
+ * per-agent answers. A cue's own explicit `voice` (no `agent`) is left exactly as
+ * given: cue clips are never routed through the roster (see `registerCueIO` below). */
+async function say(text: string, opts?: SpeakOpts) {
   if (!tts.supported || !text || convo.barged) return;
+  const effective = opts?.voice || opts?.agent ? opts : { agent: "general" };
   try {
-    await tts.speak(text, voice);
+    await tts.speak(text, effective);
   } catch {
     /* speech is best-effort; the text is on screen */
   }
+}
+
+/** Does `role`'s roster entry have auto-speak on? Reads whatever `useProviders`
+ * last loaded (fetched once at module init, below, and refreshed whenever the
+ * Voice settings page is opened) — missing/unloaded roster = no auto-speak,
+ * exactly like today. */
+function agentAutoSpeak(role: string): boolean {
+  return !!useProviders.getState().view?.agentVoices[role === "tony" ? "general" : role]?.autoSpeak;
 }
 
 // ── Conversation: barge-in while Tony talks, follow-up listening after ─────
@@ -183,24 +201,43 @@ export function toggleListening() {
   else if (s === "idle" || s === "error" || s === "confirming") startListening({ forConfirmation: s === "confirming" });
 }
 
+// ── Routing (Part 1) ─────────────────────────────────────────────────────────
+//
+// One resolver, used by both the planner (mutating plans → a gateway agent)
+// and the OS turn (read-only → an AnythingLLM sub-agent). A Named route
+// always wins, even over the tab you're on; a Domain route only overrides
+// the tab while you're in Auto-route; otherwise the tab you're on wins
+// ("Tab"); with nothing to go on at all, it's Tony ("Default").
+function routeFor(utterance: string, thread: ThreadId, routingCfg: RoutingConfig): Route & { role: AgentRole } {
+  const det = resolveRoute(utterance, routingCfg);
+  const onTab = thread !== "auto";
+  if (det.kind === "Named" && det.role) return { ...det, role: det.role as AgentRole };
+  if (det.kind === "Domain" && det.role && !onTab) return { ...det, role: det.role as AgentRole };
+  if (onTab) return { ...det, role: thread as AgentRole, kind: "Tab", reason: "current tab" };
+  return { ...det, role: "general" };
+}
+
 // ── Input handling ──────────────────────────────────────────────────────────
 
-export async function handleInput(text: string, opts: { channel: Channel; role?: AgentRole }) {
+export async function handleInput(text: string, opts: { channel: Channel; thread?: ThreadId }) {
   const v = store();
   const t = text.trim();
   if (!t) return;
   if (v.pending) return answerConfirmation(t, opts.channel);
 
   convo.barged = false;
-  // The tab you're on is the thread this exchange lives in.
-  const thread = v.activeThread;
-  const role = opts.role ?? (thread !== "auto" ? (thread as AgentRole) : undefined);
+  // Main bars (VoiceConsole/VoiceHUD/cue IO) pass "auto" or nothing; only use
+  // the visible tab when the Agents section is actually what's on screen —
+  // never a stale tab left over from an earlier visit (voice-store no longer
+  // persists `activeThread` for exactly this reason).
+  const thread: ThreadId = opts.thread ?? (useNav.getState().section === "agents" ? v.activeThread : "auto");
   v.pushTurn({ who: "user", text: t, thread });
 
   // "Stop gabagool mode" (any spelling Whisper produces) — checked BEFORE starting cues,
-  // since the phrase itself contains "gabagool mode".
+  // since the phrase itself contains "gabagool mode". Stops the cue clips AND Tony's
+  // own speech (the intro line keeps talking otherwise).
   if (isStopCue(t)) {
-    useCueRun.getState().stopAll();
+    stopAllAudio();
     store().pushTurn({ who: "system", text: "Gabagool mode off.", tone: "ok", thread });
     store().setState("idle");
     if (opts.channel === "voice") void say("Alright, shutting it down.");
@@ -212,6 +249,25 @@ export async function handleInput(text: string, opts: { channel: Channel; role?:
   if (cue) {
     store().setState("idle");
     fireCue(cue);
+    return;
+  }
+
+  // Native OS controls (workspace switch, model swap, compute mode, kill switch,
+  // status, plus a backstop for Gabagool phrasings the cue phrase list doesn't cover):
+  // in-process, no gateway hop, no confirmation card — these are local, reversible
+  // settings changes, so they never reach the planner as a mutating plan.
+  const osIntent = await handleOsIntent(t).catch(() => null);
+  if (osIntent) {
+    store().setState("idle");
+    if (osIntent.reply) {
+      store().pushTurn({ who: "agent", from: "os", text: osIntent.reply, thread, meta: "os-control" });
+      if (opts.channel === "voice") {
+        store().setState("speaking");
+        startBargeIn();
+        await say(osIntent.reply);
+        return afterVoiceReply();
+      }
+    }
     return;
   }
 
@@ -239,14 +295,17 @@ export async function handleInput(text: string, opts: { channel: Channel; role?:
     return;
   }
 
+  const routingCfg = useOs.getState().cfg?.routing ?? DEFAULT_ROUTING_CONFIG;
+  const routed = routeFor(stripWake(t), thread, routingCfg);
   let plan;
   try {
-    plan = await planIntent(stripWake(t), { role, history: history(thread).slice(0, -1) });
+    plan = await planIntent(stripWake(t), { role: routed.role, history: history(thread).slice(0, -1) });
   } catch (e) {
     return fail(e);
   }
   plan.thread = thread;
-  plan.explicitRole = !!role && thread !== "auto";
+  plan.routeKind = routed.kind;
+  plan.explicitRole = routed.kind === "Tab" || (routed.kind === "Named" && routed.role === thread);
 
   if (!plan.mutating) return run(plan, opts.channel);
   await requestConfirmation(plan, opts.channel);
@@ -359,10 +418,31 @@ async function run(plan: Parameters<typeof execute>[0], channel: Channel) {
   }
 }
 
+// Raw transport/parsing failures the chain can surface (dispatch.rs / plan.ts /
+// the gateway) are developer-shaped, not something to read or speak verbatim
+// to the user. Each maps to one calm, spoken-safe line; the raw text is kept
+// in the turn's `meta` (shown small, never spoken) for anyone debugging.
+const CALM_ERRORS: [RegExp, string][] = [
+  [/all providers failed/i, "None of my models answered just now — check Settings → Services, or try again in a moment."],
+  [/no reachable providers/i, "None of my models are reachable right now — check Settings → Services."],
+  [/malformed (completion|gateway reply)/i, "I got back something I couldn't read from that model — try again, or switch models in Settings."],
+  [/planner returned no JSON/i, "I couldn't turn that into a clean plan — try rephrasing it."],
+  [/model returned no JSON|verifier gave no verdict/i, "I couldn't organize that cleanly — try again."],
+  [/CLI not installed/i, "That assistant isn't installed on this machine."],
+  [/timed out/i, "That took too long and timed out — try again."],
+  [/unreachable/i, "I couldn't reach that service — check it's running."],
+];
+
+function calmMessage(raw: string): string {
+  for (const [re, calm] of CALM_ERRORS) if (re.test(raw)) return calm;
+  return raw;
+}
+
 function fail(e: unknown, thread?: ThreadId) {
-  const msg = e instanceof Error ? e.message : String(e);
-  store().pushTurn({ who: "system", text: msg, tone: "error", thread });
-  store().setError(msg);
+  const raw = e instanceof Error ? e.message : String(e);
+  const calm = calmMessage(raw);
+  store().pushTurn({ who: "system", text: calm, tone: "error", thread, meta: calm === raw ? undefined : raw });
+  store().setError(calm);
 }
 
 // ── Idea-to-Execution (Stage 1) ─────────────────────────────────────────────
@@ -411,34 +491,59 @@ export function runTurnAction(run: string, thread: ThreadId) {
   }
 }
 
-// ── OS core turn (desktop) ──────────────────────────────────────────────────
-
-/** "ask my booking agent…", "have the coder…" — the user asked for a specific agent by name. */
-const NAMES_AGENT = /\b(booking (agent|desk)|book(ing)? agent|librarian|coder|coding agent|designer|design agent|prompter|ops agent|ask (my|the) \w+ agent)\b/i;
+// ── OS core turn (desktop) ───────────────────────────────────────────────────
 
 async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
-  // Tony-first fast path: in Auto-route / Tony's tab, keyword guesses no longer hand the
-  // turn to an AnythingLLM agent (15–40 s, it thinks first). Tony answers with his own
-  // tools unless you name an agent — or you're on that agent's tab.
-  const onAgentTab = !!plan.explicitRole && plan.role !== "general";
-  const role = onAgentTab || NAMES_AGENT.test(plan.utterance) ? plan.role : "general";
-  const explicit = onAgentTab;
+  const routingCfg = useOs.getState().cfg?.routing ?? DEFAULT_ROUTING_CONFIG;
+  const routed = routeFor(plan.utterance, thread, routingCfg);
+  const role = routed.role;
+  const task = routed.task;
+  // "Explicit" = talking directly to the tab you're on — no Tony synthesis,
+  // no relay turn, no link pill. A Named/Domain route that pulls you to a
+  // *different* agent than the one you're looking at is never explicit, even
+  // from that agent's own tab (fixes: naming another agent from Tony's tab,
+  // or from a different agent's tab, used to be silently ignored).
+  const explicit = thread !== "auto" && role === thread;
+
+  // Tony-feed relay turn for a delegated (not explicit) Named/Domain route.
+  // Spoken (Tony's own voice) only for voice turns — a typed handoff notice
+  // stays silent even when the target agent has auto-speak on.
+  if (!explicit && (routed.kind === "Named" || routed.kind === "Domain")) {
+    const short = task.length > 60 ? `${task.slice(0, 57)}…` : task || plan.utterance;
+    const notice = `Routing ${short} to ${roleLabel(role)}…`;
+    store().pushTurn({ who: "relay", from: "os", to: role, text: notice, thread, meta: "routing" });
+    if (channel === "voice") {
+      store().setState("speaking");
+      startBargeIn();
+      await say(notice, { agent: "general" });
+    }
+  }
+
   let context = await liveContext();
   if (role === "librarian") {
     const hits = await cc.search(plan.utterance, [], 5).catch(() => null);
     if (hits?.results.length) context += `\nLocal vault matches (cite them):\n${hits.results.map((r, i) => `[${i + 1}] (${r.collection}) ${r.snippet.replace(/\s+/g, " ")}`).join("\n")}`;
   }
-  // Stream Tony's answer token-by-token into a live bubble.
+  const finalFromFor = (agent: string) => (agent === "general" ? "os" : agent);
+
+  // Stream the answer token-by-token into a live bubble. Two sources feed this
+  // same event: Tony's own synthesis (always tagged "general" server-side, or
+  // untagged — treated the same) and, for an explicit-tab turn, the sub-agent's
+  // own AnythingLLM stream-chat (tagged with that agent's role, Part 6 §1) —
+  // never both in the same turn (see agents.rs `run_os_turn`).
   const streamId = crypto.randomUUID();
   let live: string | null = null;
   let buffered = "";
   // Voice: start talking at the first complete sentence instead of after the whole answer.
   let spokenUpTo = 0;
   let speakQ: Promise<void> = Promise.resolve();
-  const off = await onNativeEvent<{ streamId: string; delta: string }>("tony-token", (e) => {
+  let streamAgent = "general";
+  let lastSpokenChunk: string | undefined;
+  const off = await onNativeEvent<{ streamId: string; delta: string; agent?: string }>("tony-token", (e) => {
     if (e.streamId !== streamId) return;
+    streamAgent = e.agent ?? "general";
     buffered += e.delta;
-    if (!live) live = store().pushTurn({ who: "agent", from: "os", text: buffered, thread, meta: "streaming…" }).id;
+    if (!live) live = store().pushTurn({ who: "agent", from: finalFromFor(streamAgent), text: buffered, thread, meta: "streaming…" }).id;
     else store().updateTurn(live, { text: buffered });
     if (channel === "voice") {
       const pending = buffered.slice(spokenUpTo);
@@ -449,16 +554,18 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
         const chunk = m[0].trim();
         spokenUpTo += m[0].length;
         // Render it now, while the previous chunk is still playing — no gap between sentences.
-        tts.prefetch?.(chunk);
+        const previousText = lastSpokenChunk;
+        lastSpokenChunk = chunk;
+        tts.prefetch?.(chunk, { agent: streamAgent, previousText });
         if (store().state !== "speaking") {
           store().setState("speaking");
           startBargeIn();
         }
-        speakQ = speakQ.then(() => say(chunk));
+        speakQ = speakQ.then(() => say(chunk, { agent: streamAgent, previousText }));
       }
     }
   });
-  const req = { text: plan.utterance, role, explicit, history: history(thread).slice(0, -1), context, streamId };
+  const req = { text: task, role, explicit, routeKind: routed.kind, routeReason: routed.reason, history: history(thread).slice(0, -1), context, streamId };
   let r: OsTurnResult | null;
   try {
     r = await gated(
@@ -476,12 +583,17 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     return;
   }
 
+  // The Rust safety net (phone/inbox turns against the full config) may have
+  // refined the role; fall back to what we already computed when it didn't.
+  const finalRole = (r.routedRole as AgentRole) || role;
+  const finalExplicit = explicit && finalRole === role;
+
   // Inter-agent dialogue: delegation lives in that agent's own tab.
-  const relayThread: ThreadId = role === "general" ? thread : role;
+  const relayThread: ThreadId = finalExplicit ? thread : finalRole === "general" ? thread : finalRole;
   for (const s of r.steps) {
-    if (explicit && s.kind === "delegate") continue; // you're already talking to it directly
-    if (explicit && s.kind === "reply") continue; // shown as the answer below
-    const inAgentTab = s.kind === "delegate" || s.kind === "reply" || (s.kind === "error" && s.from === role);
+    if (finalExplicit && s.kind === "delegate") continue; // you're already talking to it directly
+    if (finalExplicit && s.kind === "reply") continue; // shown as the answer below
+    const inAgentTab = s.kind === "delegate" || s.kind === "reply" || (s.kind === "error" && s.from === finalRole);
     store().pushTurn({
       who: "relay",
       text: s.text,
@@ -492,29 +604,51 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
       thread: inAgentTab ? relayThread : thread,
     });
   }
-  const linked = r.delegatedTo && !explicit && relayThread !== thread ? relayThread : undefined;
+  const linked = r.delegatedTo && !finalExplicit && relayThread !== thread ? relayThread : undefined;
   const meta = [r.providerId, r.tool && `tool ${r.tool}`, r.redacted && "privacy-diffused", `${r.latencyMs}ms`].filter(Boolean).join(" · ");
-  const final = { text: r.answer, role, meta, from: explicit ? role : "os", link: linked, commsThread: r.commsThread };
+  const final = { text: r.answer, role: finalRole, meta, from: finalExplicit ? finalRole : "os", link: linked, commsThread: r.commsThread };
+  // Who the answer is spoken as: the sub-agent itself only for an explicit-tab
+  // direct answer (`final.from` is the agent, not "os"); every Tony-synthesized
+  // reply — delegated or his own — speaks as "general", matching `final.from`.
+  const voiceAgent = final.from === "os" ? "general" : final.from;
   if (live) {
     // Relay steps were logged after the stream started; move the answer below them.
     store().updateTurn(live, { ...final, at: Date.now() });
     useVoice.setState((s) => ({ turns: [...s.turns.filter((t) => t.id !== live), ...s.turns.filter((t) => t.id === live)] }));
   } else store().pushTurn({ who: "agent", thread, ...final });
+
+  // Auto-switch: when this was delegated (not explicit) and the Agents
+  // section is already what's on screen, land the user on the exchange
+  // instead of leaving it behind a link pill. Never force-navigate into
+  // Agents just to do this — a voice-only HUD just speaks, as it already does.
+  if (!finalExplicit && relayThread !== thread && routingCfg.autoSwitch && useNav.getState().section === "agents") {
+    store().setActiveThread(relayThread);
+  }
   if (channel === "voice") {
     if (spokenUpTo > 0) {
-      // Already speaking sentence-by-sentence: queue whatever is left, then wait.
+      // Already speaking sentence-by-sentence, in whichever voice streamed
+      // (`streamAgent` — Tony's or, for an explicit-tab turn, the sub-agent's
+      // own): queue whatever is left, then wait.
       const rest = r.answer.slice(spokenUpTo).trim();
       if (rest) {
-        tts.prefetch?.(rest);
-        speakQ = speakQ.then(() => say(rest));
+        tts.prefetch?.(rest, { agent: streamAgent, previousText: lastSpokenChunk });
+        speakQ = speakQ.then(() => say(rest, { agent: streamAgent, previousText: lastSpokenChunk }));
       }
       await speakQ;
     } else {
       store().setState("speaking");
       startBargeIn();
-      await say(r.answer);
+      await say(r.answer, { agent: voiceAgent });
     }
     return afterVoiceReply();
+  }
+  // Typed turn: silent unless this agent's roster entry has auto-speak on
+  // (Part 3) — a voice turn always speaks (above); a typed one only opts in.
+  if (isTauri() && agentAutoSpeak(voiceAgent)) {
+    store().setState("speaking");
+    await say(r.answer, { agent: voiceAgent });
+    if (store().state === "speaking") store().setState("idle");
+    return;
   }
   if (store().state === "speaking" || store().state === "thinking") store().setState("idle");
 }
@@ -585,12 +719,30 @@ export function setWakeMode(on: boolean) {
 
 if (useSettings.getState().wakeMode) setTimeout(() => setWakeMode(true), 1500);
 
+// A stop said during a cue's intro also cancels Tony's TTS (no import cycle: player.ts
+// only holds the cancel function, it doesn't import the voice controller).
+registerSpeechCancel(() => tts.cancel());
+
 // Cue widgets speak with Tony's voice and can drop a prompt into the conversation.
+// `voice` here is the cue's OWN explicit voice choice (tied to whichever engine it was
+// picked from) — never routed through the agent roster, so `agentAutoSpeak`/the roster's
+// "general" fallback never changes which engine a cue clip plays on.
 registerCueIO(
   async (text, voice) => {
     store().setState("speaking");
-    await say(text, voice);
+    await say(text, { voice });
     if (store().state === "speaking") store().setState("idle");
   },
   (text) => void handleInput(text, { channel: "text" }),
 );
+
+// The voice roster lives in providers.json, loaded only when Settings → Voice is
+// opened; fetch it once up front too, so `agentAutoSpeak`/per-agent voices work for a
+// session that never visits Settings. Settings' own `load()` keeps it fresh afterwards.
+if (isTauri()) void useProviders.getState().load();
+
+// Rust fell back from an agent's configured engine to a local one (offline, out of
+// quota…) — surfaced here instead of only in the Rust console (`eprintln!`).
+void onNativeEvent<{ from: string; to: string; reason: string }>("tts-fallback", (e) => {
+  store().pushTurn({ who: "system", text: `Voice fell back to ${e.to} — ${e.from} failed (${e.reason})`, tone: "warn" });
+});

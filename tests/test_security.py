@@ -39,7 +39,7 @@ class SecurityTests(unittest.TestCase):
     def test_skill_run_traversal_rejected(self):
         for evil in [quote("../../settings"), quote("..%2F..%2Fdata%2Fsettings")]:
             status, _ = self.h.api("POST", f"/api/skills/{evil}/run",
-                                   {"agent": "hermes", "input": "x"})
+                                   {"agent": "opencode", "input": "x"})
             self.assertNotEqual(status, 200, f"skill run traversal slipped: {evil}")
 
     def test_skill_eval_traversal_rejected(self):

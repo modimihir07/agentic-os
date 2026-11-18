@@ -47,7 +47,7 @@ class ChatHistoryTests(unittest.TestCase):
 
     def test_history_search_filters(self):
         self._seed_message("terraform plan complete", "opencode")
-        self._seed_message("pod restart completed", "hermes")
+        self._seed_message("pod restart completed", "agy")
         status, data = self.h.api("GET", "/api/chat/history?q=terraform")
         self.assertEqual(status, 200)
         self.assertEqual(data["total"], 1)
@@ -55,11 +55,11 @@ class ChatHistoryTests(unittest.TestCase):
 
     def test_history_agent_filter(self):
         self._seed_message("deploy the cluster", "opencode")
-        self._seed_message("schedule the job", "hermes")
-        status, data = self.h.api("GET", "/api/chat/history?agent=hermes")
+        self._seed_message("schedule the job", "agy")
+        status, data = self.h.api("GET", "/api/chat/history?agent=agy")
         self.assertEqual(status, 200)
         self.assertEqual(data["total"], 1)
-        self.assertEqual(data["messages"][0]["agent"], "hermes")
+        self.assertEqual(data["messages"][0]["agent"], "agy")
 
     def test_history_limit(self):
         for i in range(5):
@@ -132,6 +132,44 @@ class ChatUploadTests(unittest.TestCase):
             "..%2F..%2Fevil.txt",
             b"x",
         )
+        self.assertEqual(status, 400)
+
+
+class AgentNotInstalledTests(unittest.TestCase):
+    """A missing CLI must be an HTTP 503 failure, never a 200 "reply" (chain poisoning)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.h = Harness()
+        cls.h.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.h.stop()
+
+    def test_chat_missing_cli_is_503(self):
+        with mock.patch.object(server, "resolve_cli", return_value=None):
+            status, data = self.h.api("POST", "/api/chat", {"agent": "opencode", "message": "hi"})
+        self.assertEqual(status, 503)
+        self.assertIn("not installed", data["detail"])
+        # Nothing is logged as a conversation turn.
+        _, hist = self.h.api("GET", "/api/chat/history?q=hi")
+        self.assertEqual(hist["total"], 0)
+
+    def test_upload_missing_cli_is_503(self):
+        with mock.patch.object(server, "resolve_cli", return_value=None):
+            status, data = self.h.upload("/api/chat/upload", {"agent": "agy", "message": "x"}, "n.txt", b"x")
+        self.assertEqual(status, 503)
+        self.assertIn("not installed", data["detail"])
+
+    def test_skill_run_missing_cli_is_503(self):
+        with mock.patch.object(server, "resolve_cli", return_value=None):
+            status, data = self.h.api("POST", "/api/skills/heartbeat/run", {"agent": "opencode", "input": ""})
+        self.assertEqual(status, 503)
+        self.assertIn("not installed", data["detail"])
+
+    def test_hermes_is_rejected(self):
+        status, _ = self.h.api("POST", "/api/chat", {"agent": "hermes", "message": "hi"})
         self.assertEqual(status, 400)
 
 

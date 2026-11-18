@@ -83,7 +83,6 @@ class Harness:
             "standards",
             "prompts",
             "agents/opencode",
-            "agents/hermes",
             "agents/agy",
         ]:
             (self.tmp / d).mkdir(parents=True, exist_ok=True)

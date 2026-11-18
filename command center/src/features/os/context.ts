@@ -1,5 +1,6 @@
 import { useWeather } from "@/features/weather/weather-store";
 import { useHealthStore } from "@/features/services/use-health";
+import { gabagoolOn, useCueRun } from "@/features/cues/player";
 import { cmd, isTauri } from "@/lib/platform";
 import { useOs } from "./os-store";
 
@@ -47,5 +48,7 @@ export async function liveContext(): Promise<string> {
       `Compute mode: ${cfg.compute.mode.toUpperCase()}${cfg.privacy.killSwitch ? " · KILL SWITCH ON (local only)" : ""} · droplet ${cfg.droplet.enabled ? "enabled" : "off (manual)"}`,
     );
   }
+  const run = useCueRun.getState();
+  lines.push(`Gabagool mode: ${gabagoolOn(run) ? `ON (${run.running})` : "OFF"}`);
   return lines.join("\n");
 }

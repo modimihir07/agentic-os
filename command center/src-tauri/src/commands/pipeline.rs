@@ -18,7 +18,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::agents::{workspace_chat_t, OsStep};
 use super::bridge::BridgeState;
-use super::dispatch::{run_chat, short, ChatMessage, DispatchState, Priority};
+use super::dispatch::{extract_json, run_chat, short, ChatMessage, DispatchState, Priority};
 use super::os_core::{self, OsConfig, OsState};
 
 // ── Gateway client (loopback; carries the mesh token when the lock is on) ──
@@ -43,12 +43,6 @@ pub(crate) async fn gw(state: &DispatchState, os: &OsConfig, method: reqwest::Me
 
 fn slug(cfg: &OsConfig, role: &str) -> Result<String, String> {
     cfg.anythingllm.workspaces.get(role).filter(|s| !s.is_empty()).cloned().ok_or_else(|| format!("no AnythingLLM workspace mapped for {role} (Settings → Services)"))
-}
-
-fn extract_json(text: &str) -> Option<Value> {
-    let a = text.find('{')?;
-    let b = text.rfind('}')?;
-    serde_json::from_str(&text[a..=b]).ok()
 }
 
 /// The last ```html … ``` block (or a bare <!doctype html> document).
@@ -531,7 +525,7 @@ pub async fn comms_whatsapp(state: State<'_, DispatchState>, os: State<'_, OsSta
         "contacts" => "whatsapp.search_contacts",
         _ => return Err("action must be chats, messages or contacts (sending goes through comms_whatsapp_send)".into()),
     };
-    super::mcp::call_tool(&state, &os, &bridge, tool, &args, true).await
+    super::mcp::call_tool(&state, &os, &bridge, tool, &args, true, "tony").await
 }
 
 /// Send a WhatsApp message. Requires `approved` (the confirmation card), unless
@@ -550,7 +544,7 @@ pub async fn comms_whatsapp_send(state: State<'_, DispatchState>, os: State<'_, 
     if !approved.unwrap_or(false) && !trusted {
         return Err("PERMISSION_REQUIRED:send".into());
     }
-    let out = super::mcp::call_tool(&state, &os, &bridge, "whatsapp.send_message", &json!({ "recipient": recipient, "message": message }), true).await?;
+    let out = super::mcp::call_tool(&state, &os, &bridge, "whatsapp.send_message", &json!({ "recipient": recipient, "message": message }), true, "tony").await?;
     bridge.log(json!({ "type": "comms-send", "channel": "whatsapp", "trusted": trusted, "chars": message.len() }));
     let _ = gw(&state, &cfg, reqwest::Method::POST, "/api/comms/sms", Some(json!({ "address": recipient, "body": message, "direction": "out", "channel": "whatsapp" }))).await;
     Ok(out)

@@ -11,6 +11,7 @@
 //!      `npx @elevenlabs/cli onboard`), i.e. `<repo>/.env`
 //!   3. the OS keychain entry for the `elevenlabs` provider (Settings)
 
+use futures_util::StreamExt;
 use serde::Serialize;
 use std::path::Path;
 use std::time::Duration;
@@ -20,8 +21,9 @@ use super::secrets;
 
 pub const ENV_KEY: &str = "ELEVENLABS_API_KEY";
 
-/// Models offered in Settings (from ElevenLabs' TTS docs).
-pub const MODELS: [&str; 5] = ["eleven_v4", "eleven_flash_v2_5", "eleven_flash_v2", "eleven_multilingual_v2", "eleven_v3"];
+/// Models offered in Settings (from ElevenLabs' TTS docs) when the live
+/// `GET /v1/models` lookup (`list_models`) fails or the key is missing.
+pub const MODELS: [&str; 6] = ["eleven_v4", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_flash_v2", "eleven_multilingual_v2", "eleven_v3"];
 
 #[derive(Clone, Copy, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "kebab-case")]
@@ -67,8 +69,13 @@ pub(crate) fn valid_voice_id(id: &str) -> bool {
     (8..=64).contains(&id.len()) && id.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
-fn base(p: &Provider) -> String {
-    p.base_url.trim_end_matches('/').trim_end_matches("/v1").to_string()
+/// ElevenLabs' REST host, pinned regardless of `p.base_url`. An env-var or
+/// `.env` key (unlike the keychain, which is bound to provider@host — see
+/// `api_key` above) is not scoped to a destination; `base_url` is editable
+/// in Settings, so basing the request on it would let that edit redirect an
+/// unscoped key to a different host. The key only ever goes to ElevenLabs.
+fn base(_p: &Provider) -> String {
+    "https://api.elevenlabs.io".to_string()
 }
 
 /// Turn an ElevenLabs error response into something a person can act on.
@@ -137,6 +144,41 @@ pub async fn list_voices(state: &DispatchState, p: &Provider) -> Result<Vec<Elev
     Ok(voices)
 }
 
+/// Text-to-speech-capable model ids from a `GET /v1/models` body. Split out
+/// from `list_models` so the JSON shape is unit-testable without a network call.
+pub(crate) fn tts_models_from_body(body: &serde_json::Value) -> Vec<String> {
+    body.as_array()
+        .into_iter()
+        .flatten()
+        .filter(|m| m["can_do_text_to_speech"].as_bool().unwrap_or(false))
+        .filter_map(|m| m["model_id"].as_str().map(String::from))
+        .collect()
+}
+
+/// Every model the account can use for TTS, fetched live. Callers fall back
+/// to the static `MODELS` list on any error (no key, offline, empty result).
+pub async fn list_models(state: &DispatchState, p: &Provider) -> Result<Vec<String>, String> {
+    let (key, _) = api_key(state, p);
+    let key = key.ok_or(format!("no ElevenLabs key — set {ENV_KEY} or run the ElevenLabs onboarding"))?;
+    let res = state
+        .http
+        .get(format!("{}/v1/models", base(p)))
+        .header("xi-api-key", key)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+        .map_err(|e| if e.is_timeout() { "ElevenLabs timed out".to_string() } else { "ElevenLabs unreachable".to_string() })?;
+    if !res.status().is_success() {
+        return Err(explain(res).await);
+    }
+    let body: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    let ids = tts_models_from_body(&body);
+    if ids.is_empty() {
+        return Err("ElevenLabs reported no text-to-speech models".into());
+    }
+    Ok(ids)
+}
+
 /// Instant voice clone: upload a sample (mp3/wav/m4a/flac/ogg) → new voice ID on the account.
 pub async fn add_voice(state: &DispatchState, p: &Provider, name: &str, file_name: &str, bytes: Vec<u8>) -> Result<String, String> {
     let (key, _) = api_key(state, p);
@@ -171,13 +213,26 @@ pub async fn add_voice(state: &DispatchState, p: &Provider, name: &str, file_nam
 }
 
 /// Speak `text` with `voice_id` (mp3). The voice is always the caller's choice.
-pub async fn synthesize(state: &DispatchState, p: &Provider, text: &str, voice_id: &str) -> Result<Vec<u8>, String> {
+/// `model_override` (Part 3: an agent's roster model) wins over `p.model` when
+/// set. `previous_text` (Part 6 §2 — the sentence spoken immediately before
+/// this one in the same reply, when there is one) is passed through so
+/// prosody stays continuous across the sentence-by-sentence calls the
+/// streaming sentence pipeline makes, instead of each sentence sounding like
+/// the start of a new thought.
+///
+/// Uses ElevenLabs' `/stream` endpoint (`optimize_streaming_latency=3`)
+/// rather than the plain one: lower time-to-first-byte, even though the
+/// bytes are still collected fully here before returning (the webview needs
+/// a complete file for `decodeAudioData`) — the latency win is in how much
+/// sooner ElevenLabs starts sending audio for a given sentence, not in
+/// partial playback.
+pub async fn synthesize(state: &DispatchState, p: &Provider, text: &str, voice_id: &str, model_override: Option<&str>, previous_text: Option<&str>) -> Result<Vec<u8>, String> {
     if !valid_voice_id(voice_id) {
         return Err(format!("'{voice_id}' isn't an ElevenLabs voice ID — pick one in Settings → Voice"));
     }
     let (key, _) = api_key(state, p);
     let key = key.ok_or(format!("no ElevenLabs key — set {ENV_KEY} or run the ElevenLabs onboarding"))?;
-    let model = if p.model.is_empty() || p.model == "-" { "eleven_v4" } else { p.model.as_str() };
+    let model = model_override.filter(|m| !m.is_empty()).unwrap_or_else(|| if p.model.is_empty() || p.model == "-" { "eleven_v4" } else { p.model.as_str() });
     let mut body = serde_json::json!({
         "text": text,
         "model_id": model,
@@ -187,9 +242,14 @@ pub async fn synthesize(state: &DispatchState, p: &Provider, text: &str, voice_i
     if let Some(lang) = p.language.as_deref().filter(|l| !l.is_empty() && model != "eleven_multilingual_v2") {
         body["language_code"] = lang.into();
     }
+    if let Some(prev) = previous_text.filter(|s| !s.trim().is_empty()) {
+        // ElevenLabs caps previous_text at 1000 chars; a single sentence never
+        // comes close, but keep the call safe if a caller ever passes more.
+        body["previous_text"] = prev.chars().rev().take(1000).collect::<Vec<_>>().into_iter().rev().collect::<String>().into();
+    }
     let res = state
         .http
-        .post(format!("{}/v1/text-to-speech/{voice_id}?output_format=mp3_44100_128", base(p)))
+        .post(format!("{}/v1/text-to-speech/{voice_id}/stream?output_format=mp3_44100_128&optimize_streaming_latency=3", base(p)))
         .header("xi-api-key", key)
         .json(&body)
         .timeout(Duration::from_secs(45))
@@ -199,7 +259,12 @@ pub async fn synthesize(state: &DispatchState, p: &Provider, text: &str, voice_i
     if !res.status().is_success() {
         return Err(explain(res).await);
     }
-    res.bytes().await.map(|b| b.to_vec()).map_err(|e| e.to_string())
+    let mut stream = res.bytes_stream();
+    let mut bytes = Vec::new();
+    while let Some(chunk) = stream.next().await {
+        bytes.extend_from_slice(&chunk.map_err(|e| e.to_string())?);
+    }
+    Ok(bytes)
 }
 
 #[cfg(test)]
@@ -211,6 +276,28 @@ mod tests {
         assert!(valid_voice_id("QhEKgDl6KUJsO1FPiuSD"));
         assert!(!valid_voice_id("am_michael"));
         assert!(!valid_voice_id("../../v1/user"));
+    }
+
+    #[test]
+    fn base_is_pinned_regardless_of_base_url() {
+        let p = Provider { id: "elevenlabs".into(), label: "x".into(), kind: super::super::dispatch::Kind::Tts, base_url: "https://evil.example.com/v1".into(), model: "-".into(), needs_key: false, voice: None, engine: Some("elevenlabs".into()), language: None, models_dir: None, voices_dir: None, custom: false };
+        assert_eq!(base(&p), "https://api.elevenlabs.io");
+    }
+
+    #[test]
+    fn tts_models_from_body_filters_by_capability() {
+        let body = serde_json::json!([
+            { "model_id": "eleven_v4", "can_do_text_to_speech": true },
+            { "model_id": "eleven_turbo_v2_5", "can_do_text_to_speech": true },
+            { "model_id": "scribe_v1", "can_do_text_to_speech": false },
+            { "model_id": "no_flag_field" },
+        ]);
+        assert_eq!(tts_models_from_body(&body), vec!["eleven_v4".to_string(), "eleven_turbo_v2_5".to_string()]);
+    }
+
+    #[test]
+    fn tts_models_from_body_handles_non_array() {
+        assert_eq!(tts_models_from_body(&serde_json::json!({"error": "nope"})), Vec::<String>::new());
     }
 
     #[test]
@@ -244,7 +331,7 @@ mod live_latency {
                 p.model = model.into();
                 for _ in 0..2 {
                     let t0 = std::time::Instant::now();
-                    let r = synthesize(&state, &p, "Yo, it's Tony. Weather's five degrees and overcast.", &voice).await;
+                    let r = synthesize(&state, &p, "Yo, it's Tony. Weather's five degrees and overcast.", &voice, None, None).await;
                     println!("TTS {model}: {} ms ({})", t0.elapsed().as_millis(), r.map(|b| format!("{} KB", b.len() / 1024)).unwrap_or_else(|e| e));
                 }
             }

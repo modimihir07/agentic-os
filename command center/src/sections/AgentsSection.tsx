@@ -81,7 +81,7 @@ export function AgentsSection() {
         <div className="flex items-center gap-2 border-t border-white/5 p-3">
           <MicButton size={40} />
           <div className="flex-1">
-            <CommandInput role={thread === "auto" ? undefined : (thread as AgentRole)} placeholder={thread === "auto" ? `Message ${name}…` : `Message ${label(thread)}…`} />
+            <CommandInput thread={thread} placeholder={thread === "auto" ? `Message ${name}…` : `Message ${label(thread)}…`} />
           </div>
         </div>
       </div>

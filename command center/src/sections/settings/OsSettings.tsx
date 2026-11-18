@@ -6,6 +6,7 @@ import { ComputeModeSwitch } from "@/features/os/OsControls";
 import { setWakeMode } from "@/features/voice/voice-controller";
 import { useSettings } from "@/stores/settings";
 import { CfgError, SecretRow, TierSelect, Toggle, useOsCfg } from "./os-ui";
+import { ROLE_IDS, roleLabel, type RoleId } from "@/features/dispatcher/roles";
 
 /** Text input that saves on blur (re-keyed so it resets to the saved value). */
 function BlurInput({ value, onSave, ...rest }: { value: string; onSave: (v: string) => void } & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onBlur" | "defaultValue">) {
@@ -154,14 +155,11 @@ export function DropletCard() {
 
 // ── AnythingLLM workspaces ──────────────────────────────────────────────────
 
-const ROLES: [string, string][] = [
-  ["librarian", "Librarian"],
-  ["coder", "Coder"],
-  ["booking", "Booking Desk"],
-  ["ops", "Ops"],
-  ["general", "Tony (own RAG)"],
-  ["prompter", "Prompter / dispatcher"],
-];
+// Curated display order for this card; derived from the shared ROLE_IDS so a role added or
+// removed there can't silently drift out of sync — any id not listed here is appended.
+const ROLE_ORDER: RoleId[] = ["librarian", "coder", "booking", "ops", "general", "prompter", "designer"];
+const ROLE_LABEL_OVERRIDES: Partial<Record<RoleId, string>> = { general: "Tony (own RAG)", prompter: "Prompter / dispatcher" };
+const ROLES: [RoleId, string][] = [...ROLE_ORDER, ...ROLE_IDS.filter((id) => !ROLE_ORDER.includes(id))].map((id) => [id, ROLE_LABEL_OVERRIDES[id] ?? roleLabel(id)]);
 
 export function WorkspacesCard() {
   const { cfg, error, save } = useOsCfg();

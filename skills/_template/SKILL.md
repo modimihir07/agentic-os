@@ -27,7 +27,7 @@ Brief description of what this skill does.
 - What this skill produces
 
 ## Agent Assignment
-- Primary: opencode / hermes / agy
+- Primary: opencode / agy / claude / gemini / llm
 - Fallback: {fallback agent}
 
 ## Dependencies

@@ -16,7 +16,7 @@ async function renderHistory() {
       </div>
       <div class="flex items-center gap-2" style="flex-wrap:wrap">
         <span style="font-size:12px;color:var(--text-muted)">Filter:</span>
-        ${['', 'opencode', 'hermes', 'agy'].map(a => `
+        ${['', 'opencode', 'agy'].map(a => `
           <button class="btn btn-sm ${!a ? 'btn-primary' : 'btn-ghost'}" data-agent="${a}" onclick="filterHistoryByAgent('${a}')">${a || 'All'}</button>
         `).join('')}
         <span style="flex:1"></span>

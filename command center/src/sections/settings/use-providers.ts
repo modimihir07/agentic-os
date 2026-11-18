@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { cmd, isTauri, type PolicyPatch, type ProviderPatch, type ProvidersView } from "@/lib/platform";
+import { cmd, isTauri, type AgentVoicePatch, type PolicyPatch, type ProviderPatch, type ProvidersView } from "@/lib/platform";
 
 /** providers.json, as the Settings dropdowns see and edit it (desktop only). */
 interface ProvidersState {
@@ -9,6 +9,8 @@ interface ProvidersState {
   load: () => Promise<void>;
   patch: (p: ProviderPatch) => Promise<void>;
   policy: (p: PolicyPatch) => Promise<void>;
+  /** Part 3: edit one agent's voice-roster row ("tony" accepted as an alias of "general"). */
+  agentVoice: (role: string, p: AgentVoicePatch) => Promise<void>;
   apply: (v: Promise<ProvidersView>) => Promise<void>;
 }
 
@@ -37,6 +39,7 @@ export const useProviders = create<ProvidersState>((set, get) => ({
   },
   patch: (patch) => get().apply(cmd("providers_update", { patch })),
   policy: (patch) => get().apply(cmd("policy_update", { patch })),
+  agentVoice: (role, patch) => get().apply(cmd("agent_voice_update", { role, patch })),
 }));
 
 const modelCache = new Map<string, { at: number; models: string[] }>();

@@ -2,6 +2,16 @@ import { cmd, isTauri, nativeRaw } from "@/lib/platform";
 import { useSettings } from "@/stores/settings";
 import { voiceLevel } from "./voice-store";
 import { SileroStream, preloadSilero, sileroThresholds } from "./silero";
+import { utteranceShouldEnd } from "./vad-rules";
+import { sentences, stripForSpeech } from "./tts-text";
+import type { SpeakOpts, TtsEngine } from "./tts-types";
+import { FallbackTts } from "./tts-fallback";
+
+// Re-exported so existing importers (`voice-controller.ts` et al.) are unaffected by
+// the split — these three live in their own files so they're testable under Vitest
+// without pulling in this file's browser-only code (see `tts-types.ts`'s doc comment).
+export { sentences, stripForSpeech, FallbackTts };
+export type { SpeakOpts, TtsEngine };
 
 /**
  * Pluggable speech I/O. The controller only talks to these interfaces.
@@ -24,21 +34,11 @@ export interface SttHandlers {
 export interface SttEngine {
   readonly name: string;
   readonly supported: boolean;
-  start(h: SttHandlers, opts?: { maxSilenceStartMs?: number; sensitivityOffset?: number }): void;
+  start(h: SttHandlers, opts?: { maxSilenceStartMs?: number; sensitivityOffset?: number; endSilenceMs?: number; maxUtteranceMs?: number }): void;
   /** Finish early and deliver what was heard. */
   stop(): void;
   /** Cancel: discard audio, call no handlers. */
   abort(): void;
-}
-
-export interface TtsEngine {
-  readonly name: string;
-  readonly supported: boolean;
-  /** `voice` overrides the configured voice (cue widgets); engines without voices ignore it. */
-  speak(text: string, voice?: string): Promise<void>;
-  /** Start synthesizing now so a later speak() of the same text plays without a gap. */
-  prefetch?(text: string, voice?: string): void;
-  cancel(): void;
 }
 
 // ── Shared audio context (created lazily inside a user gesture) ─────────────
@@ -69,6 +69,10 @@ interface CaptureOpts {
   meterOnly?: boolean;
   /** Added to the sensitivity (negative = stricter, e.g. while Tony is speaking). */
   sensitivityOffset?: number;
+  /** Pause (ms) that ends an utterance. Overrides `vad.endSilenceMs`; `Infinity` never ends on silence. */
+  endSilenceMs?: number;
+  /** Hard cap (ms) on one utterance, measured from speech start. Overrides `vad.maxUtteranceMs`; `Infinity` disables the cap. */
+  maxUtteranceMs?: number;
 }
 
 /**
@@ -131,6 +135,10 @@ export class MicCapture {
     let speechChunk = 0;
     let quietMs = 0;
     const sens = vad.sensitivity + (opts.sensitivityOffset ?? 0);
+    // A caller (e.g. Brainstorm's per-profile dictation) overrides the global VAD pause/cap;
+    // `Infinity` disables either check (continuous mode never ends on silence or a time cap).
+    const endMs = opts.endSilenceMs ?? vad.endSilenceMs;
+    const maxMs = opts.maxUtteranceMs ?? vad.maxUtteranceMs;
 
     /** Shared speech state machine; fed by Silero windows or, as a fallback, energy frames. */
     const step = (isSpeech: boolean, isQuiet: boolean, ms: number, debounce: number) => {
@@ -147,7 +155,7 @@ export class MicCapture {
         return;
       }
       quietMs = isQuiet ? quietMs + ms : 0;
-      if (quietMs >= vad.endSilenceMs || now - speechAt > vad.maxUtteranceMs) this.finish(ac.sampleRate, opts, speechChunk);
+      if (utteranceShouldEnd(quietMs, endMs, now - speechAt, maxMs)) this.finish(ac.sampleRate, opts, speechChunk);
     };
 
     // Neural VAD: decides once its model is loaded; until then (or if it fails) energy decides.
@@ -189,10 +197,19 @@ export class MicCapture {
     };
 
     // Safety net if the audio thread stalls (device unplugged…): give up after the max utterance.
+    // Measured from speech start once speech has begun (so a long pre-speech wait in relaxed/
+    // continuous mode — maxSilenceStartMs can be Infinity there — doesn't eat into the budget);
+    // before that, from mic start. Infinity thresholds correctly never trip this (Infinity-safe).
     this.timer = setInterval(() => {
-      if (!this.done && performance.now() - started > (opts.maxSilenceStartMs ?? 7000) + vad.maxUtteranceMs + 2000) {
-        if (opts.onUtteranceEnd && this.chunks.length) this.finish(ac.sampleRate, opts, speechChunk);
-        else this.stop();
+      if (this.done) return;
+      const now = performance.now();
+      if (speechAt) {
+        if (now - speechAt > maxMs + 2000) {
+          if (opts.onUtteranceEnd && this.chunks.length) this.finish(ac.sampleRate, opts, speechChunk);
+          else this.stop();
+        }
+      } else if (now - started > (opts.maxSilenceStartMs ?? 7000) + 2000) {
+        this.stop();
       }
     }, 1000);
   }
@@ -275,7 +292,7 @@ export class WhisperStt implements SttEngine {
     if (this.supported) void preloadSilero();
   }
 
-  start(h: SttHandlers, opts?: { maxSilenceStartMs?: number; sensitivityOffset?: number }) {
+  start(h: SttHandlers, opts?: { maxSilenceStartMs?: number; sensitivityOffset?: number; endSilenceMs?: number; maxUtteranceMs?: number }) {
     this.handlers = h;
     h.onPhase?.("waiting");
     this.mic
@@ -283,6 +300,8 @@ export class WhisperStt implements SttEngine {
         record: true,
         maxSilenceStartMs: opts?.maxSilenceStartMs,
         sensitivityOffset: opts?.sensitivityOffset,
+        endSilenceMs: opts?.endSilenceMs,
+        maxUtteranceMs: opts?.maxUtteranceMs,
         onSpeechStart: () => h.onPhase?.("speech"),
         onNoSpeech: () => h.onFinal(""),
         onUtteranceEnd: (pcm, rate) => void this.transcribe(pcm, rate),
@@ -338,11 +357,14 @@ export class WebSpeechStt implements SttEngine {
     this.supported = !!this.Ctor && !isTauri(); // WebView2 exposes the API but it never returns results
   }
 
-  start(h: SttHandlers) {
+  start(h: SttHandlers, opts?: { maxSilenceStartMs?: number; sensitivityOffset?: number; endSilenceMs?: number; maxUtteranceMs?: number }) {
     if (!this.Ctor) return h.onError("Speech recognition unavailable");
     void this.mic.start({ record: false, meterOnly: true }).catch(() => undefined); // level meter only
     const rec = new this.Ctor();
-    rec.continuous = false;
+    // Chrome's own endpointing has no configurable pause length, so snappy/relaxed just use its
+    // default (ends the session after a short pause). Continuous mode (endSilenceMs: Infinity)
+    // asks Chrome to keep recognizing across pauses; the session then only ends via stop()/abort().
+    rec.continuous = opts?.endSilenceMs === Infinity;
     rec.interimResults = true;
     rec.lang = navigator.language || "en-US";
     let finalText = "";
@@ -388,17 +410,6 @@ export class WebSpeechStt implements SttEngine {
 
 // ── Kokoro TTS (desktop) ─────────────────────────────────────────────────────
 
-/** Split for pipelining: speak sentence 1 while sentence 2 synthesises. */
-export function sentences(text: string, max = 6): string[] {
-  const parts = text.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+["')\]]*|\S[^.!?]*$/g) ?? [text];
-  const out: string[] = [];
-  for (const p of parts.map((s) => s.trim()).filter(Boolean)) {
-    if (out.length && (out.at(-1)!.length < 40 || out.length >= max)) out[out.length - 1] += ` ${p}`;
-    else out.push(p);
-  }
-  return out;
-}
-
 export class KokoroTts implements TtsEngine {
   readonly name = "Kokoro";
   readonly supported = isTauri();
@@ -408,29 +419,45 @@ export class KokoroTts implements TtsEngine {
   /** Synth requests started ahead of playback (sentence N+1 renders while N plays). */
   private ahead = new Map<string, { at: number; p: Promise<ArrayBuffer> }>();
 
-  private synth(s: string, voice?: string): Promise<ArrayBuffer> {
-    const key = `${voice ?? ""}|${s}`;
+  private key(s: string, opts?: SpeakOpts) {
+    return `${opts?.agent ?? ""}|${opts?.voice ?? ""}|${opts?.previousText ?? ""}|${s}`;
+  }
+
+  private synth(s: string, opts?: SpeakOpts): Promise<ArrayBuffer> {
+    const key = this.key(s, opts);
     const hit = this.ahead.get(key);
     if (hit) {
       this.ahead.delete(key);
       return hit.p;
     }
-    return cmd("tts_synthesize", voice ? { text: s, voice } : { text: s });
+    return cmd("tts_synthesize", { text: s, voice: opts?.voice, agent: opts?.agent, previousText: opts?.previousText });
   }
 
-  prefetch(text: string, voice?: string) {
+  /** `sentences(text)` with each one's own opts, chaining `previousText` from
+   * the sentence right before it (the caller's own `opts.previousText`, if
+   * any, only applies to the first) — ElevenLabs prosody continuity (Part 6 §2). */
+  private perSentenceOpts(text: string, opts?: SpeakOpts): { s: string; opts: SpeakOpts }[] {
+    let prev = opts?.previousText;
+    return sentences(text).map((s) => {
+      const sOpts: SpeakOpts = { ...opts, previousText: prev };
+      prev = s;
+      return { s, opts: sOpts };
+    });
+  }
+
+  prefetch(text: string, opts?: SpeakOpts) {
     const now = Date.now();
     for (const [k, v] of this.ahead) if (now - v.at > 60_000) this.ahead.delete(k);
-    for (const s of sentences(text)) {
-      const key = `${voice ?? ""}|${s}`;
+    for (const { s, opts: sOpts } of this.perSentenceOpts(text, opts)) {
+      const key = this.key(s, sOpts);
       if (this.ahead.has(key)) continue;
-      const p = cmd("tts_synthesize", voice ? { text: s, voice } : { text: s });
+      const p = cmd("tts_synthesize", { text: s, voice: sOpts.voice, agent: sOpts.agent, previousText: sOpts.previousText });
       p.catch(() => this.ahead.delete(key));
       this.ahead.set(key, { at: now, p });
     }
   }
 
-  async speak(text: string, voice?: string): Promise<void> {
+  async speak(text: string, opts?: SpeakOpts): Promise<void> {
     this.cancel();
     const gen = ++this.generation;
     const ac = await audioContext();
@@ -449,7 +476,7 @@ export class KokoroTts implements TtsEngine {
     this.raf = requestAnimationFrame(meter);
 
     // Fire all synth requests now; play strictly in order as each resolves.
-    const pending = sentences(text).map((s) => this.synth(s, voice).then((bytes) => ac.decodeAudioData(bytes)));
+    const pending = this.perSentenceOpts(text, opts).map(({ s, opts: sOpts }) => this.synth(s, sOpts).then((bytes) => ac.decodeAudioData(bytes)));
     try {
       for (const p of pending) {
         const audio = await p;
@@ -496,7 +523,7 @@ export class WebSpeechTts implements TtsEngine {
     if (!this.supported || !text) return Promise.resolve();
     this.cancel();
     return new Promise((resolve) => {
-      const u = new SpeechSynthesisUtterance(text.slice(0, 600));
+      const u = new SpeechSynthesisUtterance(stripForSpeech(text).slice(0, 600));
       u.rate = 1.03;
       // No audio tap on speechSynthesis, so synthesise an envelope from word boundaries.
       let target = 0.35;
@@ -525,45 +552,7 @@ export class WebSpeechTts implements TtsEngine {
 }
 
 // ── Selection ───────────────────────────────────────────────────────────────
-
-/** Primary TTS with automatic fallback to the system voice if Kokoro is down. */
-export class FallbackTts implements TtsEngine {
-  readonly supported: boolean;
-  private active: TtsEngine;
-  constructor(private primary: TtsEngine, private backup: TtsEngine) {
-    this.supported = primary.supported || backup.supported;
-    this.active = primary.supported ? primary : backup;
-  }
-  get name() {
-    return this.active.name;
-  }
-  async speak(text: string, voice?: string) {
-    if (this.active === this.primary) {
-      try {
-        return await this.primary.speak(text, voice);
-      } catch (e) {
-        // A cue's voice that the current engine doesn't have: use the default voice.
-        if (voice) {
-          try {
-            return await this.primary.speak(text);
-          } catch {
-            /* engine really is down — fall through */
-          }
-        }
-        console.warn("[tts] primary failed, using system voice", e);
-        this.active = this.backup;
-      }
-    }
-    return this.backup.speak(text);
-  }
-  prefetch(text: string, voice?: string) {
-    if (this.active === this.primary) this.primary.prefetch?.(text, voice);
-  }
-  cancel() {
-    this.primary.cancel();
-    this.backup.cancel();
-  }
-}
+// `FallbackTts` lives in `./tts-fallback` (re-exported above).
 
 export function createEngines(): { stt: SttEngine | null; tts: TtsEngine } {
   const whisper = new WhisperStt();

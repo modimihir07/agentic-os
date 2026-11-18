@@ -78,16 +78,31 @@ pub fn is_mutating_tool(name: &str) -> bool {
         .any(|v| tool.starts_with(v) || tool.contains(&format!("_{v}")))
 }
 
-pub async fn enabled_tools(state: &DispatchState, os: &OsState) -> Vec<ToolInfo> {
+/// Tools `agent` is actually allowed to use: every enabled server it is
+/// granted (`McpServer.grants`), minus mutating tools. Tony (`"general"` or
+/// `"tony"`) always gets every enabled server, regardless of its grant list
+/// (Part 2 spec). Servers are queried concurrently with a short per-server
+/// timeout so one dead external server can't stall the whole listing.
+pub async fn enabled_tools(state: &DispatchState, os: &OsState, agent: &str) -> Vec<ToolInfo> {
     let cfg = os.snapshot();
-    let mut out = Vec::new();
-    for s in cfg.mcps.iter().filter(|s| s.enabled) {
-        match tools_of(state, os, s, false).await {
-            Ok(v) => out.extend(v.into_iter().filter(|t| !is_mutating_tool(&t.name))),
-            Err(e) => eprintln!("[mcp] {}: {e}", s.id),
+    let is_tony = agent == "general" || agent == "tony";
+    let servers: Vec<McpServer> = cfg.mcps.iter().filter(|s| s.enabled && (is_tony || s.grants(agent))).cloned().collect();
+    let results = futures_util::future::join_all(servers.iter().map(|s| async move {
+        match tokio::time::timeout(Duration::from_secs(10), tools_of(state, os, s, false)).await {
+            Ok(Ok(v)) => v,
+            Ok(Err(e)) => {
+                eprintln!("[mcp] {}: {e}", s.id);
+                vec![]
+            }
+            Err(_) => {
+                eprintln!("[mcp] {}: tools/list timed out", s.id);
+                vec![]
+            }
         }
-    }
-    if cfg.skills.grants.values().any(|a| a.iter().any(|x| x == "tony")) {
+    }))
+    .await;
+    let mut out: Vec<ToolInfo> = results.into_iter().flatten().filter(|t| !is_mutating_tool(&t.name)).collect();
+    if cfg.skills.grants.values().any(|a| os_core::agent_matches(a, agent)) {
         out.push(t("skills", "skills.read", "Read the full instructions of one of your attached skills.", &["name"]));
     }
     out
@@ -140,13 +155,21 @@ pub async fn mcp_list_tools(state: State<'_, DispatchState>, os: State<'_, OsSta
 
 /// Run one tool from Settings ("Test") — same gates as when Tony calls it.
 #[tauri::command]
-pub async fn mcp_call(state: State<'_, DispatchState>, os: State<'_, OsState>, bridge: State<'_, BridgeState>, name: String, args: Value, approved: Option<bool>) -> Result<String, String> {
-    call_tool(&state, &os, &bridge, &name, &args, approved.unwrap_or(false)).await
+pub async fn mcp_call(state: State<'_, DispatchState>, os: State<'_, OsState>, bridge: State<'_, BridgeState>, name: String, args: Value, approved: Option<bool>, agent: Option<String>) -> Result<String, String> {
+    call_tool(&state, &os, &bridge, &name, &args, approved.unwrap_or(false), agent.as_deref().unwrap_or("tony")).await
 }
 
 // ── Calling ─────────────────────────────────────────────────────────────────
 
-pub async fn call_tool(state: &DispatchState, os: &OsState, bridge: &BridgeState, name: &str, args: &Value, approved: bool) -> Result<String, String> {
+/// `agent` is whichever role is making the call (`"tony"`/`"general"` for the
+/// OS's own calls and Settings → Test). It only gates `skills.read` here —
+/// which tools are *offered* at all is `enabled_tools`'s job; a caller that
+/// already knows the tool name (the Settings tester, a deterministic plan)
+/// can still call it even if it wasn't in that agent's list, same as before
+/// Part 2 — the real gate against a sub-agent reaching tools it has no
+/// business touching is that the pre-executor in `agents.rs` only ever
+/// builds a plan from `enabled_tools(..., agent)` in the first place.
+pub async fn call_tool(state: &DispatchState, os: &OsState, bridge: &BridgeState, name: &str, args: &Value, approved: bool, agent: &str) -> Result<String, String> {
     let cfg = os.snapshot();
     os_core::gate(bridge, cfg.permissions.mcp, "mcp", approved, json!({ "tool": name }))?;
     let arg = |k: &str| args.get(k).and_then(|v| v.as_str()).map(str::trim).unwrap_or("").to_string();
@@ -186,7 +209,7 @@ pub async fn call_tool(state: &DispatchState, os: &OsState, bridge: &BridgeState
             let v = super::n8n::fetch_readonly(state, "gmail-recent", json!({ "count": n })).await.map_err(|e| format!("{e} — import a read-only n8n workflow named \"gmail-recent\""))?;
             Ok(v.to_string().chars().take(6000).collect())
         }
-        "skills.read" => read_skill(&cfg, &arg("name"), "tony"),
+        "skills.read" => read_skill(&cfg, &arg("name"), agent),
         other => {
             let (sid, tool) = other.split_once('.').ok_or("unknown tool")?;
             let s = cfg.mcps.iter().find(|m| m.id == sid && m.enabled && m.transport != "builtin").ok_or_else(|| format!("tool {other} is not available (server off?)"))?;
@@ -540,7 +563,7 @@ pub fn skills_scan(os: State<'_, OsState>) -> Result<Vec<SkillInfo>, String> {
 
 /// "- name: description" for every skill attached to `agent`.
 pub fn skill_digest(cfg: &OsConfig, agent: &str) -> String {
-    let attached: Vec<&String> = cfg.skills.grants.iter().filter(|(_, a)| a.iter().any(|x| x == agent)).map(|(n, _)| n).collect();
+    let attached: Vec<&String> = cfg.skills.grants.iter().filter(|(_, a)| os_core::agent_matches(a, agent)).map(|(n, _)| n).collect();
     if attached.is_empty() {
         return String::new();
     }
@@ -557,7 +580,7 @@ pub fn skill_digest(cfg: &OsConfig, agent: &str) -> String {
 }
 
 pub fn read_skill(cfg: &OsConfig, name: &str, agent: &str) -> Result<String, String> {
-    if !cfg.skills.grants.get(name).is_some_and(|a| a.iter().any(|x| x == agent)) {
+    if !cfg.skills.grants.get(name).is_some_and(|a| os_core::agent_matches(a, agent)) {
         return Err(format!("skill \"{name}\" is not attached to {agent}"));
     }
     let s = scan(Path::new(&cfg.skills.dir)).into_iter().find(|s| s.0 == name).ok_or("skill not found")?;
@@ -674,6 +697,96 @@ async fn http_rpc(state: &DispatchState, s: &McpServer, method: &str, params: Va
     parse_rpc_body(&ct, &body, 2)
 }
 
+// ── AnythingLLM MCP sync ─────────────────────────────────────────────────────
+//
+// AnythingLLM Desktop runs MCP servers on its own agent sessions, reading a
+// separate registry file. Tony's own registry (above) is the single source
+// of truth the user edits; this one-way sync *adds* Tony's non-builtin
+// servers to AnythingLLM's file so its sub-agent sessions can reach the same
+// tools, without ever touching an entry AnythingLLM already has (its `env`
+// commonly holds API keys the user set there directly).
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AllmSyncReport {
+    pub added: Vec<String>,
+    pub kept: Vec<String>,
+    pub skipped: Vec<String>,
+}
+
+fn anythingllm_mcp_path() -> Option<PathBuf> {
+    let appdata = std::env::var_os("APPDATA")?;
+    Some(PathBuf::from(appdata).join("anythingllm-desktop").join("storage").join("plugins").join("anythingllm_mcp_servers.json"))
+}
+
+/// Pure merge: `existing` is the parsed `anythingllm_mcp_servers.json` (or
+/// `{"mcpServers":{}}` if the file doesn't exist yet / is malformed).
+/// Returns the new file content plus a report. Never overwrites or removes
+/// an entry AnythingLLM already has; never converts a `builtin` server (it
+/// has no command line to give AnythingLLM) or a disabled one.
+fn merge_allm_servers(existing: &Value, mcps: &[McpServer]) -> (Value, AllmSyncReport) {
+    let mut servers = existing.get("mcpServers").and_then(|v| v.as_object()).cloned().unwrap_or_default();
+    let mut report = AllmSyncReport::default();
+    for m in mcps {
+        if m.transport == "builtin" {
+            continue;
+        }
+        if !m.enabled {
+            report.skipped.push(format!("{} (disabled)", m.id));
+            continue;
+        }
+        if servers.contains_key(&m.id) {
+            report.kept.push(m.id.clone());
+            continue;
+        }
+        let entry = match m.transport.as_str() {
+            "stdio" => json!({ "command": m.command, "args": m.args, "env": m.env }),
+            // Best-effort shape for a streamable-HTTP MCP server — AnythingLLM's
+            // registry otherwise only holds command-line (stdio) servers today
+            // (confirmed by reading the live file); unverified against a real
+            // HTTP entry, so it's one more reason to always keep the user's own
+            // edit once they've confirmed it works.
+            "http" => json!({ "type": "streamable-http", "url": m.url, "headers": m.env }),
+            _ => {
+                report.skipped.push(format!("{} (unknown transport \"{}\")", m.id, m.transport));
+                continue;
+            }
+        };
+        servers.insert(m.id.clone(), entry);
+        report.added.push(m.id.clone());
+    }
+    (json!({ "mcpServers": Value::Object(servers) }), report)
+}
+
+/// Merge Tony's MCP registry into AnythingLLM Desktop's own MCP config so its
+/// sub-agent sessions can reach the same stdio/HTTP servers. Writes a
+/// timestamped `.bak` first whenever the file already exists and is about to
+/// change. Called automatically after the MCP registry saves (`os_config_update`
+/// with a `mcps` patch) and from a "Sync to AnythingLLM" button in the drawer.
+#[tauri::command]
+pub fn mcp_sync_anythingllm(os: State<'_, OsState>) -> Result<AllmSyncReport, String> {
+    let cfg = os.snapshot();
+    let path = anythingllm_mcp_path().ok_or("%APPDATA% is not set")?;
+    let existing: Value = match std::fs::read_to_string(&path) {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|_| json!({ "mcpServers": {} })),
+        Err(_) => json!({ "mcpServers": {} }),
+    };
+    let (next, report) = merge_allm_servers(&existing, &cfg.mcps);
+    if report.added.is_empty() {
+        // Nothing to add — leave the file exactly as it is (no `.bak` churn).
+        return Ok(report);
+    }
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    if path.exists() {
+        let bak = PathBuf::from(format!("{}.{}.bak", path.display(), os_core::now_secs()));
+        let _ = std::fs::copy(&path, &bak);
+    }
+    std::fs::write(&path, serde_json::to_string_pretty(&next).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok(report)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -713,5 +826,71 @@ mod tests {
     fn sse_body_parsed() {
         let v = parse_rpc_body("text/event-stream", "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":2,\"result\":{\"ok\":true}}\n\n", 2).unwrap();
         assert_eq!(v["ok"], true);
+    }
+
+    fn mcp_stdio(id: &str, enabled: bool) -> McpServer {
+        McpServer {
+            id: id.into(),
+            name: id.into(),
+            transport: "stdio".into(),
+            command: "uv".into(),
+            args: vec!["run".into(), "main.py".into()],
+            env: BTreeMap::new(),
+            url: String::new(),
+            enabled,
+            builtin: false,
+            description: String::new(),
+            agents: None,
+        }
+    }
+
+    fn mcp_builtin(id: &str, enabled: bool) -> McpServer {
+        McpServer { id: id.into(), name: id.into(), transport: "builtin".into(), command: String::new(), args: vec![], env: BTreeMap::new(), url: String::new(), enabled, builtin: true, description: String::new(), agents: None }
+    }
+
+    #[test]
+    fn allm_sync_adds_missing_keeps_existing_skips_builtin_and_disabled() {
+        // Fixture: AnythingLLM already has "git" (with an API key in its env)
+        // and nothing else. Tony's registry has a builtin (never synced), a
+        // disabled stdio server (never synced) and a new enabled one ("whatsapp")
+        // that should be added, plus "git" again (must NOT be overwritten).
+        let existing = json!({
+            "mcpServers": {
+                "git": { "command": "uvx", "args": ["mcp-server-git"], "env": { "SOME_KEY": "keep-me" } }
+            }
+        });
+        let mcps = vec![
+            mcp_builtin("weather", true),
+            mcp_stdio("git", true),
+            mcp_stdio("disabled-one", false),
+            mcp_stdio("whatsapp", true),
+        ];
+        let (next, report) = merge_allm_servers(&existing, &mcps);
+        assert_eq!(report.added, vec!["whatsapp".to_string()]);
+        assert_eq!(report.kept, vec!["git".to_string()]);
+        assert_eq!(report.skipped, vec!["disabled-one (disabled)".to_string()]);
+        // "git"'s existing entry (with the user's key) is untouched.
+        assert_eq!(next["mcpServers"]["git"]["env"]["SOME_KEY"], json!("keep-me"));
+        assert_eq!(next["mcpServers"]["git"]["args"], json!(["mcp-server-git"]));
+        // "whatsapp" was added with Tony's command line.
+        assert_eq!(next["mcpServers"]["whatsapp"]["command"], json!("uv"));
+        // The builtin weather server never appears at all.
+        assert!(next["mcpServers"].get("weather").is_none());
+    }
+
+    #[test]
+    fn allm_sync_starts_from_empty_when_file_is_missing() {
+        let (next, report) = merge_allm_servers(&json!({ "mcpServers": {} }), &[mcp_stdio("whatsapp", true)]);
+        assert_eq!(report.added, vec!["whatsapp".to_string()]);
+        assert!(report.kept.is_empty());
+        assert_eq!(next["mcpServers"]["whatsapp"]["command"], json!("uv"));
+    }
+
+    #[test]
+    fn allm_sync_http_server_gets_a_streamable_entry() {
+        let http = McpServer { id: "custom-http".into(), name: "Custom".into(), transport: "http".into(), command: String::new(), args: vec![], env: BTreeMap::new(), url: "http://127.0.0.1:9000/mcp".into(), enabled: true, builtin: false, description: String::new(), agents: None };
+        let (next, report) = merge_allm_servers(&json!({ "mcpServers": {} }), &[http]);
+        assert_eq!(report.added, vec!["custom-http".to_string()]);
+        assert_eq!(next["mcpServers"]["custom-http"]["url"], json!("http://127.0.0.1:9000/mcp"));
     }
 }

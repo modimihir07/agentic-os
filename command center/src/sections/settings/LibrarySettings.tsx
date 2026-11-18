@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { FolderOpen, Loader2, Plus, RefreshCw, Trash2, Wrench, X } from "lucide-react";
+import { Cloud, FolderOpen, Loader2, Plus, RefreshCw, Trash2, Wrench, X } from "lucide-react";
 import { Card, Field, Input, Select } from "@/components/ui";
-import { cmd, type McpServer, type ServerTools, type SkillInfo } from "@/lib/platform";
+import { cmd, type AllmSyncReport, type McpServer, type ServerTools, type SkillInfo } from "@/lib/platform";
+import { SUB_AGENT_IDS, roleLabel, toggleGrant } from "@/features/dispatcher/roles";
 import { CfgError, SecretRow, useOsCfg } from "./os-ui";
 
+/** Every id a skill or MCP server's "All" pill stands in for. Skills also
+ * accept the special "claude" grant (the Overseer), which isn't one of the
+ * 7 OS agent roles and so isn't covered by "all". */
+const ALL_AGENT_IDS = ["tony", ...SUB_AGENT_IDS] as const;
+
 const AGENTS: [string, string][] = [
+  ["all", "All"],
   ["tony", "OS"],
-  ["booking", "Booking"],
-  ["coder", "Coder"],
-  ["librarian", "Librarian"],
-  ["ops", "Ops"],
+  ...SUB_AGENT_IDS.map((id): [string, string] => [id, roleLabel(id)]),
   ["claude", "Claude"],
 ];
 
@@ -35,12 +39,14 @@ export function SkillsLibraryCard() {
   if (!cfg) return null;
   const toggle = (skill: string, agent: string) => {
     const cur = grants[skill] ?? [];
-    const next = cur.includes(agent) ? cur.filter((a) => a !== agent) : [...cur, agent];
+    const next = toggleGrant(cur, agent, ALL_AGENT_IDS);
     const g = { ...grants, [skill]: next };
     if (!next.length) delete g[skill];
     save({ skills: { grants: g } });
   };
-  const count = (agent: string) => Object.values(grants).filter((a) => a.includes(agent)).length;
+  // "all" covers every one of the 7 OS agent roles, but never the separate "claude" (Overseer) grant.
+  const has = (list: string[], agent: string) => list.includes(agent) || (agent !== "claude" && list.includes("all"));
+  const count = (agent: string) => Object.values(grants).filter((a) => has(a, agent)).length;
 
   return (
     <Card
@@ -81,7 +87,7 @@ export function SkillsLibraryCard() {
                 <span className="label-caps text-ink-3">{s.kind}</span>
                 <div className="ml-auto flex flex-wrap gap-1">
                   {AGENTS.map(([id, label]) => {
-                    const active = on.includes(id);
+                    const active = has(on, id);
                     return (
                       <button
                         key={id}
@@ -107,7 +113,14 @@ export function SkillsLibraryCard() {
   );
 }
 
-const BLANK: McpServer = { id: "", name: "", transport: "stdio", command: "npx", args: [], env: {}, url: "", enabled: true, builtin: false, description: "" };
+const BLANK: McpServer = { id: "", name: "", transport: "stdio", command: "npx", args: [], env: {}, url: "", enabled: true, builtin: false, description: "", agents: null };
+
+/** Does this server's grant list cover `agent`? Mirrors `McpServer::grants` in os_core.rs:
+ * missing/empty/containing "all" = every agent. */
+function mcpGrants(agents: string[] | null | undefined, agent: string): boolean {
+  if (!agents || agents.length === 0) return true;
+  return agents.includes("all") || agents.includes(agent);
+}
 
 export function McpRegistryCard() {
   const { cfg, error, save } = useOsCfg();
@@ -115,6 +128,7 @@ export function McpRegistryCard() {
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [testOut, setTestOut] = useState<Record<string, string>>({});
+  const [sync, setSync] = useState<{ loading: boolean; report: AllmSyncReport | null; err: string | null }>({ loading: false, report: null, err: null });
   const load = (refresh = false) => {
     setLoading(true);
     void cmd("mcp_list_tools", { refresh })
@@ -122,18 +136,41 @@ export function McpRegistryCard() {
       .finally(() => setLoading(false));
   };
   useEffect(() => load(), [cfg?.mcps.map((m) => `${m.id}:${m.enabled}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const syncAllm = () => {
+    setSync((s) => ({ ...s, loading: true, err: null }));
+    void cmd("mcp_sync_anythingllm")
+      .then((report) => setSync({ loading: false, report, err: null }))
+      .catch((e) => setSync({ loading: false, report: null, err: String(e) }));
+  };
   if (!cfg) return null;
-  const setMcps = (mcps: McpServer[]) => save({ mcps });
+  const setMcps = (mcps: McpServer[]) => {
+    save({ mcps });
+    // Best-effort: keep AnythingLLM's own MCP file in step whenever the
+    // registry changes (new server, toggled on/off, grants edited). The
+    // explicit button below covers the case where this races the save.
+    syncAllm();
+  };
+  // Tony isn't part of this list at all — he bypasses grants entirely (see
+  // `McpServer::grants` in os_core.rs) — so expanding "all" here only ever
+  // spells out the 6 sub-agents, never an inert "tony" entry. `null`/missing/
+  // empty all mean "all" on the Rust side too, so normalize to an explicit
+  // `["all"]` before toggling — otherwise clicking one specific pill from an
+  // unrestricted server would (wrongly) read as "restrict to just this one".
+  const setGrants = (id: string, agent: string) =>
+    setMcps(cfg.mcps.map((x) => (x.id === id ? { ...x, agents: toggleGrant(x.agents && x.agents.length > 0 ? x.agents : ["all"], agent, SUB_AGENT_IDS) } : x)));
   const quick: Record<string, Record<string, unknown>> = { "weather.current": {}, "time.now": {}, "kg.search": { query: "Nic" }, "git.status": { path: cfg.fsRoots[0] ?? "" } };
 
   return (
     <Card
       title={`${cfg.osName}'s MCP registry`}
-      hint="The OS's own tools. Built-ins run natively in Rust (no process to spawn); add any stdio or HTTP MCP server and its tools appear here and become available to the OS. Tools are read-only from the model's side."
+      hint="The OS's own tools. Built-ins run natively in Rust (no process to spawn); add any stdio or HTTP MCP server and its tools appear here and become available to the OS. Pills choose which agents may use each server's tools (Tony always has every one); tools themselves are read-only from the model's side."
       action={
         <>
           <button onClick={() => load(true)} className="pill-glass !h-8 text-xs" disabled={loading}>
             {loading ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Reload tools
+          </button>
+          <button onClick={syncAllm} className="pill-glass !h-8 text-xs" disabled={sync.loading} title="Add any missing stdio/HTTP servers to AnythingLLM's own MCP config, without touching entries it already has.">
+            {sync.loading ? <Loader2 size={13} className="animate-spin" /> : <Cloud size={13} />} Sync to AnythingLLM
           </button>
           <button onClick={() => setAdding(true)} className="pill-primary !h-8 text-xs">
             <Plus size={13} /> Add MCP server
@@ -141,6 +178,22 @@ export function McpRegistryCard() {
         </>
       }
     >
+      {(sync.report || sync.err) && (
+        <p className="mb-2 text-xs text-ink-3">
+          {sync.err ? (
+            <span className="text-alert">AnythingLLM sync failed: {sync.err}</span>
+          ) : (
+            <>
+              AnythingLLM sync — added: <span className="font-mono text-teal">{sync.report!.added.join(", ") || "none"}</span>; kept: <span className="font-mono text-ink">{sync.report!.kept.join(", ") || "none"}</span>
+              {sync.report!.skipped.length > 0 && (
+                <>
+                  ; skipped: <span className="font-mono text-ink-3">{sync.report!.skipped.join(", ")}</span>
+                </>
+              )}
+            </>
+          )}
+        </p>
+      )}
       <ul className="space-y-1.5">
         {cfg.mcps.map((m) => {
           const t = tools?.find((x) => x.id === m.id);
@@ -167,6 +220,24 @@ export function McpRegistryCard() {
               </div>
               {m.description && <p className="mt-0.5 text-xs text-ink-3">{m.description}</p>}
               {m.transport !== "builtin" && <p className="mt-0.5 truncate font-mono text-[11px] text-ink-3">{m.transport === "http" ? m.url : `${m.command} ${m.args.join(" ")}`}</p>}
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {AGENTS.filter(([id]) => id !== "claude").map(([id, label]) => {
+                  const isTony = id === "tony";
+                  const active = isTony || mcpGrants(m.agents, id);
+                  return (
+                    <button
+                      key={id}
+                      aria-pressed={active}
+                      disabled={isTony}
+                      onClick={() => !isTony && setGrants(m.id, id)}
+                      className={`h-6 rounded-full border px-2 text-[11px] transition-colors ${active ? "border-teal/60 bg-teal/15 text-teal" : "border-white/10 text-ink-3 hover:text-ink"} ${isTony ? "cursor-default opacity-80" : ""}`}
+                      title={isTony ? `${cfg.osName} has full access` : `${active ? "Revoke from" : "Grant to"} ${id === "all" ? "every agent" : label}`}
+                    >
+                      {id === "tony" ? cfg.osName : label}
+                    </button>
+                  );
+                })}
+              </div>
               {m.enabled && t?.ok && t.tools.length > 0 && (
                 <div className="mt-1 flex flex-wrap gap-1">
                   {t.tools.map((tool) => (

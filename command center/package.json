@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/kill-port.mjs 1420 1421",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
@@ -11,7 +12,9 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "icons": "tauri icon public/icon.svg"
+    "icons": "tauri icon public/icon.svg",
+    "test": "vitest run",
+    "test:scripts": "node --test scripts/"
   },
   "dependencies": {
     "@fontsource-variable/jetbrains-mono": "^5.2.5",
@@ -36,6 +39,7 @@
     "tailwindcss": "^4.1.7",
     "typescript": "~5.8.3",
     "vite": "^6.3.5",
-    "vite-plugin-pwa": "^1.0.0"
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^3.2.4"
   }
 }

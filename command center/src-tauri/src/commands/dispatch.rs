@@ -17,6 +17,7 @@
 //! file-only (see services.rs).
 
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::RwLock;
@@ -33,7 +34,7 @@ pub enum Kind {
     Local,
     /// OpenAI-compatible chat elsewhere (droplet over NetBird, hosted APIs).
     Cloud,
-    /// Agentic OS server.py `/api/chat` (opencode / hermes / agy).
+    /// Agentic OS server.py `/api/chat` (opencode / agy / claude / gemini / llm CLIs).
     AgenticOs,
     /// OpenAI-compatible `/audio/transcriptions` (whisper.cpp server, speaches).
     Stt,
@@ -240,6 +241,50 @@ pub struct Config {
     pub gateway: GatewayConfig,
     #[serde(default)]
     pub pipelines: PipelinesConfig,
+    /// Part 3: per-agent TTS voice roster, keyed by role id ("general" = Tony).
+    /// Empty by default — nothing here means "use policy.tts" exactly as before.
+    #[serde(default)]
+    pub agent_voices: BTreeMap<String, AgentVoice>,
+}
+
+/// Agent ids a voice-roster entry (or any other per-agent config in this
+/// file) can key on. Kept local here rather than importing `roles.ts`'s
+/// list from the TS side: the roster lives in providers.json, not OsConfig,
+/// so it has no Rust-side shared list of its own yet.
+pub(crate) const ROLE_IDS: [&str; 7] = ["general", "booking", "prompter", "coder", "designer", "librarian", "ops"];
+
+/// `"tony"` is accepted as an alias of `"general"` (ground rule) wherever a
+/// role id arrives from the outside (Settings UI, `tts_synthesize`'s `agent`).
+pub(crate) fn canon_role(r: &str) -> String {
+    let r = r.trim().to_ascii_lowercase();
+    if r == "tony" {
+        "general".into()
+    } else {
+        r
+    }
+}
+
+pub(crate) fn valid_role(r: &str) -> bool {
+    ROLE_IDS.contains(&r)
+}
+
+/// Part 3: one agent's voice. `engine` is "elevenlabs" or "kokoro" (the two
+/// engines this app drives); `voice`/`model` override the matching
+/// provider's own `voice`/`model` when set, and fall back to them when not.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentVoice {
+    pub engine: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub auto_speak: bool,
+}
+
+fn default_voice_engine() -> String {
+    "elevenlabs".into()
 }
 
 fn p(id: &str, label: &str, kind: Kind, base_url: &str, model: &str, needs_key: bool) -> Provider {
@@ -306,6 +351,7 @@ impl Default for Config {
             n8n_workflows: BTreeMap::new(),
             gateway: GatewayConfig::default(),
             pipelines: PipelinesConfig::default(),
+            agent_voices: BTreeMap::new(),
         }
     }
 }
@@ -344,6 +390,11 @@ impl DispatchState {
         let cfg = match std::fs::read_to_string(&path) {
             Ok(text) => match serde_json::from_str::<Config>(&text) {
                 Ok(mut cfg) if validate(&cfg).is_ok() => {
+                    // The hermes CLI is gone: rewrite the stale "Agentic OS (hermes)" label
+                    // (and a hermes model) so Settings stops advertising it. Saved below.
+                    if migrate_hermes(&mut cfg) {
+                        eprintln!("[dispatch] migrated stale hermes provider label/model");
+                    }
                     for d in &defaults.providers {
                         if !cfg.providers.iter().any(|p| p.id == d.id) {
                             cfg.providers.push(d.clone());
@@ -463,6 +514,17 @@ fn validate(cfg: &Config) -> Result<(), String> {
     if !(5..=3600).contains(&pl.poll_interval_seconds) || !(0.25..=168.0).contains(&pl.auto_sync_hours) || pl.gdrive_tracked_paths.len() > 32 {
         return Err("poll 5–3600 s, auto-sync 0.25–168 h, at most 32 tracked paths".into());
     }
+    for (role, v) in &cfg.agent_voices {
+        if !valid_role(role) {
+            return Err(format!("agentVoices: unknown role '{role}'"));
+        }
+        if v.engine != "elevenlabs" && v.engine != "kokoro" {
+            return Err(format!("agentVoices.{role}: engine must be 'elevenlabs' or 'kokoro'"));
+        }
+        if v.voice.as_ref().is_some_and(|s| s.chars().count() > 120) || v.model.as_ref().is_some_and(|s| s.chars().count() > 64) {
+            return Err(format!("agentVoices.{role}: voice/model too long"));
+        }
+    }
     Ok(())
 }
 
@@ -481,9 +543,12 @@ pub struct ProviderInfo {
 pub struct ProvidersView {
     providers: Vec<ProviderInfo>,
     policy: Policy,
+    /// Part 3: the voice roster, by role id.
+    agent_voices: BTreeMap<String, AgentVoice>,
 }
 
 fn view(state: &DispatchState, cfg: Config) -> ProvidersView {
+    let agent_voices = cfg.agent_voices.clone();
     ProvidersView {
         providers: cfg
             .providers
@@ -494,6 +559,7 @@ fn view(state: &DispatchState, cfg: Config) -> ProvidersView {
             })
             .collect(),
         policy: cfg.policy,
+        agent_voices,
     }
 }
 
@@ -547,6 +613,53 @@ pub fn providers_update(state: State<'_, DispatchState>, patch: ProviderPatch) -
             p.voices_dir = Some(short(v, 400)).filter(|s| !s.is_empty());
         }
         Ok(())
+    })?;
+    Ok(view(&state, cfg))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentVoicePatch {
+    engine: Option<String>,
+    voice: Option<String>,
+    model: Option<String>,
+    auto_speak: Option<bool>,
+}
+
+/// Pure merge of a patch into one roster entry, kept separate from the
+/// command below so it is unit-testable without a live `DispatchState`.
+pub(crate) fn apply_agent_voice_patch(entry: &mut AgentVoice, patch: AgentVoicePatch) -> Result<(), String> {
+    if let Some(v) = patch.engine {
+        let v = v.trim().to_ascii_lowercase();
+        if v != "elevenlabs" && v != "kokoro" {
+            return Err("engine must be 'elevenlabs' or 'kokoro'".into());
+        }
+        entry.engine = v;
+    }
+    if let Some(v) = patch.voice {
+        entry.voice = Some(v.trim().chars().take(120).collect::<String>()).filter(|s| !s.is_empty());
+    }
+    if let Some(v) = patch.model {
+        entry.model = Some(v.trim().chars().take(64).collect::<String>()).filter(|s| !s.is_empty());
+    }
+    if let Some(v) = patch.auto_speak {
+        entry.auto_speak = v;
+    }
+    Ok(())
+}
+
+/// Settings → Voice: edit one agent's roster row ("tony" accepted as an
+/// alias of "general"). A role with no entry yet starts from the app's
+/// default engine (ElevenLabs) before the patch is applied.
+#[tauri::command]
+pub fn agent_voice_update(state: State<'_, DispatchState>, role: String, patch: AgentVoicePatch) -> Result<ProvidersView, String> {
+    let role = canon_role(&role);
+    if !valid_role(&role) {
+        return Err(format!("unknown agent role '{role}'"));
+    }
+    let cfg = state.update(|cfg| {
+        let entry = cfg.agent_voices.entry(role.clone()).or_insert_with(|| AgentVoice { engine: default_voice_engine(), voice: None, model: None, auto_speak: false });
+        apply_agent_voice_patch(entry, patch)
     })?;
     Ok(view(&state, cfg))
 }
@@ -718,6 +831,9 @@ pub(crate) async fn run_chat(
     }
 
     let chars: usize = messages.iter().map(|m| m.content.len()).sum();
+    // The Agentic OS gateway forwards only the last user message: a planner / router /
+    // verifier call would lose its system prompt and come back as prose, not JSON.
+    let skip_gateway = skip_agentic_os(&messages, max_secs);
     let (plan, mut reason): (Vec<Provider>, String) = if let Some(id) = &provider {
         // "verifier" is an alias for whatever the policy names.
         let id = if id == "verifier" { cfg.policy.verifier.as_str() } else { id.as_str() };
@@ -735,10 +851,14 @@ pub(crate) async fn run_chat(
             _ => chain,
         };
         let vram = if osc.compute.mode == os_core::ComputeMode::Hybrid { os_core::vram_pct().await } else { None };
-        let (shaped, notes) = os_core::shape_chain(&osc, chain, vram, chars, false);
+        let (mut shaped, notes) = os_core::shape_chain(&osc, chain, vram, chars, false);
         let mut r = busy.map(|w| format!("background + {w} → off-GPU")).unwrap_or_else(|| "chain".into());
         if !notes.is_empty() {
             r = format!("{r} · {}", notes.join(", "));
+        }
+        if skip_gateway && shaped.iter().any(|p| p.kind == Kind::AgenticOs) {
+            shaped.retain(|p| p.kind != Kind::AgenticOs);
+            r = format!("{r} · agentic-os skipped (system prompt + JSON)");
         }
         (shaped, r)
     };
@@ -810,8 +930,21 @@ async fn call(state: &DispatchState, osc: &os_core::OsConfig, policy: &Policy, p
             rb = rb.bearer_auth(t);
         }
         let res = rb.send().await.map_err(short)?;
-        let body: serde_json::Value = res.error_for_status().map_err(short)?.json().await.map_err(short)?;
-        return body["response"]["content"].as_str().map(str::to_owned).ok_or_else(|| "malformed gateway reply".into());
+        let status = res.status();
+        if !status.is_success() {
+            // 503 = "CLI not installed": an Err so the chain falls through, never a reply.
+            let detail = res.json::<serde_json::Value>().await.ok().and_then(|b| b["detail"].as_str().map(str::to_owned));
+            return Err(match detail {
+                Some(d) => format!("HTTP {} — {}", status.as_u16(), gateway_detail(&d)),
+                None => format!("HTTP {status}"),
+            });
+        }
+        let body: serde_json::Value = res.json().await.map_err(short)?;
+        let content = body["response"]["content"].as_str().ok_or("malformed gateway reply")?;
+        if let Some(e) = gateway_reply_error(content) {
+            return Err(e);
+        }
+        return Ok(content.to_owned());
     }
 
     // OpenAI-compatible /chat/completions (LM Studio, AnythingLLM, vLLM, Ollama, OpenRouter).
@@ -840,9 +973,75 @@ async fn call(state: &DispatchState, osc: &os_core::OsConfig, policy: &Policy, p
     }
     let res = rb.send().await.map_err(short)?;
     let body: serde_json::Value = res.error_for_status().map_err(short)?.json().await.map_err(short)?;
-    let text = body["choices"][0]["message"]["content"].as_str().ok_or("malformed completion")?;
-    // Reasoning models wrap their scratchpad in <think>…</think>; never surface it.
-    Ok(strip_think(text))
+    Ok(usable_text_from_message(&body["choices"][0]["message"]).ok_or("malformed completion")?)
+}
+
+/// Pull something usable out of a chat completion's `message`, instead of
+/// requiring a plain string `content` (Part 6 §3 — "never malformed
+/// completion when there's usable text"). Some models answer a router/tool
+/// prompt with `content: null` and a `tool_calls` array, or put their whole
+/// answer in `reasoning_content` when the server strips `content`. Preferred
+/// order: a real string `content`; else the first `tool_calls` entry, mapped
+/// to the `{"tool":…, "args":…}` shape the router expects; else
+/// `reasoning_content` prose. `None` only when literally nothing is usable.
+pub(crate) fn usable_text_from_message(msg: &Value) -> Option<String> {
+    if let Some(s) = msg["content"].as_str().filter(|s| !s.trim().is_empty()) {
+        return Some(strip_think(s));
+    }
+    if let Some(tc) = msg["tool_calls"].as_array().and_then(|a| a.first()) {
+        let f = &tc["function"];
+        let name = f["name"].as_str().unwrap_or_default();
+        if !name.is_empty() {
+            let args = f["arguments"].as_str().and_then(|s| serde_json::from_str::<Value>(s).ok()).unwrap_or_else(|| f["arguments"].clone());
+            return Some(json!({ "tool": name, "args": args }).to_string());
+        }
+    }
+    if let Some(r) = msg["reasoning_content"].as_str().filter(|s| !s.trim().is_empty()) {
+        return Some(strip_think(r));
+    }
+    None
+}
+
+/// Planner / router / verifier calls (short budget) that carry a system prompt expect
+/// JSON shaped by that prompt. The Agentic OS gateway drops system prompts, so it is
+/// excluded from such chains (a pinned `provider` is left alone).
+pub(crate) fn skip_agentic_os(messages: &[ChatMessage], max_secs: Option<u64>) -> bool {
+    let system: Vec<&ChatMessage> = messages.iter().filter(|m| m.role == "system").collect();
+    if system.is_empty() {
+        return false;
+    }
+    let internal = max_secs.is_some_and(|m| m <= 45);
+    internal || system.iter().any(|m| m.content.to_ascii_lowercase().contains("json"))
+}
+
+/// server.py's error strings that older gateways returned with HTTP 200. They are
+/// failures, not answers: returning Err lets the chain fall through.
+pub(crate) fn gateway_reply_error(content: &str) -> Option<String> {
+    let t = content.trim_start();
+    const FAIL: [&str; 4] = ["⚠ Agent", "⚠ Error communicating", "⏱ Agent", "Unknown agent:"];
+    FAIL.iter().any(|p| t.starts_with(p)).then(|| gateway_detail(t))
+}
+
+/// One short line of a gateway error (no markdown, capped).
+fn gateway_detail(s: &str) -> String {
+    let line = s.trim().trim_start_matches(['⚠', '⏱']).trim().lines().next().unwrap_or("").to_string();
+    line.chars().take(160).collect()
+}
+
+/// One-time migration: the hermes CLI was removed. Returns true when anything changed.
+pub(crate) fn migrate_hermes(cfg: &mut Config) -> bool {
+    let mut changed = false;
+    for p in cfg.providers.iter_mut() {
+        if p.label.to_lowercase().contains("hermes") {
+            p.label = "Agentic OS (opencode)".into();
+            changed = true;
+        }
+        if p.kind == Kind::AgenticOs && p.model.eq_ignore_ascii_case("hermes") {
+            p.model = "opencode".into();
+            changed = true;
+        }
+    }
+    changed
 }
 
 pub(crate) fn strip_think(s: &str) -> String {
@@ -850,6 +1049,235 @@ pub(crate) fn strip_think(s: &str) -> String {
         (Some(a), Some(b)) if b > a => format!("{}{}", &s[..a], &s[b + 8..]).trim().to_string(),
         _ => s.trim().to_string(),
     }
+}
+
+/// Filters `<think>…</think>` out of a token-by-token stream, including an
+/// unclosed block (the model was still "thinking" when the turn ended). Feed
+/// every delta as it arrives; `feed` returns only the text that is safe to
+/// show/speak right now — never think content, and never a partial tag (a
+/// `<think>` split across two deltas is held back until it resolves one way
+/// or the other). Using this on the LIVE stream, instead of only on the final
+/// `content` (as `strip_think` does), is what keeps the webview's `buffered`
+/// text identical to the final answer: there is no separate stripping pass
+/// afterwards to drift out of sync with the `spokenUpTo` offsets already
+/// computed against the raw stream (Part 6 §1's "spokenUpTo offset drift").
+pub struct ThinkFilter {
+    pending: String,
+    in_think: bool,
+}
+
+impl ThinkFilter {
+    pub fn new() -> Self {
+        Self { pending: String::new(), in_think: false }
+    }
+
+    pub fn feed(&mut self, delta: &str) -> String {
+        self.pending.push_str(delta);
+        let mut out = String::new();
+        loop {
+            if self.in_think {
+                if let Some(pos) = self.pending.find("</think>") {
+                    self.pending.drain(..pos + "</think>".len());
+                    self.in_think = false;
+                    continue;
+                }
+                // Still inside the block: hold everything but a short tail (long
+                // enough to still catch "</think>" split across the next feed),
+                // so a never-closing block can't grow `pending` without bound.
+                let keep = "</think>".len() - 1;
+                if self.pending.len() > keep {
+                    let cut = floor_char_boundary(&self.pending, self.pending.len() - keep);
+                    self.pending.drain(..cut);
+                }
+                break;
+            }
+            if let Some(pos) = self.pending.find("<think>") {
+                out.push_str(&self.pending[..pos]);
+                self.pending.drain(..pos + "<think>".len());
+                self.in_think = true;
+                continue;
+            }
+            // No full "<think>" seen yet — hold back only a tail that could still
+            // be the START of one, so a stray "<" isn't flushed too eagerly.
+            let hold = partial_tag_suffix_len(&self.pending, "<think>");
+            let safe_len = self.pending.len() - hold;
+            out.push_str(&self.pending[..safe_len]);
+            self.pending.drain(..safe_len);
+            break;
+        }
+        out
+    }
+
+    /// End of stream: whatever is left, unless it's an unclosed `<think>`
+    /// block (dropped — a scratchpad that never closed has nothing to show).
+    pub fn finish(self) -> String {
+        if self.in_think {
+            String::new()
+        } else {
+            self.pending
+        }
+    }
+}
+
+impl Default for ThinkFilter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+fn floor_char_boundary(s: &str, idx: usize) -> usize {
+    let mut i = idx.min(s.len());
+    while i > 0 && !s.is_char_boundary(i) {
+        i -= 1;
+    }
+    i
+}
+
+/// Longest suffix of `s` that is a (possibly empty) prefix of `tag`, so a
+/// partially-arrived tag ("<thi") is never mistaken for literal text.
+fn partial_tag_suffix_len(s: &str, tag: &str) -> usize {
+    let max = (tag.len() - 1).min(s.len());
+    for len in (1..=max).rev() {
+        let start = s.len() - len;
+        if !s.is_char_boundary(start) {
+            continue;
+        }
+        if s.as_bytes()[start..] == tag.as_bytes()[..len] {
+            return len;
+        }
+    }
+    0
+}
+
+// ── Model-agnostic JSON / tool-call extraction (Part 6) ─────────────────────
+//
+// Replaces the naive "first `{` … last `}`" copies that used to live in
+// agents.rs and pipeline.rs (and are mirrored in TS `plan.ts` and Python
+// `command_center_api.py`). Handles: a model's reasoning scratchpad sitting
+// right next to the JSON, a ```json fence, more than one `{…}` span in the
+// reply (tries each, outermost first), light formatting slips, and either
+// `{"tool":…,"args":…}` or the OpenAI-style `{"name":…,"arguments":…}` shape.
+
+fn strip_think_loose(s: &str) -> String {
+    let mut out = s.to_string();
+    loop {
+        match (out.find("<think>"), out.find("</think>")) {
+            (Some(a), Some(b)) if b > a => out = format!("{}{}", &out[..a], &out[b + 8..]),
+            (Some(a), None) => {
+                out.truncate(a);
+                break;
+            }
+            _ => break,
+        }
+    }
+    out.trim().to_string()
+}
+
+fn fenced_json(s: &str) -> Option<&str> {
+    let lower = s.to_ascii_lowercase();
+    let start = lower.find("```json")? + "```json".len();
+    let end = s[start..].find("```")?;
+    Some(s[start..start + end].trim())
+}
+
+/// `{`-at-`i` to its matching `}`, skipping braces that appear inside a
+/// quoted string. `None` if it never balances (truncated output).
+fn matching_brace(s: &str, start: usize) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut depth: i32 = 0;
+    let mut in_str = false;
+    let mut escape = false;
+    for (i, &c) in bytes.iter().enumerate().skip(start) {
+        if in_str {
+            if escape {
+                escape = false;
+            } else if c == b'\\' {
+                escape = true;
+            } else if c == b'"' {
+                in_str = false;
+            }
+            continue;
+        }
+        match c {
+            b'"' => in_str = true,
+            b'{' => depth += 1,
+            b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Every outermost `{…}` span in `s`, in order. Nested objects inside a
+/// matched span are not reported separately (they're already covered by it).
+fn balanced_spans(s: &str) -> Vec<(usize, usize)> {
+    let bytes = s.as_bytes();
+    let mut spans = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'{' {
+            if let Some(end) = matching_brace(s, i) {
+                spans.push((i, end));
+                i = end + 1;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    spans
+}
+
+/// Trailing commas before `}`/`]`, and curly quotes a model sometimes emits
+/// instead of straight ones.
+fn light_repair(s: &str) -> String {
+    static TRAILING_COMMA: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = TRAILING_COMMA.get_or_init(|| regex::Regex::new(r",\s*([}\]])").unwrap());
+    let s = s.replace(['\u{201c}', '\u{201d}'], "\"").replace(['\u{2018}', '\u{2019}'], "'");
+    re.replace_all(&s, "$1").into_owned()
+}
+
+/// An OpenAI-style tool call (`{"name":…, "arguments":…}`) is also usable as
+/// `{"tool":…, "args":…}` — add the aliases so every existing caller that
+/// reads `j["tool"]`/`j["args"]` keeps working without knowing which shape
+/// the model used.
+fn normalize_tool_shape(mut v: Value) -> Value {
+    if v.get("tool").is_none() {
+        if let (Some(name), true) = (v.get("name").and_then(Value::as_str).map(str::to_owned), v.get("arguments").is_some()) {
+            if let Some(obj) = v.as_object_mut() {
+                obj.insert("tool".into(), Value::String(name));
+                obj.insert("args".into(), obj.get("arguments").cloned().unwrap_or(Value::Null));
+            }
+        }
+    }
+    v
+}
+
+pub(crate) fn extract_json(text: &str) -> Option<Value> {
+    let cleaned = strip_think_loose(text);
+    let mut candidates: Vec<&str> = Vec::new();
+    if let Some(f) = fenced_json(&cleaned) {
+        candidates.push(f);
+    }
+    let without_tool_tags = cleaned.replace("<tool_call>", "").replace("</tool_call>", "");
+    let spans = balanced_spans(&without_tool_tags);
+    for (a, b) in &spans {
+        candidates.push(&without_tool_tags[*a..=*b]);
+    }
+    for c in candidates {
+        for attempt in [c.to_string(), light_repair(c)] {
+            if let Ok(v) = serde_json::from_str::<Value>(&attempt) {
+                if v.is_object() {
+                    return Some(normalize_tool_shape(v));
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Error text without the URL (keeps internal addresses out of the UI log).
@@ -899,6 +1327,10 @@ pub(crate) async fn run_chat_streamed(state: &DispatchState, os: &OsState, messa
     };
     let mut stream = res.bytes_stream();
     let mut buf = String::new();
+    // Filtering `<think>…</think>` out of the LIVE stream (not only the final
+    // `content`, as before) keeps the webview's `buffered` text exactly equal
+    // to what this function returns — see `ThinkFilter`'s doc comment.
+    let mut filter = ThinkFilter::new();
     let mut content = String::new();
     while let Some(chunk) = stream.next().await {
         let Ok(chunk) = chunk else { break };
@@ -912,15 +1344,335 @@ pub(crate) async fn run_chat_streamed(state: &DispatchState, os: &OsState, messa
             }
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(data) {
                 if let Some(d) = v["choices"][0]["delta"]["content"].as_str().filter(|d| !d.is_empty()) {
-                    content.push_str(d);
-                    let _ = app.emit("tony-token", serde_json::json!({ "streamId": stream_id, "delta": d }));
+                    let shown = filter.feed(d);
+                    if !shown.is_empty() {
+                        content.push_str(&shown);
+                        let _ = app.emit("tony-token", serde_json::json!({ "streamId": stream_id, "delta": shown }));
+                    }
                 }
             }
         }
     }
+    content.push_str(&filter.finish());
     if content.trim().is_empty() {
         drop(_slot);
         return run_chat(state, os, messages, Priority::Interactive, None, max_secs).await;
     }
-    Ok(DispatchResult { provider_id: p.id.clone(), content: strip_think(&content), fell_back: false, reason: "chain · streamed".into(), latency_ms: started.elapsed().as_millis(), redacted: false })
+    Ok(DispatchResult { provider_id: p.id.clone(), content: content.trim().to_string(), fell_back: false, reason: "chain · streamed".into(), latency_ms: started.elapsed().as_millis(), redacted: false })
+}
+
+#[cfg(test)]
+mod part4_tests {
+    use super::*;
+
+    #[test]
+    fn hermes_label_and_model_migrate() {
+        let mut cfg = Config::default();
+        let gw = cfg.providers.iter_mut().find(|p| p.id == "agentic-os").unwrap();
+        gw.label = "Agentic OS (Hermes)".into();
+        gw.model = "hermes".into();
+        assert!(migrate_hermes(&mut cfg));
+        let gw = cfg.providers.iter().find(|p| p.id == "agentic-os").unwrap();
+        assert_eq!(gw.label, "Agentic OS (opencode)");
+        assert_eq!(gw.model, "opencode");
+        // Idempotent; other providers untouched.
+        assert!(!migrate_hermes(&mut cfg));
+        assert!(cfg.providers.iter().any(|p| p.label == "LM Studio"));
+    }
+
+    #[test]
+    fn migrate_keeps_llm_model() {
+        let mut cfg = Config::default();
+        let gw = cfg.providers.iter_mut().find(|p| p.id == "agentic-os").unwrap();
+        gw.label = "Agentic OS (hermes)".into();
+        gw.model = "llm".into();
+        assert!(migrate_hermes(&mut cfg));
+        assert_eq!(cfg.providers.iter().find(|p| p.id == "agentic-os").unwrap().model, "llm");
+    }
+
+    #[test]
+    fn gateway_error_bodies_are_errors() {
+        assert!(gateway_reply_error("⚠ Agent 'hermes' CLI not installed. Install it and try again.").is_some());
+        assert!(gateway_reply_error("  ⚠ Agent 'opencode' CLI not installed.").unwrap().starts_with("Agent 'opencode'"));
+        assert!(gateway_reply_error("⏱ Agent 'opencode' timed out.\n\nRun …").is_some());
+        assert!(gateway_reply_error("⚠ Error communicating with llm: boom").is_some());
+        assert!(gateway_reply_error("Unknown agent: x").is_some());
+        assert!(gateway_reply_error("Sure — the weather is mild today.").is_none());
+        assert!(gateway_reply_error("Note: ⚠ Agent names are case sensitive").is_none());
+    }
+
+    #[test]
+    fn agentic_os_skipped_for_internal_json_calls() {
+        let sys = ChatMessage::new("system", "You are a planner. Reply with ONLY JSON.");
+        let user = ChatMessage::new("user", "turn off gabagool mode");
+        // planner (system + short budget)
+        assert!(skip_agentic_os(&[sys.clone(), user.clone()], Some(15)));
+        // system prompt that asks for JSON, no budget
+        assert!(skip_agentic_os(&[sys, user.clone()], None));
+        // plain chat with a persona, long budget → gateway stays in the chain
+        let persona = ChatMessage::new("system", "You are Tony, a calm assistant.");
+        assert!(!skip_agentic_os(&[persona.clone(), user.clone()], Some(120)));
+        assert!(!skip_agentic_os(&[persona, user.clone()], None));
+        // no system prompt → nothing is lost
+        assert!(!skip_agentic_os(&[user], Some(15)));
+    }
+}
+
+#[cfg(test)]
+mod part3_tests {
+    use super::*;
+
+    #[test]
+    fn canon_role_aliases_tony_to_general() {
+        assert_eq!(canon_role("tony"), "general");
+        assert_eq!(canon_role("Tony"), "general");
+        assert_eq!(canon_role("  TONY  "), "general");
+        assert_eq!(canon_role("booking"), "booking");
+        assert_eq!(canon_role("Booking"), "booking");
+    }
+
+    #[test]
+    fn valid_role_matches_the_seven_roles_only() {
+        for r in ROLE_IDS {
+            assert!(valid_role(r), "{r} should be a valid role");
+        }
+        assert!(!valid_role("tony")); // caller must canon_role() first
+        assert!(!valid_role("overseer"));
+        assert!(!valid_role(""));
+    }
+
+    #[test]
+    fn agent_voices_pass_validation_when_well_formed() {
+        let mut cfg = Config::default();
+        cfg.agent_voices.insert("general".into(), AgentVoice { engine: "elevenlabs".into(), voice: Some("QhEKgDl6KUJsO1FPiuSD".into()), model: Some("eleven_v4".into()), auto_speak: false });
+        cfg.agent_voices.insert("booking".into(), AgentVoice { engine: "kokoro".into(), voice: Some("am_michael".into()), model: None, auto_speak: true });
+        assert!(validate(&cfg).is_ok());
+    }
+
+    #[test]
+    fn agent_voices_reject_unknown_role() {
+        let mut cfg = Config::default();
+        cfg.agent_voices.insert("overseer".into(), AgentVoice { engine: "elevenlabs".into(), voice: None, model: None, auto_speak: false });
+        assert!(validate(&cfg).unwrap_err().contains("unknown role"));
+    }
+
+    #[test]
+    fn agent_voices_reject_bad_engine() {
+        let mut cfg = Config::default();
+        cfg.agent_voices.insert("coder".into(), AgentVoice { engine: "xtts".into(), voice: None, model: None, auto_speak: false });
+        assert!(validate(&cfg).unwrap_err().contains("engine must be"));
+    }
+
+    #[test]
+    fn agent_voices_reject_oversized_fields() {
+        let mut cfg = Config::default();
+        cfg.agent_voices.insert("coder".into(), AgentVoice { engine: "kokoro".into(), voice: Some("x".repeat(121)), model: None, auto_speak: false });
+        assert!(validate(&cfg).unwrap_err().contains("too long"));
+    }
+
+    #[test]
+    fn apply_agent_voice_patch_merges_only_given_fields() {
+        let mut entry = AgentVoice { engine: "elevenlabs".into(), voice: Some("old-voice".into()), model: Some("eleven_v4".into()), auto_speak: false };
+        apply_agent_voice_patch(&mut entry, AgentVoicePatch { engine: None, voice: Some("new-voice".into()), model: None, auto_speak: Some(true) }).unwrap();
+        assert_eq!(entry.engine, "elevenlabs"); // untouched
+        assert_eq!(entry.voice.as_deref(), Some("new-voice"));
+        assert_eq!(entry.model.as_deref(), Some("eleven_v4")); // untouched
+        assert!(entry.auto_speak);
+    }
+
+    #[test]
+    fn apply_agent_voice_patch_rejects_bad_engine() {
+        let mut entry = AgentVoice { engine: "kokoro".into(), voice: None, model: None, auto_speak: false };
+        let err = apply_agent_voice_patch(&mut entry, AgentVoicePatch { engine: Some("xtts".into()), voice: None, model: None, auto_speak: None }).unwrap_err();
+        assert!(err.contains("elevenlabs"));
+        assert_eq!(entry.engine, "kokoro"); // unchanged on error
+    }
+
+    #[test]
+    fn apply_agent_voice_patch_clearing_voice_with_blank_string() {
+        let mut entry = AgentVoice { engine: "kokoro".into(), voice: Some("am_michael".into()), model: None, auto_speak: false };
+        apply_agent_voice_patch(&mut entry, AgentVoicePatch { engine: None, voice: Some("   ".into()), model: None, auto_speak: None }).unwrap();
+        assert_eq!(entry.voice, None); // blank clears it, matching every other trimmed-string patch field in this file
+    }
+}
+
+#[cfg(test)]
+mod part6_tests {
+    use super::*;
+
+    // ── ThinkFilter ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn think_filter_passes_plain_text_through() {
+        let mut f = ThinkFilter::new();
+        assert_eq!(f.feed("Hello "), "Hello ");
+        assert_eq!(f.feed("there."), "there.");
+        assert_eq!(f.finish(), "");
+    }
+
+    #[test]
+    fn think_filter_strips_a_closed_block_in_one_feed() {
+        let mut f = ThinkFilter::new();
+        let mut out = String::new();
+        out.push_str(&f.feed("Before <think>scratch</think> after."));
+        out.push_str(&f.finish());
+        assert_eq!(out, "Before  after.");
+    }
+
+    #[test]
+    fn think_filter_handles_the_open_tag_split_across_feeds() {
+        let mut f = ThinkFilter::new();
+        let mut out = String::new();
+        out.push_str(&f.feed("Before <thi"));
+        out.push_str(&f.feed("nk>scratch</think> after."));
+        out.push_str(&f.finish());
+        assert_eq!(out, "Before  after.");
+    }
+
+    #[test]
+    fn think_filter_handles_the_close_tag_split_across_feeds() {
+        let mut f = ThinkFilter::new();
+        let mut out = String::new();
+        out.push_str(&f.feed("Before <think>scratch</thi"));
+        out.push_str(&f.feed("nk> after."));
+        out.push_str(&f.finish());
+        assert_eq!(out, "Before  after.");
+    }
+
+    #[test]
+    fn think_filter_drops_an_unclosed_block_at_end_of_stream() {
+        let mut f = ThinkFilter::new();
+        let mut out = String::new();
+        out.push_str(&f.feed("Before <think>never closes"));
+        out.push_str(&f.finish()); // dropped, not shown
+        assert_eq!(out, "Before ");
+    }
+
+    #[test]
+    fn think_filter_handles_multiple_blocks() {
+        let mut f = ThinkFilter::new();
+        let mut out = String::new();
+        out.push_str(&f.feed("A <think>x</think> B <think>y</think> C"));
+        out.push_str(&f.finish());
+        assert_eq!(out, "A  B  C");
+    }
+
+    #[test]
+    fn think_filter_never_flushes_a_stray_bracket_as_a_partial_tag() {
+        let mut f = ThinkFilter::new();
+        let mut out = String::new();
+        // "5 < 10" should never be mistaken for the start of "<think>".
+        out.push_str(&f.feed("5 < 10, done."));
+        out.push_str(&f.finish());
+        assert_eq!(out, "5 < 10, done.");
+    }
+
+    // ── extract_json ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn extract_json_plain_object() {
+        assert_eq!(extract_json(r#"{"tool": "x", "args": {}}"#).unwrap()["tool"], "x");
+    }
+
+    #[test]
+    fn extract_json_strips_a_closed_think_block_first() {
+        let v = extract_json(r#"<think>let me think about {"fake": 1}</think>{"tool": "real", "args": {}}"#).unwrap();
+        assert_eq!(v["tool"], "real");
+    }
+
+    #[test]
+    fn extract_json_strips_an_unclosed_think_block() {
+        // Nothing usable follows an unclosed scratchpad — None, not a crash.
+        assert!(extract_json(r#"<think>still thinking about {"tool":"x"}"#).is_none());
+    }
+
+    #[test]
+    fn extract_json_prefers_a_json_fence() {
+        let text = "Sure, here you go:\n```json\n{\"tool\": \"fenced\", \"args\": {\"a\": 1}}\n```\nHope that helps.";
+        assert_eq!(extract_json(text).unwrap()["tool"], "fenced");
+    }
+
+    #[test]
+    fn extract_json_tries_each_brace_span_when_the_first_is_junk() {
+        // The first `{…}` isn't even valid JSON on its own; the second is.
+        let text = r#"note: {this isn't json} but then {"tool": "second", "args": {}}"#;
+        assert_eq!(extract_json(text).unwrap()["tool"], "second");
+    }
+
+    #[test]
+    fn extract_json_ignores_braces_inside_string_values() {
+        let text = r#"{"tool": "x", "args": {"note": "use { and } in prose"}}"#;
+        let v = extract_json(text).unwrap();
+        assert_eq!(v["tool"], "x");
+        assert_eq!(v["args"]["note"], "use { and } in prose");
+    }
+
+    #[test]
+    fn extract_json_repairs_trailing_commas_and_smart_quotes() {
+        let text = "{\u{201c}tool\u{201d}: \u{201c}x\u{201d}, \u{201c}args\u{201d}: {\u{201c}a\u{201d}: 1,},}";
+        let v = extract_json(text).unwrap();
+        assert_eq!(v["tool"], "x");
+        assert_eq!(v["args"]["a"], 1);
+    }
+
+    #[test]
+    fn extract_json_accepts_tool_call_tag_wrapper() {
+        let text = r#"<tool_call>{"tool": "wrapped", "args": {}}</tool_call>"#;
+        assert_eq!(extract_json(text).unwrap()["tool"], "wrapped");
+    }
+
+    #[test]
+    fn extract_json_normalizes_name_arguments_shape() {
+        let text = r#"{"name": "whatsapp.list_messages", "arguments": {"limit": 5}}"#;
+        let v = extract_json(text).unwrap();
+        assert_eq!(v["tool"], "whatsapp.list_messages");
+        assert_eq!(v["args"]["limit"], 5);
+        // Original keys stay too — callers reading either shape still work.
+        assert_eq!(v["name"], "whatsapp.list_messages");
+    }
+
+    #[test]
+    fn extract_json_none_when_there_is_no_json_at_all() {
+        assert!(extract_json("just a plain sentence, no JSON here").is_none());
+    }
+
+    #[test]
+    fn extract_json_none_on_empty_input() {
+        assert!(extract_json("").is_none());
+    }
+
+    // ── usable_text_from_message ─────────────────────────────────────────────
+
+    #[test]
+    fn usable_text_prefers_plain_content() {
+        let msg = json!({ "content": "hello", "tool_calls": [{"function": {"name": "x", "arguments": "{}"}}] });
+        assert_eq!(usable_text_from_message(&msg).unwrap(), "hello");
+    }
+
+    #[test]
+    fn usable_text_falls_back_to_tool_calls_when_content_is_null() {
+        let msg = json!({ "content": Value::Null, "tool_calls": [{"function": {"name": "whatsapp.list_messages", "arguments": "{\"limit\":5}"}}] });
+        let v: Value = serde_json::from_str(&usable_text_from_message(&msg).unwrap()).unwrap();
+        assert_eq!(v["tool"], "whatsapp.list_messages");
+        assert_eq!(v["args"]["limit"], 5);
+    }
+
+    #[test]
+    fn usable_text_accepts_a_tool_call_with_object_arguments() {
+        let msg = json!({ "content": Value::Null, "tool_calls": [{"function": {"name": "time.now", "arguments": {}}}] });
+        let v: Value = serde_json::from_str(&usable_text_from_message(&msg).unwrap()).unwrap();
+        assert_eq!(v["tool"], "time.now");
+    }
+
+    #[test]
+    fn usable_text_falls_back_to_reasoning_content() {
+        let msg = json!({ "content": Value::Null, "reasoning_content": "<think>x</think>here's my answer" });
+        assert_eq!(usable_text_from_message(&msg).unwrap(), "here's my answer");
+    }
+
+    #[test]
+    fn usable_text_none_when_nothing_is_usable() {
+        let msg = json!({ "content": Value::Null });
+        assert!(usable_text_from_message(&msg).is_none());
+    }
 }

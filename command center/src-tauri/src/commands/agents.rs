@@ -1,7 +1,7 @@
 //! Core OS orchestrator ("Tony").
 //!
-//! One read-only turn runs a 4-stage pipeline natively — it no longer depends
-//! on the hermes CLI being healthy:
+//! One read-only turn runs a 4-stage pipeline natively — it never depends
+//! on a gateway CLI agent being installed:
 //!
 //!   1. Live context: the dashboard's current state (weather, nodes, GPU,
 //!      alarms…) + MASTER_IDENTITY.md + attached skills go into the system
@@ -25,7 +25,7 @@ use std::time::{Duration, Instant};
 use tauri::State;
 
 use super::bridge::BridgeState;
-use super::dispatch::{run_chat, short, ChatMessage, DispatchState, Priority};
+use super::dispatch::{extract_json, run_chat, short, ChatMessage, DispatchState, Priority, ThinkFilter};
 use super::os_core::{self, OsConfig, OsState};
 
 // ── AnythingLLM ─────────────────────────────────────────────────────────────
@@ -143,13 +143,102 @@ pub(crate) async fn workspace_chat_t(state: &DispatchState, os: &OsState, slug: 
     Ok((super::dispatch::strip_think(&text), sources))
 }
 
+/// Same answer as `workspace_chat_t`, but over AnythingLLM's `stream-chat` SSE
+/// endpoint, emitting the same `tony-token` events `run_chat_streamed` uses —
+/// tagged with `agent_tag` so the webview speaks the reply in *that* agent's
+/// voice instead of Tony's (Part 6 §1: only the explicit-tab "talk directly to
+/// a sub-agent" turn uses this; a delegated turn still has Tony synthesize a
+/// summary afterwards through his own streamed chain, unchanged).
+///
+/// AnythingLLM's stream response is a `data: {...}` line per chunk, each
+/// shaped roughly `{textResponse, sources, close, error}` (a delta in
+/// `textResponse`, `close: true` on the last chunk). Falls back to the plain
+/// (non-streamed) call on any transport/HTTP failure, or if nothing useful
+/// ever streamed — never fails the turn over a streaming-specific hiccup.
+pub(crate) async fn workspace_chat_streamed(state: &DispatchState, os: &OsState, slug: &str, message: &str, app: &tauri::AppHandle, stream_id: &str, agent_tag: &str) -> Result<(String, Vec<String>), String> {
+    use futures_util::StreamExt;
+    use tauri::Emitter;
+    let cfg = os.snapshot();
+    let _slot = os.slot.acquire(&format!("anythingllm · {slug} (streaming)"), true, cfg.scheduler.tony_priority_pct).await;
+    let base = cfg.anythingllm.base_url.clone();
+    let key = match allm_key(state, false) {
+        Ok(k) => k,
+        Err(e) => return Err(e),
+    };
+    let secs = cfg.anythingllm.timeout_secs.clamp(10, 900);
+    let path = match tony_thread(state, os, &base, &key, slug).await {
+        Ok(thread) => format!("/v1/workspace/{slug}/thread/{thread}/stream-chat"),
+        Err(e) if e.contains("not found") => return Err(e),
+        Err(_) => format!("/v1/workspace/{slug}/stream-chat"),
+    };
+    let url = format!("{}/api{}", base.trim_end_matches('/'), path);
+    let body = json!({ "message": message, "mode": "chat", "sessionId": format!("tony-{}", month_tag()) });
+    let sent = state.http.post(&url).bearer_auth(&key).timeout(Duration::from_secs(secs)).header("Accept", "text/event-stream").json(&body).send().await;
+    let response = match sent.and_then(|r| r.error_for_status()) {
+        Ok(r) => r,
+        Err(_) => {
+            drop(_slot);
+            return workspace_chat_t(state, os, slug, message, Some(secs), true).await;
+        }
+    };
+    let mut stream = response.bytes_stream();
+    let mut buf = String::new();
+    let mut filter = ThinkFilter::new();
+    let mut content = String::new();
+    let mut sources: Vec<String> = Vec::new();
+    let mut saw_error: Option<String> = None;
+    'outer: while let Some(chunk) = stream.next().await {
+        let Ok(chunk) = chunk else { break };
+        buf.push_str(&String::from_utf8_lossy(&chunk));
+        while let Some(nl) = buf.find('\n') {
+            let line = buf[..nl].trim().to_string();
+            buf.drain(..=nl);
+            let Some(data) = line.strip_prefix("data:").map(str::trim) else { continue };
+            if data.is_empty() || data == "[DONE]" {
+                continue;
+            }
+            let Ok(v) = serde_json::from_str::<Value>(data) else { continue };
+            if let Some(e) = v["error"].as_str().filter(|e| !e.is_empty() && *e != "null") {
+                saw_error = Some(e.to_string());
+                break 'outer;
+            }
+            if let Some(d) = v["textResponse"].as_str().filter(|d| !d.is_empty()) {
+                let shown = filter.feed(d);
+                if !shown.is_empty() {
+                    content.push_str(&shown);
+                    let _ = app.emit("tony-token", json!({ "streamId": stream_id, "delta": shown, "agent": agent_tag }));
+                }
+            }
+            if let Some(arr) = v["sources"].as_array().filter(|a| !a.is_empty()) {
+                sources = arr.iter().filter_map(|s| s["title"].as_str().map(String::from)).take(5).collect();
+            }
+            if v["close"].as_bool() == Some(true) {
+                break 'outer;
+            }
+        }
+    }
+    let tail = filter.finish();
+    if !tail.is_empty() {
+        content.push_str(&tail);
+        let _ = app.emit("tony-token", json!({ "streamId": stream_id, "delta": tail, "agent": agent_tag }));
+    }
+    drop(_slot);
+    if let Some(e) = saw_error {
+        return Err(e);
+    }
+    if content.trim().is_empty() {
+        return workspace_chat_t(state, os, slug, message, Some(secs), true).await;
+    }
+    Ok((content.trim().to_string(), sources))
+}
+
 // ── Prompt building ─────────────────────────────────────────────────────────
 
 fn role_label(role: &str) -> String {
     match role {
         "librarian" => "Librarian".into(),
         "coder" => "Coder".into(),
-        "booking" => "Booking".into(),
+        "booking" => "Booking Desk".into(),
         "ops" => "Ops".into(),
         "prompter" => "Prompter".into(),
         "designer" => "Designer".into(),
@@ -161,7 +250,11 @@ pub fn system_prompt(cfg: &OsConfig, context: &str) -> String {
     let name = &cfg.os_name;
     let mut s = format!(
         "You are {name}, the user's personal operating system (Agentic OS) running on their own desktop. \
-You coordinate local sub-agents (Librarian, Coder, Booking, Ops in AnythingLLM), local MCP tools, and the user's dashboard."
+You coordinate six local sub-agents in AnythingLLM — Librarian (search & retrieval across files, notes and memory), \
+Coder (software: Tauri/Rust/TypeScript/React, git, terminal), Booking Desk (scheduling, casting, WhatsApp/booking \
+threads), Ops (infrastructure: Docker, n8n, the droplet, GPU/VRAM), Prompter (turns goals into specs, task lists and \
+prompts for the others) and Designer (UI/UX: tokens, layouts, prototypes) — plus local MCP tools and the user's \
+dashboard."
     );
     if cfg.root_directive {
         s.push_str(&format!(
@@ -207,18 +300,194 @@ pub(crate) fn comms_recall_intent(text: &str) -> Option<(String, String)> {
     Some((who, topic))
 }
 
+/// Widened per Part 2: also catches "what's up" (Whisper's mangle of
+/// "WhatsApp"), plural messages/texts/chats, inbox, "files", and "latest" —
+/// the exact gaps the MCP map found causing false WhatsApp/email refusals.
 fn wants_tools(text: &str) -> bool {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"(?i)\b(weather|forecast|temperature|rain|snow|wind|time|date|today|tomorrow|fetch|url|https?://|website|web ?page|page|file|folder|read|open|list|repo|git|commit|branch|search|look ?up|google|find|news|knowledge|remember|who is|email|inbox|gmail|whatsapp|skill|status)\b").unwrap()
+        regex::Regex::new(r"(?i)\b(weather|forecast|temperature|rain|snow|wind|time|date|today|tomorrow|fetch|url|https?://|website|web ?page|page|files?|folder|read|open|list|repo|git|commit|branch|search|look ?up|google|find|news|knowledge|remember|who is|emails?|inbox|gmail|what'?s ?app|whatsapp|messages?|texts?|chats?|what'?s ?up|dm|group|skill|status|latest)\b").unwrap()
     })
     .is_match(text)
 }
 
-fn extract_json(text: &str) -> Option<Value> {
-    let a = text.find('{')?;
-    let b = text.rfind('}')?;
-    serde_json::from_str(&text[a..=b]).ok()
+// ── Tool pre-executor (Part 2) ──────────────────────────────────────────────
+//
+// Runs BEFORE a sub-agent sees its task (and for Tony's own turns), using
+// only the tools the target agent is actually granted (`mcp::enabled_tools`).
+// Fixes the root cause the MCP map found: a sub-agent that answers at all —
+// even a refusal — used to skip tool-running entirely, because the old
+// single-tool router only ran when `agent_answer.is_none()`. Now tool data
+// is fetched first and handed to the sub-agent (or to Tony's own synthesis)
+// as part of its task/context, regardless of what it goes on to say.
+
+/// "last N (whatsapp) messages/texts/chats", "check my whatsapp", "messages
+/// from X" → `whatsapp.list_messages`. Deterministic (no LLM round trip) so
+/// the single most common refusal case is instant and never misrouted by the
+/// JSON router.
+fn whatsapp_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    let tool = tools.iter().find(|t| t.name == "whatsapp.list_messages")?;
+    let norm = super::routing::normalize(original); // fixes Whisper's "what's up" → "whatsapp", number words → digits
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let re = RE.get_or_init(|| {
+        regex::Regex::new(
+            r"(?i)\b(?:last|recent)\s+(\d{1,2})?\s*(?:whatsapp\s+)?(?:messages?|texts?|chats?)\b|\bwhatsapp\s+(?:messages?|texts?|chats?)\b|\bcheck\s+my\s+whatsapp\b|\bmy\s+(?:last\s+)?(\d{1,2})?\s*whatsapp\b|\bmessages?\s+(?:with|from)\s+[a-z]",
+        )
+        .unwrap()
+    });
+    if !re.is_match(&norm) {
+        return None;
+    }
+    let n: u64 = re.captures(&norm).and_then(|c| c.get(1).or_else(|| c.get(2))).and_then(|m| m.as_str().parse().ok()).unwrap_or(10);
+    let limit = n.clamp(1, 50);
+    let mut args = json!({ "limit": limit });
+    if tool.args.iter().any(|a| a == "include_context") {
+        args["include_context"] = json!(false);
+    }
+    static SENDER_RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let sender_re = SENDER_RE.get_or_init(|| regex::Regex::new(r"(?i)\bmessages?\s+(?:with|from)\s+([A-Za-z][\w'\-]*(?:\s+[A-Z][\w'\-]*)?)").unwrap());
+    if let Some(c) = sender_re.captures(original) {
+        let name = c[1].trim().trim_end_matches(['?', '.', ',']).to_string();
+        let key = if tool.args.iter().any(|a| a == "query") {
+            Some("query")
+        } else if tool.args.iter().any(|a| a == "sender_phone_number") {
+            Some("sender_phone_number")
+        } else {
+            None
+        };
+        if let Some(key) = key {
+            args[key] = json!(name);
+        }
+    }
+    Some(("whatsapp.list_messages".to_string(), args))
+}
+
+/// "what time / what's the date" → `time.now`, without a model round trip.
+fn time_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    if !tools.iter().any(|t| t.name == "time.now") {
+        return None;
+    }
+    let norm = super::routing::normalize(original);
+    (norm.contains("what time") || norm.contains("current time") || norm.contains("whats the date") || norm.contains("what date")).then(|| ("time.now".to_string(), json!({})))
+}
+
+fn deterministic_plan(text: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    whatsapp_plan(text, tools).or_else(|| time_plan(text, tools))
+}
+
+/// Run the existing JSON tool router, restricted to `tools`, for up to two
+/// sequential calls (so a second lookup can build on the first), capped by
+/// `deadline`. Each call gets its own short timeout so a dead server can't
+/// stall the turn — the caller already bounds the whole thing to ~20s.
+async fn run_tool_router(
+    state: &DispatchState,
+    os: &OsState,
+    bridge: &BridgeState,
+    tools: &[super::mcp::ToolInfo],
+    context: &str,
+    text: &str,
+    approved: bool,
+    agent: &str,
+    deadline: Instant,
+) -> (String, Vec<OsStep>, Option<String>) {
+    let mut block = String::new();
+    let mut steps = Vec::new();
+    let mut last = None;
+    let mut extra = String::new();
+    for _ in 0..2 {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            break;
+        }
+        let list: Vec<String> = tools.iter().map(|t| format!("- {}({}): {}", t.name, t.args.join(", "), t.description)).collect();
+        let router = format!(
+            "You route a request to at most ONE tool. Tools:\n{}\n\nLIVE DASHBOARD:\n{}{extra}\n\nReply ONLY with JSON: {{\"tool\": \"<tool name>\" or null, \"args\": {{…}}}}. \
+Use null if the dashboard/previous tool result already answers it or no tool helps.",
+            list.join("\n"),
+            context.chars().take(1500).collect::<String>()
+        );
+        let router_secs = left.as_secs().clamp(1, 15);
+        let Ok(r) = run_chat(state, os, vec![ChatMessage::new("system", router), ChatMessage::new("user", text.to_string())], Priority::Interactive, None, Some(router_secs)).await else { break };
+        // A router reply that isn't usable JSON, or names a tool it wasn't
+        // offered, used to be silent (no step, turn just continued without a
+        // tool). Now it's a visible (non-error) step, then synthesis proceeds
+        // exactly as before — Part 6 §3's "push a non-error step and continue".
+        let Some(j) = extract_json(&r.content) else {
+            steps.push(step("tool", "os", "router", "no tool (router reply not JSON)", true, 0));
+            break;
+        };
+        if j["tool"].is_null() {
+            break; // router decided no tool is needed — expected, not a failure
+        }
+        let Some(name) = j["tool"].as_str().filter(|n| tools.iter().any(|t| t.name == *n)).map(String::from) else {
+            steps.push(step("tool", "os", "router", format!("no tool (router named an unmatched tool: {})", j["tool"]), true, 0));
+            break;
+        };
+        let args = if j["args"].is_object() { j["args"].clone() } else { json!({}) };
+        let t0 = Instant::now();
+        let call_secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(10));
+        if call_secs.is_zero() {
+            steps.push(step("tool", "os", &name, format!("{name} skipped — out of time"), false, 0));
+            break;
+        }
+        match tokio::time::timeout(call_secs, super::mcp::call_tool(state, os, bridge, &name, &args, approved, agent)).await {
+            Ok(Ok(out)) => {
+                steps.push(step("tool", "os", &name, format!("{args}\n→ {}", out.chars().take(600).collect::<String>()), true, t0.elapsed().as_millis()));
+                let server = name.split('.').next().unwrap_or(&name);
+                block.push_str(&format!("\n\n[LIVE MCP TOOL DATA - {server}]:\n{}", out.chars().take(2000).collect::<String>()));
+                extra = format!("\n\nTool {name} already returned:\n{}", out.chars().take(500).collect::<String>());
+                last = Some(name);
+            }
+            Ok(Err(e)) if e.starts_with("PERMISSION_") => {
+                steps.push(step("tool", "os", &name, format!("blocked: {e}"), false, t0.elapsed().as_millis()));
+                break;
+            }
+            Ok(Err(e)) => {
+                steps.push(step("tool", "os", &name, format!("failed: {e}"), false, t0.elapsed().as_millis()));
+                break;
+            }
+            Err(_) => {
+                steps.push(step("tool", "os", &name, format!("{name} timed out"), false, t0.elapsed().as_millis()));
+                break;
+            }
+        }
+    }
+    (block, steps, last)
+}
+
+/// Fetch live tool data for `agent`'s upcoming turn (its own granted tools;
+/// Tony's own turns pass `"general"`, which `enabled_tools` always gives
+/// every enabled server). Tries a deterministic plan first (instant, no LLM
+/// call), then — if the text still plausibly wants a tool — the JSON router,
+/// restricted to that agent's tools. Mutating tools are never offered
+/// (`mcp::is_mutating_tool`, enforced inside `mcp::enabled_tools`). The whole
+/// thing is capped at ~20s so one dead server can't stall the turn.
+async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeState, cfg: &OsConfig, agent: &str, text: &str, context: &str, approved: bool) -> (String, Vec<OsStep>, Option<String>) {
+    if cfg.permissions.mcp == super::bridge::Tier::Deny {
+        return (String::new(), Vec::new(), None);
+    }
+    let tools = super::mcp::enabled_tools(state, os, agent).await;
+    if tools.is_empty() {
+        return (String::new(), Vec::new(), None);
+    }
+    let deadline = Instant::now() + Duration::from_secs(20);
+    if let Some((name, args)) = deterministic_plan(text, &tools) {
+        let t0 = Instant::now();
+        let call_secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(12));
+        return match tokio::time::timeout(call_secs, super::mcp::call_tool(state, os, bridge, &name, &args, approved, agent)).await {
+            Ok(Ok(out)) => {
+                let step = step("tool", "os", &name, format!("{args}\n→ {}", out.chars().take(600).collect::<String>()), true, t0.elapsed().as_millis());
+                let server = name.split('.').next().unwrap_or(&name);
+                (format!("\n\n[LIVE MCP TOOL DATA - {server}]:\n{}", out.chars().take(2000).collect::<String>()), vec![step], Some(name))
+            }
+            Ok(Err(e)) => (String::new(), vec![step("tool", "os", &name, format!("failed: {e}"), false, t0.elapsed().as_millis())], None),
+            Err(_) => (String::new(), vec![step("tool", "os", &name, format!("{name} timed out"), false, t0.elapsed().as_millis())], None),
+        };
+    }
+    if wants_tools(text) {
+        return run_tool_router(state, os, bridge, &tools, context, text, approved, agent, deadline).await;
+    }
+    (String::new(), Vec::new(), None)
 }
 
 // ── The turn ────────────────────────────────────────────────────────────────
@@ -232,6 +501,13 @@ pub struct OsTurnRequest {
     /// The user opened that agent's tab (talk to it directly, no synthesis).
     #[serde(default)]
     pub(crate) explicit: bool,
+    /// How the caller (the TS resolver) already classified this turn —
+    /// "Named" | "Domain" | "Tab" | "Llm" | "Default". Echoed back on
+    /// `OsTurnResult` unless the Rust safety net below re-resolves it.
+    #[serde(default)]
+    pub(crate) route_kind: Option<String>,
+    #[serde(default)]
+    pub(crate) route_reason: Option<String>,
     #[serde(default)]
     pub(crate) history: Vec<ChatMessage>,
     /// Live dashboard state rendered as text by the webview.
@@ -270,6 +546,11 @@ pub struct OsTurnResult {
     /// Comms thread the answer quotes from ("Jump to Thread in Comms →").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) comms_thread: Option<String>,
+    /// Final role this turn was routed to (after the Rust safety net, if it fired).
+    pub(crate) routed_role: String,
+    pub(crate) route_reason: String,
+    /// "Named" | "Domain" | "Tab" | "Llm" | "Default".
+    pub(crate) route_kind: String,
 }
 
 pub(crate) fn step(kind: &str, from: &str, to: &str, text: impl Into<String>, ok: bool, ms: u128) -> OsStep {
@@ -289,6 +570,27 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     if text.is_empty() || text.len() > 20_000 {
         return Err("empty or oversized request".into());
     }
+
+    // ── Routing safety net ──
+    // The caller (the TS resolver, for desktop turns; the phone's own default
+    // trigger table, for inbox turns) has usually already resolved a role.
+    // When it hasn't — role is still "general" and this isn't an explicit
+    // tab turn — re-resolve here against the *authoritative* config (every
+    // custom trigger the user saved), which the phone path can't see.
+    let mut role = req.role.clone();
+    let mut route_kind = req.route_kind.clone().unwrap_or_else(|| if req.explicit { "Tab".into() } else { "Default".into() });
+    let mut route_reason = req.route_reason.clone().unwrap_or_else(|| if req.explicit { "current tab".into() } else { "caller-resolved".into() });
+    if role == "general" && !req.explicit {
+        let r = super::routing::resolve(&text, &cfg);
+        if matches!(r.kind, super::routing::RouteKind::Named | super::routing::RouteKind::Domain) {
+            if let Some(rr) = r.role {
+                role = rr;
+                route_kind = format!("{:?}", r.kind);
+                route_reason = r.reason;
+            }
+        }
+    }
+
     let mut steps: Vec<OsStep> = Vec::new();
     let mut delegated_to = None;
     let mut agent_answer: Option<String> = None;
@@ -312,15 +614,34 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     let keep = cfg.scheduler.history_turns.max(2) as usize;
     let history: Vec<ChatMessage> = req.history.into_iter().rev().take(keep).collect::<Vec<_>>().into_iter().rev().collect();
 
+    // ── Tool pre-executor (Part 2) — runs BEFORE delegation, using only the
+    // target agent's own granted tools, and regardless of whether a
+    // sub-agent later answers (that gate used to skip tools entirely). ──
+    let prefetch_agent = if role == "general" { "general" } else { role.as_str() };
+    let (tool_raw, tool_steps, tool_used) = if comms_thread.is_none() {
+        prefetch_tools(state, os, bridge, &cfg, prefetch_agent, &text, &req.context, req.approved).await
+    } else {
+        (String::new(), Vec::new(), None)
+    };
+    steps.extend(tool_steps);
+    let tool_note = if tool_raw.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "{tool_raw}\n\nYou have live tool access through {}. The data above was fetched just now; answer from it directly. Never say you lack access to WhatsApp, email, files or the internet.",
+            cfg.os_name
+        )
+    };
+
     // ── 2. Delegation ──
-    let slug = cfg.anythingllm.workspaces.get(&req.role).filter(|s| !s.is_empty()).cloned();
-    if req.role != "general" && comms_thread.is_none() {
+    let slug = cfg.anythingllm.workspaces.get(&role).filter(|s| !s.is_empty()).cloned();
+    if role != "general" && comms_thread.is_none() {
         if let Some(slug) = slug {
             os_core::gate(bridge, cfg.permissions.delegation, "delegation", req.approved, json!({ "workspace": slug }))?;
-            let label = role_label(&req.role);
-            let skills = super::mcp::skill_digest(&cfg, &req.role);
+            let label = role_label(&role);
+            let skills = super::mcp::skill_digest(&cfg, &role);
             // Designer / Prompter also get the user's identity file (taste, brand, goals).
-            let identity = if matches!(req.role.as_str(), "designer" | "prompter") {
+            let identity = if matches!(role.as_str(), "designer" | "prompter") {
                 os_core::read_identity(&cfg).map(|i| format!("\n\nABOUT THE USER (MASTER_IDENTITY.md):\n{}", i.chars().take(2000).collect::<String>())).unwrap_or_default()
             } else {
                 String::new()
@@ -335,17 +656,28 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
                     if skills.is_empty() { String::new() } else { format!("\nYour attached skills:\n{skills}") }
                 ) + &identity
             };
-            steps.push(step("delegate", "os", &req.role, &task, true, 0));
+            let task = format!("{task}{tool_note}");
+            steps.push(step("delegate", "os", &role, &task, true, 0));
             let t0 = Instant::now();
-            match workspace_chat(state, os, &slug, &task).await {
+            // Talking directly to this agent's tab (no Tony synthesis to follow):
+            // stream its reply with its OWN voice as it arrives, instead of
+            // waiting for the whole answer (Part 6 §1). A delegated turn that
+            // Tony is about to summarize skips this — streaming the raw
+            // sub-agent reply there would be heard twice (once raw, once as
+            // Tony's synthesis moments later).
+            let chat_result = match (req.explicit, req.stream_id.as_deref(), app) {
+                (true, Some(sid), Some(app)) => workspace_chat_streamed(state, os, &slug, &task, app, sid, &role).await,
+                _ => workspace_chat(state, os, &slug, &task).await,
+            };
+            match chat_result {
                 Ok((answer, sources)) => {
                     let src = if sources.is_empty() { String::new() } else { format!("\n\nSources: {}", sources.join(", ")) };
-                    steps.push(step("reply", &req.role, "os", format!("{answer}{src}"), true, t0.elapsed().as_millis()));
+                    steps.push(step("reply", &role, "os", format!("{answer}{src}"), true, t0.elapsed().as_millis()));
                     delegated_to = Some(slug.clone());
                     agent_answer = Some(answer);
                 }
                 Err(e) => {
-                    steps.push(step("error", &req.role, "os", format!("{label} agent failed: {e}"), false, t0.elapsed().as_millis()));
+                    steps.push(step("error", &role, "os", format!("{label} agent failed: {e}"), false, t0.elapsed().as_millis()));
                     steps.push(step("step-in", "os", "user", format!("{} stepped in with its own tools.", cfg.os_name), true, 0));
                 }
             }
@@ -354,53 +686,39 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
 
     // Explicit tab + the agent answered: that IS the answer.
     if let (true, Some(a)) = (req.explicit, &agent_answer) {
-        let res = OsTurnResult { answer: a.clone(), steps, provider_id: format!("anythingllm:{}", delegated_to.clone().unwrap_or_default()), delegated_to, tool: None, latency_ms: started.elapsed().as_millis(), reason: "direct to sub-agent".into(), redacted: false, comms_thread: None };
-        log_turn(bridge, &req.role, &text, &res);
+        let res = OsTurnResult {
+            answer: a.clone(),
+            steps,
+            provider_id: format!("anythingllm:{}", delegated_to.clone().unwrap_or_default()),
+            delegated_to,
+            tool: tool_used.clone(),
+            latency_ms: started.elapsed().as_millis(),
+            reason: "direct to sub-agent".into(),
+            redacted: false,
+            comms_thread: None,
+            routed_role: role.clone(),
+            route_reason: route_reason.clone(),
+            route_kind: route_kind.clone(),
+        };
+        log_turn(bridge, &role, &text, &res);
         return Ok(res);
     }
 
-    // ── 1 + 3. OS context + tools ──
+    // ── 1 + 3. OS context + synthesis ──
+    // The tool data for a delegated (non-general) turn already rode along in
+    // the task above; Tony's own turns (role == "general") get it here, in
+    // his own system prompt, since there was no delegated task to carry it.
     let sys = system_prompt(&cfg, &req.context);
-    let mut tool_used = None;
-    let mut tool_block = String::new();
-    if agent_answer.is_none() && wants_tools(&text) && cfg.permissions.mcp != super::bridge::Tier::Deny {
-        let tools = super::mcp::enabled_tools(state, os).await;
-        if !tools.is_empty() {
-            let list: Vec<String> = tools.iter().map(|t| format!("- {}({}): {}", t.name, t.args.join(", "), t.description)).collect();
-            let router = format!(
-                "You route a request to at most ONE tool. Tools:\n{}\n\nLIVE DASHBOARD:\n{}\n\nReply ONLY with JSON: {{\"tool\": \"<tool name>\" or null, \"args\": {{…}}}}. \
-Use null if the dashboard already answers it or no tool helps.",
-                list.join("\n"),
-                req.context.chars().take(1500).collect::<String>()
-            );
-            let t0 = Instant::now();
-            if let Ok(r) = run_chat(state, os, vec![ChatMessage::new("system", router), ChatMessage::new("user", text.clone())], Priority::Interactive, None, Some(20)).await {
-                if let Some(j) = extract_json(&r.content) {
-                    if let Some(name) = j["tool"].as_str().filter(|n| tools.iter().any(|t| t.name == *n)) {
-                        let args = if j["args"].is_object() { j["args"].clone() } else { json!({}) };
-                        match super::mcp::call_tool(state, os, bridge, name, &args, req.approved).await {
-                            Ok(out) => {
-                                steps.push(step("tool", "os", name, format!("{args}\n→ {}", out.chars().take(600).collect::<String>()), true, t0.elapsed().as_millis()));
-                                tool_block = format!("\n\nTOOL RESULT ({name}):\n{out}");
-                                tool_used = Some(name.to_string());
-                            }
-                            Err(e) if e.starts_with("PERMISSION_") => return Err(e),
-                            Err(e) => steps.push(step("tool", "os", name, format!("failed: {e}"), false, t0.elapsed().as_millis())),
-                        }
-                    }
-                }
-            }
-        }
-    }
+    let sys_tool_note = if role == "general" { tool_note.clone() } else { String::new() };
 
     let mut user_msg = text.clone();
     if let Some(a) = &agent_answer {
         user_msg = format!(
             "{text}\n\n[{} agent's reply — summarize it for the user in your own voice, keep the specifics (names, dates, times), don't invent anything]:\n{a}",
-            role_label(&req.role)
+            role_label(&role)
         );
     }
-    let mut msgs = vec![ChatMessage::new("system", format!("{sys}{tool_block}"))];
+    let mut msgs = vec![ChatMessage::new("system", format!("{sys}{sys_tool_note}"))];
     msgs.extend(history);
     msgs.push(ChatMessage::new("user", user_msg));
 
@@ -415,22 +733,52 @@ Use null if the dashboard already answers it or no tool helps.",
             let t0 = Instant::now();
             let (answer, engine, redacted) = overseer_call(state, os, &cfg, &msgs).await?;
             steps.push(step("overseer", &engine, "os", "auto-escalated", true, t0.elapsed().as_millis()));
-            let out = OsTurnResult { answer, steps, provider_id: engine, delegated_to, tool: tool_used, latency_ms: started.elapsed().as_millis(), reason: "auto-escalated to overseer".into(), redacted, comms_thread: comms_thread.clone() };
-            log_turn(bridge, &req.role, &text, &out);
+            let out = OsTurnResult {
+                answer,
+                steps,
+                provider_id: engine,
+                delegated_to,
+                tool: tool_used,
+                latency_ms: started.elapsed().as_millis(),
+                reason: "auto-escalated to overseer".into(),
+                redacted,
+                comms_thread: comms_thread.clone(),
+                routed_role: role.clone(),
+                route_reason: route_reason.clone(),
+                route_kind: route_kind.clone(),
+            };
+            log_turn(bridge, &role, &text, &out);
             return Ok(out);
         }
         Err(e) => {
             // The sub-agent answered but no model is up to summarize: hand it over as-is.
             if let Some(a) = agent_answer {
-                let out = OsTurnResult { answer: a, steps, provider_id: format!("anythingllm:{}", delegated_to.clone().unwrap_or_default()), delegated_to, tool: tool_used, latency_ms: started.elapsed().as_millis(), reason: format!("synthesis failed ({e}) — raw agent reply"), redacted: false, comms_thread: comms_thread.clone() };
-                log_turn(bridge, &req.role, &text, &out);
+                let out = OsTurnResult {
+                    answer: a,
+                    steps,
+                    provider_id: format!("anythingllm:{}", delegated_to.clone().unwrap_or_default()),
+                    delegated_to,
+                    tool: tool_used,
+                    latency_ms: started.elapsed().as_millis(),
+                    reason: format!("synthesis failed ({e}) — raw agent reply"),
+                    redacted: false,
+                    comms_thread: comms_thread.clone(),
+                    routed_role: role.clone(),
+                    route_reason: route_reason.clone(),
+                    route_kind: route_kind.clone(),
+                };
+                log_turn(bridge, &role, &text, &out);
                 return Ok(out);
             }
             return Err(e);
         }
     };
+    // If the model's final answer is itself bare JSON or a tool-call (it
+    // decided to "answer" with the router shape instead of prose), ask it
+    // once more for plain sentences rather than showing/speaking raw JSON.
+    let answer_text = ensure_prose(state, os, &msgs, res.content).await;
     let out = OsTurnResult {
-        answer: res.content,
+        answer: answer_text,
         steps,
         provider_id: res.provider_id,
         delegated_to,
@@ -439,9 +787,38 @@ Use null if the dashboard already answers it or no tool helps.",
         reason: res.reason,
         redacted: res.redacted,
         comms_thread,
+        routed_role: role.clone(),
+        route_reason,
+        route_kind,
     };
-    log_turn(bridge, &req.role, &text, &out);
+    log_turn(bridge, &role, &text, &out);
     Ok(out)
+}
+
+/// The whole trimmed reply is itself a JSON object / fenced JSON / tool-call
+/// wrapper (not merely prose that happens to mention `{…}` somewhere) — the
+/// model answered in the router's shape instead of talking to the user.
+fn looks_like_bare_json(s: &str) -> bool {
+    let t = s.trim();
+    if t.is_empty() {
+        return false;
+    }
+    (t.starts_with('{') || t.starts_with("```json") || t.starts_with("<tool_call>")) && extract_json(t).is_some()
+}
+
+/// Re-ask once, in plain sentences, when the final answer is bare JSON/a
+/// tool-call (Part 6 §3). Best-effort: any failure, or a retry that's still
+/// bare JSON, keeps the original text rather than losing the answer.
+async fn ensure_prose(state: &DispatchState, os: &OsState, msgs: &[ChatMessage], content: String) -> String {
+    if !looks_like_bare_json(&content) {
+        return content;
+    }
+    let mut retry = msgs.to_vec();
+    retry.push(ChatMessage::new("user", "Answer that in plain sentences for the user — no JSON, no tool-call syntax."));
+    match run_chat(state, os, retry, Priority::Interactive, None, Some(20)).await {
+        Ok(r) if !looks_like_bare_json(&r.content) => r.content,
+        _ => content,
+    }
 }
 
 fn log_turn(bridge: &BridgeState, role: &str, text: &str, r: &OsTurnResult) {
@@ -733,11 +1110,80 @@ mod tests {
         assert!(wants_tools("what's the weather like"));
         assert!(wants_tools("read C:\\ai-hub\\README.md"));
         assert!(!wants_tools("tell me a joke"));
+        // Part 2's widened gaps: the exact refusal-causing phrases from the MCP map.
+        assert!(wants_tools("check my what's up"));
+        assert!(wants_tools("last message in my WhatsApp group"));
+        assert!(wants_tools("any texts from Sam?"));
+        assert!(wants_tools("what's in my inbox"));
     }
 
     #[test]
     fn json_extracted() {
         assert_eq!(extract_json("sure: {\"tool\": null}").unwrap()["tool"], Value::Null);
+    }
+
+    #[test]
+    fn bare_json_detection() {
+        assert!(looks_like_bare_json(r#"{"tool": "x", "args": {}}"#));
+        assert!(looks_like_bare_json("```json\n{\"a\": 1}\n```"));
+        assert!(looks_like_bare_json(r#"<tool_call>{"tool": "x"}</tool_call>"#));
+        // Prose that merely contains a brace somewhere is not "bare" JSON.
+        assert!(!looks_like_bare_json("Sure — here's a plan: {\"tool\": \"x\"} is one option."));
+        assert!(!looks_like_bare_json("The weather is 5°C and overcast."));
+        assert!(!looks_like_bare_json(""));
+    }
+
+    fn whatsapp_tool() -> Vec<super::super::mcp::ToolInfo> {
+        vec![super::super::mcp::ToolInfo {
+            name: "whatsapp.list_messages".into(),
+            description: "List messages".into(),
+            server: "whatsapp".into(),
+            args: vec!["limit".into(), "include_context".into(), "sender_phone_number".into(), "query".into()],
+        }]
+    }
+
+    #[test]
+    fn whatsapp_plan_extracts_limit_and_defaults() {
+        let (name, args) = whatsapp_plan("check my last 5 whatsapp messages", &whatsapp_tool()).unwrap();
+        assert_eq!(name, "whatsapp.list_messages");
+        assert_eq!(args["limit"], 5);
+        assert_eq!(args["include_context"], false);
+
+        // Number word, not digit — exercises routing::normalize's conversion.
+        let (_, args) = whatsapp_plan("what are my last five whatsapp texts", &whatsapp_tool()).unwrap();
+        assert_eq!(args["limit"], 5);
+
+        // No number at all → default 10.
+        let (_, args) = whatsapp_plan("check my whatsapp", &whatsapp_tool()).unwrap();
+        assert_eq!(args["limit"], 10);
+
+        // Whisper's "WhatsApp" → "what's up" mangle, caught via routing::normalize.
+        let (name, _) = whatsapp_plan("check my what's up messages", &whatsapp_tool()).unwrap();
+        assert_eq!(name, "whatsapp.list_messages");
+
+        // Cap at 50 even if a huge number is spoken.
+        let (_, args) = whatsapp_plan("last 99 whatsapp messages", &whatsapp_tool()).unwrap();
+        assert_eq!(args["limit"], 50);
+    }
+
+    #[test]
+    fn whatsapp_plan_extracts_sender_name() {
+        let (_, args) = whatsapp_plan("messages from Maria Lopez", &whatsapp_tool()).unwrap();
+        assert_eq!(args["query"], "Maria Lopez");
+    }
+
+    #[test]
+    fn whatsapp_plan_absent_without_the_tool() {
+        assert!(whatsapp_plan("check my last 5 whatsapp messages", &[]).is_none());
+        assert!(whatsapp_plan("tell me a joke", &whatsapp_tool()).is_none());
+    }
+
+    #[test]
+    fn time_plan_matches_only_with_the_tool() {
+        let time_tool = vec![super::super::mcp::ToolInfo { name: "time.now".into(), description: "x".into(), server: "time".into(), args: vec![] }];
+        assert!(time_plan("what time is it", &time_tool).is_some());
+        assert!(time_plan("what time is it", &[]).is_none());
+        assert!(time_plan("tell me a joke", &time_tool).is_none());
     }
 }
 
@@ -775,7 +1221,7 @@ mod live {
             }
 
             // 2. Weather tool
-            println!("TOOL weather: {:?}", super::super::mcp::call_tool(&state, &os, &bridge, "weather.current", &json!({}), false).await.map(|s| s.lines().next().unwrap_or("").to_string()));
+            println!("TOOL weather: {:?}", super::super::mcp::call_tool(&state, &os, &bridge, "weather.current", &json!({}), false, "tony").await.map(|s| s.lines().next().unwrap_or("").to_string()));
 
             // 3. Answer from live context (no refusal)
             let sys = system_prompt(&cfg, "Weather (Toronto): 5°C Overcast, wind 11 km/h");
