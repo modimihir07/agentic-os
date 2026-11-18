@@ -80,4 +80,32 @@ describe("sentences", () => {
     const out = sentences("**Step one.** Then *step two*.");
     expect(out.join(" ")).not.toMatch(/[*_]/);
   });
+
+  it("keeps a bulleted reply as one chunk instead of one request per bullet", () => {
+    // Each bullet ends in a period, which — without list detection — would each become
+    // its own sentence chunk (the exact "fires per bullet" bug this guards against).
+    const text = "Here's the casting summary:\n- John Smith confirmed for Saturday's callback.\n- Priya Shah still pending wardrobe fitting.\n- Marcus Lee dropped out, backup notified.";
+    expect(sentences(text)).toHaveLength(1);
+  });
+
+  it("keeps a numbered list as one chunk too", () => {
+    const text = "1. Scene one is locked in.\n2. Scene two needs a reshoot.\n3. Scene three is still pending approval.";
+    expect(sentences(text)).toHaveLength(1);
+  });
+
+  it("does not treat a single incidental dash line as a list", () => {
+    // Only one marked line — normal prose, not a list — keeps ordinary sentence splitting.
+    const s1 = `Alpha ${"word ".repeat(8)}end1.`;
+    const s2 = `- Bravo ${"word ".repeat(8)}end2.`;
+    expect(sentences(`${s1}\n${s2}`)).toHaveLength(2);
+  });
+
+  it("still caps a very long list at maxChars without dropping content", () => {
+    const line = (n: number) => `- Item number ${n} with some extra detail to pad it out.`;
+    const text = Array.from({ length: 40 }, (_, i) => line(i)).join("\n");
+    const out = sentences(text, 500);
+    expect(out.length).toBeGreaterThan(1);
+    for (const chunk of out) expect(chunk.length).toBeLessThanOrEqual(500);
+    expect(out.join(" ").replace(/\s+/g, " ")).toBe(stripForSpeech(text).replace(/\s+/g, " "));
+  });
 });

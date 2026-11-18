@@ -111,6 +111,26 @@ function ramp(g: GainNode, to: number, ms: number) {
   g.gain.linearRampToValueAtTime(to, now + ms / 1000);
 }
 
+/** Each currently-ducked clip's own volume, to ramp back up to. Non-null while ducked. */
+let duckedFrom: Map<GainNode, number> | null = null;
+
+/**
+ * Duck every playing cue clip (a looping Gabagool theme, most importantly) while
+ * actively listening, so Whisper can actually hear "turn off gabagool mode" instead
+ * of transcribing it over full-volume theme/soundbite audio. Idempotent either way —
+ * safe to call with nothing playing, or to call `true` twice before a matching `false`.
+ */
+export function duckForListening(active: boolean) {
+  if (active) {
+    if (duckedFrom) return;
+    duckedFrom = new Map(current.map((p) => [p.gain, p.gain.gain.value] as const));
+    for (const [gain, vol] of duckedFrom) ramp(gain, vol * 0.18, 150);
+  } else if (duckedFrom) {
+    for (const [gain, vol] of duckedFrom) ramp(gain, vol, 400);
+    duckedFrom = null;
+  }
+}
+
 // ── Running cue state (top-bar pill shows it) ───────────────────────────────
 
 interface CueRun {
@@ -132,6 +152,7 @@ export const useCueRun = create<CueRun>((set) => ({
     generation++;
     current.forEach((p) => p.stop(400));
     current = [];
+    duckedFrom = null;
     set({ running: null, builtin: null });
   },
 }));

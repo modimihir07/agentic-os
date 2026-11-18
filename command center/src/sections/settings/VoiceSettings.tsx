@@ -198,7 +198,9 @@ export function TtsCard() {
         </Field>
         {eleven ? <ModelSelect provider={tts} onChange={(model) => void patch({ id: tts.id, model })} /> : <span />}
 
-        <Field label={eleven ? `Voice${list.length ? ` (${list.length} on your account${cloned ? `, ${cloned} cloned` : ""})` : ""}` : `Voice${list.length ? ` (${list.length} installed)` : ""}`}>
+        {/* Full card width, not squeezed into the 1.4fr column — a cloned voice's label plus its
+            full ElevenLabs ID ("Tony Soprano Master Gabagool · QHdQg83KluWzfCPPis6D") needs it. */}
+        <Field label={eleven ? `Voice${list.length ? ` (${list.length} on your account${cloned ? `, ${cloned} cloned` : ""})` : ""}` : `Voice${list.length ? ` (${list.length} installed)` : ""}`} className="sm:col-span-2">
           <Select value={current} onChange={(e) => void patch({ id: tts.id, voice: e.target.value })}>
             {!list.some((v) => v.id === current) && current && <option value={current}>{eleven ? `${current} (not on this account)` : current}</option>}
             {groups.map(([name, vs]) => (
@@ -290,7 +292,7 @@ export function AgentVoiceRoster() {
       hint="Give each agent its own engine, voice and model. A row left on “Default” speaks with the Text-to-speech card above; auto-speak reads that agent's reply aloud even when you typed instead of talked."
     >
       <div className="-mx-1 overflow-x-auto">
-        <table className="w-full min-w-[640px] text-left text-sm">
+        <table className="w-full min-w-[700px] text-left text-sm">
           <thead>
             <tr className="label-caps text-[11px] text-ink-3">
               <th className="px-1 py-1.5">Agent</th>
@@ -356,7 +358,9 @@ function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entr
         </Select>
       </td>
       <td className="px-1 py-1.5">
-        <Select value={current} onChange={(e) => onPatch({ voice: e.target.value })} className="!h-8 !w-40 !text-xs">
+        {/* w-40 used to clip a cloned voice's full name ("Tony Soprano Master Gabagool"); wide
+            enough now for that plus some headroom, with a title so hover shows the rest anyway. */}
+        <Select value={current} onChange={(e) => onPatch({ voice: e.target.value })} className="!h-8 !w-56 !text-xs" title={engine === "elevenlabs" ? current || undefined : undefined}>
           <option value="">Default</option>
           {!list.some((v) => v.id === current) && current && <option value={current}>{current}</option>}
           {list.map((v) => (

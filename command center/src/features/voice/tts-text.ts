@@ -40,13 +40,31 @@ function splitLong(s: string, maxChars: number): string[] {
   return out;
 }
 
+const LIST_LINE = /^\s*(?:[-*+•]|\d+[.)])\s+/;
+
+/** True when most non-blank lines are bulleted/numbered (a WhatsApp casting summary,
+ * a checklist) rather than ordinary prose split across lines. */
+function looksLikeList(text: string): boolean {
+  const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+  if (lines.length < 2) return false;
+  const marked = lines.filter((l) => LIST_LINE.test(l)).length;
+  return marked >= 2 && marked / lines.length >= 0.5;
+}
+
 /** Split for pipelining: speak sentence 1 while sentence 2 synthesises. Each chunk is
  * capped at `maxChars` (never dumped, unbounded, into a final chunk the way the old
  * count-based cap did past its 6th chunk). A chunk under 40 characters keeps absorbing
  * the sentences right after it (bounded by `maxChars`) until it's no longer short, so a
- * one-word sentence like "Ok." merges into what follows instead of its own round trip. */
+ * one-word sentence like "Ok." merges into what follows instead of its own round trip.
+ *
+ * A bulleted/numbered reply is the one exception: splitting on sentence-ending
+ * punctuation there means one TTS request per bullet (each line usually ends with a
+ * period of its own), stacking a full round trip's latency per line for what should
+ * read as one list. Those are kept as a single chunk instead (still safety-capped at
+ * `maxChars` via `splitLong`, same as any other long chunk). */
 export function sentences(text: string, maxChars = 1800): string[] {
   const clean = stripForSpeech(text);
+  if (looksLikeList(text)) return splitLong(clean.replace(/\s+/g, " ").trim(), maxChars);
   const parts = clean.replace(/\s+/g, " ").match(/[^.!?]+[.!?]+["')\]]*|\S[^.!?]*$/g) ?? [clean];
   const out: string[] = [];
   for (const raw of parts.map((s) => s.trim()).filter(Boolean)) {

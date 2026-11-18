@@ -25,6 +25,12 @@ pub const ENV_KEY: &str = "ELEVENLABS_API_KEY";
 /// `GET /v1/models` lookup (`list_models`) fails or the key is missing.
 pub const MODELS: [&str; 6] = ["eleven_v4", "eleven_flash_v2_5", "eleven_turbo_v2_5", "eleven_flash_v2", "eleven_multilingual_v2", "eleven_v3"];
 
+/// v4 models (`eleven_v4`, `eleven_v4_conversational`, …) 400 outright on
+/// `optimize_streaming_latency` — only the older models accept it.
+fn supports_streaming_latency(model: &str) -> bool {
+    !model.to_ascii_lowercase().contains("v4")
+}
+
 #[derive(Clone, Copy, Serialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub enum KeySource {
@@ -247,9 +253,16 @@ pub async fn synthesize(state: &DispatchState, p: &Provider, text: &str, voice_i
         // comes close, but keep the call safe if a caller ever passes more.
         body["previous_text"] = prev.chars().rev().take(1000).collect::<Vec<_>>().into_iter().rev().collect::<String>().into();
     }
+    // v4 models (eleven_v4, eleven_v4_conversational, …) reject `optimize_streaming_latency`
+    // outright with a 400 — append it only for the older models that actually support it.
+    let url = if supports_streaming_latency(model) {
+        format!("{}/v1/text-to-speech/{voice_id}/stream?output_format=mp3_44100_128&optimize_streaming_latency=3", base(p))
+    } else {
+        format!("{}/v1/text-to-speech/{voice_id}/stream?output_format=mp3_44100_128", base(p))
+    };
     let res = state
         .http
-        .post(format!("{}/v1/text-to-speech/{voice_id}/stream?output_format=mp3_44100_128&optimize_streaming_latency=3", base(p)))
+        .post(url)
         .header("xi-api-key", key)
         .json(&body)
         .timeout(Duration::from_secs(45))
@@ -276,6 +289,16 @@ mod tests {
         assert!(valid_voice_id("QhEKgDl6KUJsO1FPiuSD"));
         assert!(!valid_voice_id("am_michael"));
         assert!(!valid_voice_id("../../v1/user"));
+    }
+
+    #[test]
+    fn streaming_latency_excluded_only_for_v4_models() {
+        assert!(!supports_streaming_latency("eleven_v4"));
+        assert!(!supports_streaming_latency("eleven_v4_conversational"));
+        assert!(!supports_streaming_latency("ELEVEN_V4"));
+        assert!(supports_streaming_latency("eleven_flash_v2_5"));
+        assert!(supports_streaming_latency("eleven_turbo_v2_5"));
+        assert!(supports_streaming_latency("eleven_multilingual_v2"));
     }
 
     #[test]

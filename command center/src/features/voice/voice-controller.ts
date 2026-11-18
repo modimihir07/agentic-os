@@ -10,7 +10,7 @@ import { handleOsIntent } from "@/features/os/os-intents";
 import { useOs } from "@/features/os/os-store";
 import { runPipeline, usePipelines } from "@/features/os/pipeline-store";
 import { fireCue, isStopCue, matchCue, registerCueIO } from "@/features/cues/cue-runtime";
-import { registerSpeechCancel, stopAllAudio } from "@/features/cues/player";
+import { duckForListening, registerSpeechCancel, stopAllAudio } from "@/features/cues/player";
 import { cc } from "@/lib/cc-api";
 import { cmd, isTauri, onNativeEvent, type ChatMessage, type OsTurnResult, type RoutingConfig } from "@/lib/platform";
 import { useProviders } from "@/sections/settings/use-providers";
@@ -135,22 +135,31 @@ function afterVoiceReply() {
 
 // ── Listening ───────────────────────────────────────────────────────────────
 
-export function startListening(opts: { forConfirmation?: boolean } = {}) {
+export function startListening(opts: { forConfirmation?: boolean; silent?: boolean } = {}) {
   const v = store();
   convo.active = false;
   tts.cancel();
-  v.setExpanded(true);
+  // `silent`: passive hands-free wake-word rearming, not a real interaction yet — never force
+  // the floating HUD back open over a user who just closed it (that was the "pops back open on
+  // its own" bug). Every other caller here is an explicit tap/hotkey or an actually-detected
+  // wake word / pending confirmation, so it keeps expanding as before.
+  if (!opts.silent) v.setExpanded(true);
   v.setPartial("");
   if (!stt) {
     v.setError("Speech-to-text unavailable here — type below");
     return;
   }
   v.setState("listening");
+  // A looping Gabagool (or any) theme plays at full volume once its intro line ends — duck it
+  // while actively listening so Whisper can hear "turn off gabagool mode" over it instead of
+  // transcribing it garbled or not at all. Restored in onFinal/onError below, whichever fires.
+  duckForListening(true);
   stt.start(
     {
       onPartial: (t) => store().setPartial(t),
       onPhase: (p) => p === "transcribing" && store().setState("transcribing"),
       onFinal: (t) => {
+        duckForListening(false);
         store().setPartial("");
         if (t && wake.armed && !opts.forConfirmation) {
           // Hands-free: only lines that start with a wake word ("Hey Tony…") count.
@@ -171,6 +180,7 @@ export function startListening(opts: { forConfirmation?: boolean } = {}) {
         rearmWake();
       },
       onError: (e) => {
+        duckForListening(false);
         const p = store().pending;
         store().setError(e);
         if (p) store().setState("confirming"); // keep the card; tap still works
@@ -188,7 +198,8 @@ export function finishListening() {
 /** Esc / close: stop everything. A pending action is cancelled (fail closed). */
 export function stopVoice() {
   convo.active = false;
-  stt?.abort();
+  stt?.abort(); // abort() never fires onFinal/onError, so restore ducking explicitly here.
+  duckForListening(false);
   tts.cancel();
   if (store().pending) return reject("stopped");
   store().setState("idle");
@@ -515,15 +526,19 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     if (channel === "voice") {
       store().setState("speaking");
       startBargeIn();
-      await say(notice, { agent: "general" });
+      // Fire-and-forget: the actual dispatch below doesn't need to wait for this courtesy
+      // notice to finish playing (it used to `await` it, stacking its TTS time in front of
+      // every delegated turn's real latency). `say()` cancels this mid-sentence on its own
+      // if the real answer's first chunk is ready sooner, which reads as the assistant
+      // getting straight to the point rather than anything breaking.
+      void say(notice, { agent: "general" });
     }
   }
 
-  let context = await liveContext();
-  if (role === "librarian") {
-    const hits = await cc.search(plan.utterance, [], 5).catch(() => null);
-    if (hits?.results.length) context += `\nLocal vault matches (cite them):\n${hits.results.map((r, i) => `[${i + 1}] (${r.collection}) ${r.snippet.replace(/\s+/g, " ")}`).join("\n")}`;
-  }
+  // Independent I/O — run concurrently instead of one after the other.
+  const [context0, librarianHits] = await Promise.all([liveContext(), role === "librarian" ? cc.search(plan.utterance, [], 5).catch(() => null) : Promise.resolve(null)]);
+  let context = context0;
+  if (librarianHits?.results.length) context += `\nLocal vault matches (cite them):\n${librarianHits.results.map((r, i) => `[${i + 1}] (${r.collection}) ${r.snippet.replace(/\s+/g, " ")}`).join("\n")}`;
   const finalFromFor = (agent: string) => (agent === "general" ? "os" : agent);
 
   // Stream the answer token-by-token into a live bubble. Two sources feed this
@@ -700,7 +715,7 @@ function rearmWake() {
   if (!wake.armed || !stt) return;
   wake.timer = setTimeout(() => {
     const s = store().state;
-    if (wake.armed && (s === "idle" || s === "error") && !store().pending) startListening();
+    if (wake.armed && (s === "idle" || s === "error") && !store().pending) startListening({ silent: true });
     else if (wake.armed) rearmWake();
   }, 600);
 }
@@ -712,8 +727,13 @@ export function setWakeMode(on: boolean) {
   if (wake.armed) rearmWake();
   else {
     clearTimeout(wake.timer);
-    if (store().state === "listening") stt?.abort();
-    store().setState("idle");
+    // Hard-stop regardless of the current state: a barge-in or post-reply follow-up listen
+    // (startBargeIn / afterVoiceReply) opens the mic without ever setting state to "listening",
+    // so checking the state before aborting used to leave the mic running after this toggle.
+    convo.active = false;
+    stt?.abort();
+    duckForListening(false);
+    if (!store().pending) store().setState("idle");
   }
 }
 
