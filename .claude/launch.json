@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "command-center-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "command center", "run", "dev"],
+      "port": 1420
+    }
+  ]
+}

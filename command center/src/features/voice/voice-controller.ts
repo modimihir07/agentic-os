@@ -1,6 +1,6 @@
 import { SUB_AGENTS, type AgentRole } from "@/features/dispatcher/agents";
 import { roleLabel } from "@/features/dispatcher/roles";
-import { DEFAULT_ROUTING_CONFIG, resolve as resolveRoute, type Route } from "@/features/dispatcher/router";
+import { DEFAULT_ROUTING_CONFIG, directTool, resolve as resolveRoute, type Route } from "@/features/dispatcher/router";
 import { execute } from "@/features/orchestrator/execute";
 import { parseConfirmation, planIntent, stripWake, type ActionPlan } from "@/features/orchestrator/plan";
 import { handleLocalIntent } from "@/features/reminders/intents";
@@ -22,12 +22,14 @@ import { useNav } from "@/stores/nav";
 import { useSettings } from "@/stores/settings";
 import { audioContext, createEngines, type SpeakOpts } from "./engines";
 import { nextStreamChunk } from "./tts-text";
+import { introLine } from "./handoff";
 import { useVoice, type Channel, type ThreadId, type VoiceTurn } from "./voice-store";
 import { toggleAction, type TurnOrigin } from "./voice-status";
 import { wakeCommand } from "./wake-word";
 import { parseReflex, type Reflex, type ReflexCtx } from "./reflex-parse";
 import { bargeSensitivityOffset, detectRoute, detectedRoute, effectiveRoute } from "./audio-route";
 import { cutMedia, holdMedia, releaseMedia, type HeldMedia } from "./media-hold";
+import { duckOnSpeech, musicPlayingHere, restoreAfterPause, restoreDuck, scheduleRestore, settleCommand, settleNoise } from "./spotify-duck";
 
 /**
  * Conversation state machine (voice-first; text uses the same path):
@@ -159,6 +161,7 @@ function speechHandlers() {
       if (p === "speech") {
         heardSpeech = true;
         setCueDuck("user", true);
+        duckOnSpeech();
       }
       if (p === "speech" && convo.active) {
         // Barge-in: you talked over Tony (or over a turn still thinking). Duck, don't stop:
@@ -170,6 +173,7 @@ function speechHandlers() {
       }
       if (p === "transcribing") {
         setCueDuck("user", false);
+        scheduleRestore();
         // Over a ducked reply the orb keeps showing him speaking until the decision.
         if (!convo.ducked) store().setState("transcribing");
       }
@@ -191,8 +195,9 @@ function speechHandlers() {
           cancelStreams();
           supersedeTurn();
         }
-        return void handleInput(t, { channel: "voice" });
+        return settleCommand(handleInput(t, { channel: "voice" }));
       }
+      settleNoise();
       convo.barged = false;
       tts.duck?.(false);
       if (sayDepth > 0 || activeStreams.size > 0) {
@@ -207,6 +212,7 @@ function speechHandlers() {
     onError: (e: string) => {
       clientTrace.sttError(voiceCaps.sttName, e);
       setCueDuck("user", false);
+      restoreDuck();
       convo.active = false;
       store().setError(e);
     },
@@ -236,6 +242,7 @@ function endIdleBargeIn() {
   convo.active = false;
   stt?.abort();
   setCueDuck("user", false);
+  restoreDuck();
 }
 
 /** Reply finished: hand over to a short follow-up window (or back to rest). `gen` is the turn's `micGen`. */
@@ -272,6 +279,7 @@ function hardStopMic() {
   convo.ducked = false;
   stt?.abort(); // abort() never fires onFinal/onError, so release ducking explicitly here.
   setCueDuck("user", false);
+  restoreDuck(); // a cut's own restore (after the pause lands) is deferred and left alone
   store().setPartial("");
   store().setState(store().pending ? "confirming" : "idle");
   if (wake.armed) rearmWake();
@@ -312,9 +320,11 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
         if (p === "speech") {
           heardSpeech = true;
           setCueDuck("user", true);
+          duckOnSpeech(passiveListen);
         }
         if (p === "transcribing") {
           setCueDuck("user", false);
+          scheduleRestore();
           store().setState("transcribing");
         }
       },
@@ -326,10 +336,12 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
           // Phase 2 reflexes, before wake-word handling. A yes/no listen only takes "cut it"
           // (it cancels the card). A passive hands-free listen hears the room, so there only a
           // cut (or a hold over a busy turn) acts without the wake word; "Tony, take it ease…"
-          // still locks a thought (checked on the command text below).
+          // still locks a thought (checked on the command text below). A bare "stop" heard in
+          // the room is too common to pause the music on: it needs the wake word ("Tony, stop").
           const r = parseReflex(t, reflexCtx());
           const bare = wakeListen && useSettings.getState().wakeRequire;
-          if (r && (opts.forConfirmation ? r.kind === "cut" : !bare || r.kind === "cut" || reflexCtx().busy)) return applyReflex(r);
+          const roomCut = r?.kind === "cut" && !r.needsAddress;
+          if (r && (opts.forConfirmation ? r.kind === "cut" : !bare || roomCut || reflexCtx().busy)) return applyReflex(r);
         }
         if (t && wakeListen) {
           // Hands-free: only lines that start with a wake word ("Hey Tony…") count.
@@ -339,7 +351,8 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
           if (cmdText === null) {
             // People shout "stop" / "turn it down" at a cue without the wake word.
             const intent = cueRecentlyActive() ? parseOsLine(t) : null;
-            if (intent?.kind === "gabagool-off" || intent?.kind === "cue-volume") return void handleInput(t, { channel: "voice", origin }).finally(rearmWake);
+            if (intent?.kind === "gabagool-off" || intent?.kind === "cue-volume") return settleCommand(handleInput(t, { channel: "voice", origin }).finally(rearmWake));
+            settleNoise(); // room talk without the wake word
             store().setState("idle");
             return void rearmWake();
           }
@@ -348,16 +361,18 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
             if (wake.armed) startListening({ origin: "wake" });
             return;
           }
-          return void handleInput(cmdText, { channel: "voice", origin }).finally(rearmWake);
+          return settleCommand(handleInput(cmdText, { channel: "voice", origin }).finally(rearmWake));
         }
-        if (t) return void handleInput(t, { channel: "voice", origin });
+        if (t) return settleCommand(handleInput(t, { channel: "voice", origin }));
         // Silence: back to the right resting state.
+        settleNoise();
         store().setState(store().pending ? "confirming" : "idle");
         rearmWake();
       },
       onError: (e) => {
         clientTrace.sttError(voiceCaps.sttName, e);
         setCueDuck("user", false);
+        restoreDuck();
         const p = store().pending;
         store().setError(e);
         if (p) store().setState("confirming"); // keep the card; tap still works
@@ -408,11 +423,15 @@ export function toggleListening() {
 // and the OS turn (read-only → an AnythingLLM sub-agent). A Named route
 // always wins, even over the tab you're on; a Domain route only overrides
 // the tab while you're in Auto-route; otherwise the tab you're on wins
-// ("Tab"); with nothing to go on at all, it's Tony ("Default").
+// ("Tab"); with nothing to go on at all, it's Tony ("Default"). A live-tool read
+// question ("any WhatsApp updates?", weather, inbox, now playing) is Tony's own
+// tool path ("Direct") on any tab — only a Named delegation beats it.
 function routeFor(utterance: string, thread: ThreadId, routingCfg: RoutingConfig): Route & { role: AgentRole } {
   const det = resolveRoute(utterance, routingCfg);
   const onTab = thread !== "auto";
   if (det.kind === "Named" && det.role) return { ...det, role: det.role as AgentRole };
+  const direct = directTool(utterance);
+  if (direct) return { ...det, role: "general", kind: "Direct", reason: `live ${direct} tool` };
   if (det.kind === "Domain" && det.role && !onTab) return { ...det, role: det.role as AgentRole };
   if (onTab) return { ...det, role: thread as AgentRole, kind: "Tab", reason: "current tab" };
   return { ...det, role: "general" };
@@ -626,6 +645,7 @@ function abortConfirmListen() {
   stt?.abort();
   heardSpeech = false;
   setCueDuck("user", false);
+  restoreDuck();
 }
 
 /** The ONLY path by which a mutating plan reaches an executor. */
@@ -837,6 +857,14 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     tts.prefetch?.(body, { agent });
     speakQ = speakQ.then(() => sayLive(body, { agent }));
   };
+  // Explicit-tab voice turn: Tony introduces the agent once, right before its first spoken words
+  // (never for Tony's own or direct-tool turns: role is "general" there).
+  const tabIntro = channel === "voice" && explicit && role !== "general" && useSettings.getState().routing.announcerHandoff;
+  const introOnce = (agent: string) => {
+    if (!tabIntro || agent !== role || introduced.has(agent) || !isLive()) return;
+    introduced.add(agent);
+    speakQ = speakQ.then(() => sayLive(introLine([agent]), { agent: "general", cache: true }));
+  };
   if (handoff && isLive() && (routed.kind === "Named" || routed.kind === "Domain")) {
     introduced.add(role);
     store().setState("speaking");
@@ -864,6 +892,7 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
           store().setState("speaking");
           startBargeIn();
         }
+        introOnce(streamAgent);
         speakQ = speakQ.then(() => sayLive(chunk, { agent: streamAgent, previousText }));
       }
     }
@@ -973,6 +1002,8 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     } else {
       store().setState("speaking");
       startBargeIn();
+      introOnce(voiceAgent);
+      await speakQ;
       await say(r.answer, { agent: voiceAgent, traceId });
     }
     return afterVoiceReply(gen);
@@ -1071,6 +1102,7 @@ export function holdWake(on: boolean) {
       passiveListen = false;
       stt?.abort(); // fires no handlers
       setCueDuck("user", false);
+      restoreDuck();
       store().setPartial("");
       store().setState("idle");
     }
@@ -1141,8 +1173,10 @@ function reflexCtx(): ReflexCtx {
   const s = store().state;
   const busy = sayDepth > 0 || activeStreams.size > 0 || s === "thinking" || s === "speaking";
   // Through open speakers his own "oh" can reach the mic; a paused (held) reply is silent.
+  // So can a lyric from Spotify playing on this PC (ducked, still audible; a hold paused it).
   const audible = sayDepth > 0 && !hold.active;
-  return { busy, holding: hold.active, ttsAudible: currentRoute() === "speakers" && audible };
+  const speakers = currentRoute() === "speakers";
+  return { busy, holding: hold.active, ttsAudible: speakers && audible, musicAudible: speakers && !hold.active && musicPlayingHere() };
 }
 
 function applyReflex(r: NonNullable<Reflex>) {
@@ -1154,8 +1188,10 @@ function applyReflex(r: NonNullable<Reflex>) {
     case "hold":
       return enterHold(r.rest);
     case "resume":
+      restoreDuck();
       return resumeHold();
     case "submit":
+      restoreDuck();
       return submitHold(r.rest);
   }
 }
@@ -1183,7 +1219,7 @@ export function killTurn() {
   if (hold.active) clearHold(); // whatever the hold paused stays stopped
   tts.cancel();
   releaseTtsDuck();
-  cutMedia();
+  restoreAfterPause(cutMedia()); // the speech duck comes back only once Spotify is paused
   if (store().pending) reject("cut", { silent: true });
   hardStopMic(); // micGen++ silences anything still thinking/streaming here; idle; re-arms hands-free
   void playCutCue();
@@ -1219,6 +1255,7 @@ function enterHold(rest: string) {
     tts.pause?.();
     tts.duck?.(false);
     hold.media = holdMedia();
+    restoreAfterPause(hold.media); // un-duck Spotify once paused, so a resume isn't at the duck level
     store().setHeld([]); // before setState: the store keeps "holding" while `held` is set
     store().setState("holding");
   }
@@ -1362,12 +1399,6 @@ function holdTimeout() {
 function endHold() {
   releaseHeldMedia();
   clearHold();
-}
-
-/** Announcer handoff intro, Tony's voice: "Booking Desk, you're up." / "Booking Desk, then Librarian." */
-function introLine(roles: string[]): string {
-  const names = roles.map((r) => roleLabel(r as AgentRole));
-  return names.length === 1 ? `${names[0]}, you're up.` : `${names.join(", then ")}.`;
 }
 
 /** `os-agent-reply` (agents.rs): a delegated agent's answer the moment it lands. Listened to

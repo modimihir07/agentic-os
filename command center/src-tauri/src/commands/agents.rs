@@ -407,7 +407,8 @@ fn router_tool_line(t: &super::mcp::ToolInfo) -> String {
 // as part of its task/context, regardless of what it goes on to say.
 
 /// "last N (whatsapp) messages/texts/chats", "check my whatsapp", "messages
-/// from X" → `whatsapp.list_messages`. Deterministic (no LLM round trip) so
+/// from X", "any WhatsApp updates", "what's new / anything on WhatsApp (today)"
+/// → `whatsapp.list_messages`. Deterministic (no LLM round trip) so
 /// the single most common refusal case is instant and never misrouted by the
 /// JSON router.
 fn whatsapp_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
@@ -416,11 +417,13 @@ fn whatsapp_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(Stri
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     let re = RE.get_or_init(|| {
         regex::Regex::new(
-            r"(?i)\b(?:last|recent)\s+(\d{1,2})?\s*(?:whatsapp\s+)?(?:messages?|texts?|chats?)\b|\bwhatsapp\s+(?:messages?|texts?|chats?)\b|\bcheck\s+my\s+whatsapp\b|\bmy\s+(?:last\s+)?(\d{1,2})?\s*whatsapp\b|\bmessages?\s+(?:with|from)\s+[a-z]",
+            r"(?i)\b(?:last|recent)\s+(\d{1,2})?\s*(?:whatsapp\s+)?(?:messages?|texts?|chats?)\b|\bwhatsapp\s+(?:messages?|texts?|chats?)\b|\bcheck\s+my\s+whatsapp\b|\bmy\s+(?:last\s+)?(\d{1,2})?\s*whatsapp\b|\bmessages?\s+(?:with|from)\s+[a-z]|\bwhatsapp\s+updates?\b|\b(?:any|new|latest)\s+(?:updates?|messages?)\s+(?:on|from|in)\s+whatsapp\b|\bwhats\s+new\s+on\s+whatsapp\b|\banything\s+(?:new\s+)?(?:on|from|in)\s+whatsapp\b",
         )
         .unwrap()
     });
-    if !re.is_match(&norm) {
+    // Any other WhatsApp read question the direct-tool rule recognises ("who messaged me on
+    // WhatsApp") lists the latest messages too; a bare "what's up" never does.
+    if !re.is_match(&norm) && super::routing::direct_tool(original) != Some("whatsapp") {
         return None;
     }
     let n: u64 = re.captures(&norm).and_then(|c| c.get(1).or_else(|| c.get(2))).and_then(|m| m.as_str().parse().ok()).unwrap_or(10);
@@ -454,6 +457,28 @@ fn time_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, 
     }
     let norm = super::routing::normalize(original);
     (norm.contains("what time") || norm.contains("current time") || norm.contains("whats the date") || norm.contains("what date")).then(|| ("time.now".to_string(), json!({})))
+}
+
+/// "what's the weather in Lisbon", "will it rain tomorrow" → `weather.current`, without a
+/// model round trip. The place is a capitalised name after in / for / at, else home (`{}`).
+fn weather_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+    if !tools.iter().any(|t| t.name == "weather.current") || super::routing::direct_tool(original) != Some("weather") {
+        return None;
+    }
+    static PLACE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    const TRAILING: [&str; 9] = ["today", "tomorrow", "tonight", "now", "right", "later", "this", "week", "weekend"];
+    let place = PLACE.get_or_init(|| regex::Regex::new(r"\b(?:in|for|at)\s+([A-Z][\w .'\-]{1,40})").unwrap()).captures(original).map(|c| {
+        let mut words: Vec<&str> = c[1].split_whitespace().collect();
+        while words.last().is_some_and(|w| TRAILING.contains(&w.to_ascii_lowercase().as_str())) {
+            words.pop();
+        }
+        words.join(" ")
+    });
+    let args = match place.filter(|p| !p.is_empty() && !p.eq_ignore_ascii_case("home")) {
+        Some(p) => json!({ "place": p }),
+        None => json!({}),
+    };
+    Some(("weather.current".to_string(), args))
 }
 
 /// The request names email at all (`norm` is `routing::normalize`d).
@@ -578,6 +603,18 @@ fn pending_from(err: &str, name: &str, args: &Value, ask_cards: bool) -> Option<
     Some(PendingSpotifyCall { name: name.to_string(), summary: super::spotify_intent::summary_for(name, &args), args, required })
 }
 
+/// Fixed reason when WhatsApp is on but none of its tools answered.
+const WHATSAPP_DOWN: &str = "the WhatsApp bridge isn't answering — start whatsapp-bridge (the Go bridge), then check WhatsApp Bridge in Settings → Skills & MCP Library";
+
+/// Tool shapes a planner needs to recognise a request for a server that listed nothing:
+/// the built-in listing, or WhatsApp's read tool (it is an external stdio server).
+fn planner_tools(id: &str) -> Vec<super::mcp::ToolInfo> {
+    match id {
+        "whatsapp" => vec![super::mcp::ToolInfo { name: "whatsapp.list_messages".into(), description: String::new(), server: id.into(), args: vec!["limit".into()] }],
+        _ => super::mcp::builtin_tools(id),
+    }
+}
+
 /// Where a prefetched tool call came from.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum PlanSource {
@@ -592,7 +629,11 @@ fn verbatim_answer(source: PlanSource, is_write: bool, reply: &str) -> Option<St
 }
 
 fn deterministic_plan(text: &str, tools: &[super::mcp::ToolInfo], os_name: &str) -> Option<(String, Value)> {
-    gmail_plan(text, tools).or_else(|| whatsapp_plan(text, tools)).or_else(|| spotify_plan(text, tools, os_name)).or_else(|| time_plan(text, tools))
+    gmail_plan(text, tools)
+        .or_else(|| whatsapp_plan(text, tools))
+        .or_else(|| spotify_plan(text, tools, os_name))
+        .or_else(|| time_plan(text, tools))
+        .or_else(|| weather_plan(text, tools))
 }
 
 /// Text appended to Tony's (or a delegated agent's) prompt: the live tool data,
@@ -887,14 +928,15 @@ async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeStat
         out.spotify_outcome(&name, &args, res.as_deref(), PlanSource::Deterministic);
         return out;
     }
-    // Asked for email / Spotify but that server can't serve it (off / no
+    // Asked for email / Spotify / WhatsApp but that server can't serve it (off / no
     // backend / not connected): say why instead of letting the model invent a refusal.
     type Planner = fn(&str, &[super::mcp::ToolInfo], &str) -> Option<(String, Value)>;
-    let planners: [(&str, Planner); 2] = [("gmail", |t, tools, _| gmail_plan(t, tools)), ("spotify", spotify_plan)];
+    let planners: [(&str, Planner); 3] = [("gmail", |t, tools, _| gmail_plan(t, tools)), ("spotify", spotify_plan), ("whatsapp", |t, tools, _| whatsapp_plan(t, tools))];
     for (id, plan) in planners {
         let granted = cfg.mcps.iter().any(|m| m.id == id && (agent == "general" || m.grants(agent)));
-        if granted && !tools.iter().any(|t| t.server == id) && plan(text, &super::mcp::builtin_tools(id), &cfg.os_name).is_some() {
-            if let Some(reason) = super::mcp::unavailable_reason(state, cfg, id) {
+        if granted && !tools.iter().any(|t| t.server == id) && plan(text, &planner_tools(id), &cfg.os_name).is_some() {
+            // An enabled stdio WhatsApp server that listed nothing is a bridge that isn't running.
+            if let Some(reason) = super::mcp::unavailable_reason(state, cfg, id).or_else(|| (id == "whatsapp").then(|| WHATSAPP_DOWN.to_string())) {
                 out.steps.push(step("tool", "os", id, format!("failed: {reason}"), false, 0));
                 out.failure = Some((id.into(), reason));
                 return out;
@@ -925,7 +967,7 @@ pub struct OsTurnRequest {
     #[serde(default)]
     pub(crate) explicit: bool,
     /// How the caller (the TS resolver) already classified this turn —
-    /// "Named" | "Domain" | "Tab" | "Llm" | "Default". Echoed back on
+    /// "Named" | "Domain" | "Tab" | "Llm" | "Default" | "Direct". Echoed back on
     /// `OsTurnResult` unless the Rust safety net below re-resolves it.
     #[serde(default)]
     pub(crate) route_kind: Option<String>,
@@ -1119,6 +1161,16 @@ async fn os_turn_traced(state: &DispatchState, os: &OsState, bridge: &BridgeStat
                 route_kind = format!("{:?}", r.kind);
                 route_reason = r.reason;
             }
+        }
+    }
+    // Direct live-tool backstop (phone / inbox callers, a stale webview): a WhatsApp / Gmail /
+    // weather / now-playing read question is Tony's own tool path on any tab, never an
+    // AnythingLLM delegation. Only a Named delegation keeps its agent.
+    if route_kind != "Named" {
+        if let Some(d) = super::routing::direct_tool(&text) {
+            role = "general".into();
+            route_kind = "Direct".into();
+            route_reason = format!("live {d} tool");
         }
     }
     // Route kind + target only (the reason can quote the request).
@@ -2001,6 +2053,38 @@ mod tests {
     fn whatsapp_plan_absent_without_the_tool() {
         assert!(whatsapp_plan("check my last 5 whatsapp messages", &[]).is_none());
         assert!(whatsapp_plan("tell me a joke", &whatsapp_tool()).is_none());
+    }
+
+    #[test]
+    fn whatsapp_plan_covers_update_phrasings_but_not_greetings_or_writes() {
+        for t in ["any WhatsApp updates?", "what's new on whats app", "anything on WhatsApp today?", "Hey Tony, any new messages on WhatsApp", "who messaged me on WhatsApp"] {
+            let (name, args) = whatsapp_plan(t, &whatsapp_tool()).unwrap_or_else(|| panic!("{t}"));
+            assert_eq!(name, "whatsapp.list_messages", "{t}");
+            assert_eq!(args["limit"], 10, "{t}");
+        }
+        for t in ["what's up", "reply to Sam on WhatsApp", "send a whatsapp to Maria"] {
+            assert!(whatsapp_plan(t, &whatsapp_tool()).is_none(), "{t}");
+        }
+    }
+
+    #[test]
+    fn weather_plan_reads_place_or_home() {
+        let tools = super::super::mcp::builtin_tools("weather");
+        assert_eq!(weather_plan("what's the weather in Lisbon tomorrow?", &tools), Some(("weather.current".into(), json!({ "place": "Lisbon" }))));
+        assert_eq!(weather_plan("Is it going to rain in New York City today", &tools), Some(("weather.current".into(), json!({ "place": "New York City" }))));
+        assert_eq!(weather_plan("will it rain tomorrow", &tools), Some(("weather.current".into(), json!({}))));
+        assert_eq!(weather_plan("how cold is it outside", &tools), Some(("weather.current".into(), json!({}))));
+        assert!(weather_plan("play purple rain", &tools).is_none());
+        assert!(weather_plan("what's the weather", &[]).is_none());
+        // Chained after the other deterministic planners.
+        assert_eq!(deterministic_plan("weather forecast for Paris", &tools, "Tony").map(|p| p.0).as_deref(), Some("weather.current"));
+    }
+
+    #[test]
+    fn whatsapp_planner_shape_matches_its_requests() {
+        assert!(whatsapp_plan("any WhatsApp updates", &planner_tools("whatsapp")).is_some());
+        let names = |v: Vec<super::super::mcp::ToolInfo>| v.into_iter().map(|t| t.name).collect::<Vec<_>>();
+        assert_eq!(names(planner_tools("gmail")), names(super::super::mcp::builtin_tools("gmail")));
     }
 
     fn spotify_tools() -> Vec<super::super::mcp::ToolInfo> {

@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod alarm;
 pub mod bridge;
 pub mod clihub;
 pub mod devqueue;

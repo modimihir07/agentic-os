@@ -6,7 +6,12 @@ import { norm } from "@/features/cues/gaba";
  * pattern as `wake-word.ts`. Every phrase that shows up in live use goes in the tables
  * below AND in `reflex-parse.test.ts`.
  */
-export type Reflex = { kind: "cut" | "hold" | "resume" | "submit"; rest: string } | null;
+export type Reflex = {
+  kind: "cut" | "hold" | "resume" | "submit";
+  rest: string;
+  /** A bare hard stop ("stop", "shut it off"): a passive hands-free listen acts on it only after the wake word. */
+  needsAddress?: true;
+} | null;
 
 export interface ReflexCtx {
   /** Tony/an agent is speaking OR a turn is thinking/executing. */
@@ -15,10 +20,15 @@ export interface ReflexCtx {
   holding: boolean;
   /** Speakers mode only: TTS is audible right now, so Tony's own "oh" could leak into the mic. */
   ttsAudible?: boolean;
+  /** Speakers mode only: Spotify plays on this PC (ducked, still audible), so a lyric's "oh" could too. */
+  musicAudible?: boolean;
 }
 
 /** Whole-word phrase tables, written as `norm()` produces them ("that's" → "that s"). */
 export const CUT = ["cut it", "cut it out", "cut that", "cutit", "yo tony cut it", "tony cut it", "stop talking", "stop stop"];
+/** Hard stops only as the whole utterance (address words before, politeness after): never a
+ * prefix or a "contains" match, so "don't stop the music" / "stop the timer" stay ordinary lines. */
+export const CUT_STANDALONE = ["stop", "stop it", "shut it off", "shut it down"];
 export const HOLD_MULTI = [
   "take it ease", "take it easy", "take it eas", "take it ees", "take it knees", "take at ease", "take it is",
   "madone", "madonna", "ma donna", "my donna", "mad one",
@@ -38,6 +48,7 @@ const TAIL = new Set(["please", "tony", "now", "then", "yeah", "man"]);
 const toks = (s: string) => (s ? s.split(" ") : []);
 const PHRASES = (list: string[]) => list.map(toks).sort((a, b) => b.length - a.length);
 const T_CUT = PHRASES(CUT);
+const T_CUT_STANDALONE = PHRASES(CUT_STANDALONE);
 const T_HOLD = PHRASES(HOLD_MULTI);
 const T_RESUME = PHRASES(RESUME);
 const T_SUBMIT = PHRASES(SUBMIT);
@@ -86,6 +97,7 @@ export function parseReflex(text: string, ctx: ReflexCtx): Reflex {
   const lead = leadCount(w);
   const cutLen = prefixLen(w, T_CUT, lead);
   if (cutLen) return { kind: "cut", rest: restAfter(text, lead + cutLen) };
+  if (standalone(w, T_CUT_STANDALONE, lead)) return { kind: "cut", rest: "", needsAddress: true };
 
   // 4. Resume / submit only mean something while holding.
   if (ctx.holding) {
@@ -102,8 +114,8 @@ export function parseReflex(text: string, ctx: ReflexCtx): Reflex {
   if (hold) return { kind: "hold", rest: restAfter(text, lead + hold) };
 
   // 2. Single-syllable holds: only over a busy/held turn, only as the whole line (repeats ok),
-  //    and never while Tony is audible through speakers (his own "oh" can leak into the mic).
-  if ((ctx.busy || ctx.holding) && !ctx.ttsAudible && w.every((x) => SINGLE.has(x))) return { kind: "hold", rest: "" };
+  //    and never while Tony or music is audible through speakers (an "oh" can leak into the mic).
+  if ((ctx.busy || ctx.holding) && !ctx.ttsAudible && !ctx.musicAudible && w.every((x) => SINGLE.has(x))) return { kind: "hold", rest: "" };
 
   return null;
 }

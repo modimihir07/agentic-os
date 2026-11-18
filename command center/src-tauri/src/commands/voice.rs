@@ -319,15 +319,37 @@ pub async fn tts_voice_upload(state: State<'_, DispatchState>, request: Request<
     Ok(stem)
 }
 
-/// The roster entry to speak `agent` with: that agent's own entry, else
-/// Tony's ("general"), else `None`. Only consulted when `agent` is actually
-/// named — a call that never identifies a speaker (a cue clip's own voice, a
-/// Settings preview) skips the roster entirely and keeps using the single
+/// Built-in Kokoro voice a sub-agent speaks with when the roster has no row for it, so a
+/// handoff ("Here's Ops.") never answers in Tony's own voice. Runtime only: providers.json
+/// is never rewritten. Mirrored by `DEFAULT_AGENT_KOKORO` in VoiceSettings.tsx.
+pub(crate) fn default_agent_voice(role: &str) -> Option<&'static str> {
+    match role {
+        "booking" => Some("am_michael"),
+        "prompter" => Some("bm_george"),
+        "coder" => Some("am_adam"),
+        "designer" => Some("af_nicole"),
+        "librarian" => Some("bf_emma"),
+        "ops" => Some("am_eric"),
+        _ => None,
+    }
+}
+
+/// The roster entry to speak `agent` with: that agent's own entry; else, once the
+/// roster is in use and Kokoro is configured (`kokoro`), the agent's built-in Kokoro
+/// default (auto-speak off); else Tony's ("general"); else `None`. Only consulted when
+/// `agent` is actually named — a call that never identifies a speaker (a cue clip's own
+/// voice, a Settings preview) skips the roster entirely and keeps using the single
 /// global `policy.tts` provider, exactly as before Part 3's roster existed.
 /// `agent` is already canonicalized ("tony" → "general") by the caller.
-fn roster_entry_for<'a>(agent_voices: &'a std::collections::BTreeMap<String, AgentVoice>, agent: Option<&str>) -> Option<&'a AgentVoice> {
+fn roster_entry_for(agent_voices: &std::collections::BTreeMap<String, AgentVoice>, agent: Option<&str>, kokoro: bool) -> Option<AgentVoice> {
     let agent = agent?;
-    agent_voices.get(agent).or_else(|| agent_voices.get("general"))
+    if let Some(own) = agent_voices.get(agent) {
+        return Some(own.clone());
+    }
+    if let Some(voice) = default_agent_voice(agent).filter(|_| kokoro && !agent_voices.is_empty()) {
+        return Some(AgentVoice { engine: "kokoro".into(), voice: Some(voice.into()), model: None, auto_speak: false });
+    }
+    agent_voices.get("general").cloned()
 }
 
 /// 1–2000 *characters* (was bytes — a non-ASCII reply under the character
@@ -365,7 +387,8 @@ pub async fn tts_synthesize(
     // ("general"), else nothing (today's single `policy.tts` provider).
     let cfg = state.snapshot();
     let role = agent.as_deref().map(canon_role);
-    let roster = roster_entry_for(&cfg.agent_voices, role.as_deref()).cloned();
+    let kokoro = cfg.providers.iter().any(|x| x.kind == Kind::Tts && x.engine.as_deref() == Some("kokoro"));
+    let roster = roster_entry_for(&cfg.agent_voices, role.as_deref(), kokoro);
     let (p, roster_voice, roster_model) = match &roster {
         Some(av) => match cfg.providers.iter().find(|x| x.kind == Kind::Tts && x.engine.as_deref() == Some(av.engine.as_str())).cloned() {
             Some(b) => (b, av.voice.clone(), av.model.clone()),
@@ -502,7 +525,7 @@ mod part3_tests {
         let mut m = BTreeMap::new();
         m.insert("general".into(), av("elevenlabs", "tony-voice"));
         m.insert("booking".into(), av("kokoro", "booking-voice"));
-        let got = roster_entry_for(&m, Some("booking")).unwrap();
+        let got = roster_entry_for(&m, Some("booking"), true).unwrap();
         assert_eq!(got.voice.as_deref(), Some("booking-voice"));
     }
 
@@ -510,9 +533,31 @@ mod part3_tests {
     fn roster_entry_falls_back_to_general() {
         let mut m = BTreeMap::new();
         m.insert("general".into(), av("elevenlabs", "tony-voice"));
-        // "coder" has no entry of its own.
-        let got = roster_entry_for(&m, Some("coder")).unwrap();
+        // "coder" has no entry of its own and Kokoro isn't configured.
+        let got = roster_entry_for(&m, Some("coder"), false).unwrap();
         assert_eq!(got.voice.as_deref(), Some("tony-voice"));
+        // An unknown speaker always falls back to Tony.
+        assert_eq!(roster_entry_for(&m, Some("overseer"), true).unwrap().voice.as_deref(), Some("tony-voice"));
+    }
+
+    #[test]
+    fn roster_gaps_get_distinct_kokoro_defaults_at_runtime() {
+        let mut m = BTreeMap::new();
+        m.insert("general".into(), av("elevenlabs", "tony-voice"));
+        m.insert("booking".into(), av("elevenlabs", "booking-voice"));
+        let ops = roster_entry_for(&m, Some("ops"), true).unwrap();
+        let lib = roster_entry_for(&m, Some("librarian"), true).unwrap();
+        assert_eq!((ops.engine.as_str(), ops.auto_speak), ("kokoro", false));
+        assert_eq!(lib.engine, "kokoro");
+        assert_ne!(ops.voice, lib.voice);
+        // The user's own choices win, and Tony never gets a default.
+        assert_eq!(roster_entry_for(&m, Some("booking"), true).unwrap().voice.as_deref(), Some("booking-voice"));
+        assert_eq!(roster_entry_for(&m, Some("general"), true).unwrap().voice.as_deref(), Some("tony-voice"));
+        // Every sub-agent default is distinct.
+        let ids: std::collections::BTreeSet<_> = ["booking", "prompter", "coder", "designer", "librarian", "ops"].iter().filter_map(|r| default_agent_voice(r)).collect();
+        assert_eq!(ids.len(), 6);
+        // An empty roster (per-agent voices never set up) keeps the single policy voice.
+        assert!(roster_entry_for(&BTreeMap::new(), Some("ops"), true).is_none());
     }
 
     #[test]
@@ -522,14 +567,14 @@ mod part3_tests {
         // kick in, so `policy.tts` keeps deciding exactly as before Part 3.
         let mut m = BTreeMap::new();
         m.insert("general".into(), av("kokoro", "tony-voice"));
-        assert!(roster_entry_for(&m, None).is_none());
+        assert!(roster_entry_for(&m, None, true).is_none());
     }
 
     #[test]
     fn roster_entry_none_when_roster_is_empty() {
         let m: BTreeMap<String, AgentVoice> = BTreeMap::new();
-        assert!(roster_entry_for(&m, Some("general")).is_none());
-        assert!(roster_entry_for(&m, None).is_none());
+        assert!(roster_entry_for(&m, Some("general"), true).is_none());
+        assert!(roster_entry_for(&m, None, true).is_none());
     }
 
     #[test]

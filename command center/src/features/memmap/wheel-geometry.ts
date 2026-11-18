@@ -1,6 +1,6 @@
 /**
- * One 18-inch E46 wheel as pure line geometry (no three.js): a 225/40R18 tyre with a real
- * cross-section (bead, sidewall bulge, shoulder, tread and grooves), a multi-spoke alloy
+ * One 18-inch E46 wheel as pure line geometry (no three.js): a 225/40R18 tyre (or the
+ * staggered rear 255/35R18, same diameter, wider section) with a real cross-section (bead, sidewall bulge, shoulder, tread and grooves), a multi-spoke alloy
  * (lip, barrel, inner flange, five twin-spoke pairs dished toward the hub, centre cap and
  * five lug bolts), and the brake behind the spokes (vented rotor with its hat, and a
  * caliper at the trailing edge). Metres, same axes as holo-geometry: the wheel spins
@@ -10,6 +10,7 @@
 export type WV3 = readonly [number, number, number];
 
 export const WHEEL = {
+  size: "225/40",
   /** 225/40R18: 457 mm rim + 2 × 90 mm sidewall → 0.637 m diameter. */
   tyreR: 0.316,
   /** 18-inch rim lip. */
@@ -23,7 +24,14 @@ export const WHEEL = {
   n: 36,
 } as const;
 
-/** Tyre cross-section (radius, offset from the wheel's centre plane, + = outboard). */
+/** The staggered rear tyre, 255/35R18: 457 mm + 2 × 89 mm → 0.636 m, so the same radius, ~13% wider. */
+export const REAR_TYRE = {
+  size: "255/35",
+  tyreR: WHEEL.tyreR,
+  halfWidth: 0.1175,
+} as const;
+
+/** Tyre cross-section for the 225 section (radius, offset from the wheel's centre plane, + = outboard); scaled for wider tyres. */
 const TYRE_SECTION: readonly (readonly [number, number])[] = [
   [0.232, 0.104],
   [0.27, 0.117],
@@ -46,6 +54,10 @@ export interface WheelSpec {
   side: 1 | -1;
   /** Where the caliper sits, in degrees about z (180 = trailing edge for a car facing +x). */
   caliperDeg?: number;
+  /** Half the tyre's section width (default WHEEL.halfWidth); the rim face moves out with it. */
+  halfWidth?: number;
+  /** Twin-spoke pairs (default WHEEL.spokePairs). */
+  spokePairs?: number;
 }
 
 export interface WheelLines {
@@ -63,33 +75,35 @@ function loop(pts: readonly WV3[], out: number[]) {
 }
 
 /** The wheel's segment lists, grouped for colouring (tyre, rim, brake). */
-export function wheelGeometry({ cx, cy, zc, side, caliperDeg = 180 }: WheelSpec): WheelLines {
+export function wheelGeometry({ cx, cy, zc, side, caliperDeg = 180, halfWidth = WHEEL.halfWidth, spokePairs = WHEEL.spokePairs }: WheelSpec): WheelLines {
   const out: WheelLines = { tyre: [], rim: [], brake: [] };
   const n: number = WHEEL.n;
   const at = (r: number, a: number, dz: number): WV3 => [cx + r * Math.cos(a), cy + r * Math.sin(a), zc + side * dz];
   const circle = (r: number, dz: number, m: number = n) => Array.from({ length: m }, (_, i) => at(r, (i / m) * Math.PI * 2, dz));
+  const wz = halfWidth / WHEEL.halfWidth;
+  const section = TYRE_SECTION.map(([r, dz]) => [r, dz * wz] as const);
 
   // Tyre: a circle per cross-section point, meridians through the section, tread blocks.
-  for (const [r, dz] of TYRE_SECTION) loop(circle(r, dz), out.tyre);
+  for (const [r, dz] of section) loop(circle(r, dz), out.tyre);
   for (let i = 0; i < n; i += n / 9) {
     const a = (i / n) * Math.PI * 2;
-    for (let k = 0; k + 1 < TYRE_SECTION.length; k++) seg(at(TYRE_SECTION[k][0], a, TYRE_SECTION[k][1]), at(TYRE_SECTION[k + 1][0], a, TYRE_SECTION[k + 1][1]), out.tyre);
+    for (let k = 0; k + 1 < section.length; k++) seg(at(section[k][0], a, section[k][1]), at(section[k + 1][0], a, section[k + 1][1]), out.tyre);
   }
   for (let i = 0; i < n; i += 2) {
     const a = ((i + 0.5) / n) * Math.PI * 2;
-    seg(at(WHEEL.tyreR, a, 0.082), at(WHEEL.tyreR, a + 0.05, 0.028), out.tyre);
-    seg(at(WHEEL.tyreR, a, -0.082), at(WHEEL.tyreR, a + 0.05, -0.028), out.tyre);
+    seg(at(WHEEL.tyreR, a, 0.082 * wz), at(WHEEL.tyreR, a + 0.05, 0.028 * wz), out.tyre);
+    seg(at(WHEEL.tyreR, a, -0.082 * wz), at(WHEEL.tyreR, a + 0.05, -0.028 * wz), out.tyre);
   }
 
   // Rim: lip, inner lip step, barrel and inner flange.
-  const face = WHEEL.halfWidth;
+  const face = halfWidth;
   loop(circle(WHEEL.rimR, face + 0.002), out.rim);
   loop(circle(0.215, face - 0.008), out.rim);
   loop(circle(0.205, face - 0.06), out.rim);
   loop(circle(WHEEL.rimR, -face), out.rim);
-  // Five twin-spoke pairs, dished: hub end 35 mm inboard of the lip.
-  for (let k = 0; k < WHEEL.spokePairs; k++) {
-    const ak = Math.PI / 2 + (k / WHEEL.spokePairs) * Math.PI * 2;
+  // Twin-spoke pairs, dished: hub end 35 mm inboard of the lip.
+  for (let k = 0; k < spokePairs; k++) {
+    const ak = Math.PI / 2 + (k / spokePairs) * Math.PI * 2;
     for (const sgn of [-1, 1]) {
       const h = at(WHEEL.hubR, ak + sgn * 0.13, face - 0.035);
       const r = at(0.212, ak + sgn * 0.21, face - 0.008);

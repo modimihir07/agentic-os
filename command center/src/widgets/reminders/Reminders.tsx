@@ -5,6 +5,7 @@ import { useCollection, useNow, type Item } from "@/lib/cc-api";
 import { cmd, isTauri } from "@/lib/platform";
 import { countdown, formatWhen } from "@/features/reminders/when";
 import { handleLocalIntent } from "@/features/reminders/intents";
+import { cancelOsAlarm } from "@/features/reminders/os-alarm";
 import type { Reminder } from "@/features/reminders/types";
 import { requestConfirmation } from "@/features/voice/voice-controller";
 import { heuristicPlan } from "@/features/orchestrator/plan";
@@ -27,7 +28,7 @@ export default function Reminders() {
     const t = text.trim();
     if (!t) return;
     // Plain text ("Dentist on Friday at 3") becomes "remind me to Dentist on …".
-    const phrased = /^(remind|set|alarm|wake|countdown|start|add|make)\b/i.test(t) ? t : `remind me to ${t}`;
+    const phrased = /^(remind|set|alarm|wake|countdown|start|add|make|timer)\b|^[\w.]+[- ]?(minutes?|mins?|seconds?|secs?|hours?|hrs?) timer\b/i.test(t) ? t : `remind me to ${t}`;
     const res = await handleLocalIntent(phrased).catch((e) => ({ reply: String(e), meta: "" }));
     setMsg(res?.reply ?? null);
     if (res?.meta) setText("");
@@ -49,7 +50,10 @@ export default function Reminders() {
       {error && <p className="mb-2 text-[11px] text-alert">Gateway: {error}</p>}
       <ul className="min-h-0 flex-1 space-y-1.5 overflow-y-auto">
         {upcoming.map((r) => (
-          <Row key={r.id} r={r} now={now} canPush={canPush && r.source !== "gcal" && !r.gcalId} onRemove={() => void remove(r.id)} onRepeat={(repeat) => void update(r.id, { repeat })} />
+          <Row key={r.id} r={r} now={now} canPush={canPush && r.source !== "gcal" && !r.gcalId} onRemove={() => {
+              void cancelOsAlarm(r.id);
+              void remove(r.id);
+            }} onRepeat={(repeat) => void update(r.id, { repeat })} />
         ))}
         {!upcoming.length && <li className="py-4 text-center text-xs text-ink-3">Nothing scheduled. Say “Hey Tony, remind me to…”.</li>}
       </ul>

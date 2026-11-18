@@ -4,6 +4,7 @@
  *   "in 20 minutes", "in an hour", "in 3 days"
  *   "at 7", "at 7:30pm", "at noon", "tonight", "tomorrow at 9am"
  *   "on friday at 6", "next monday", "on March 14", "on 2026-12-24 at 10"
+ *   timers only (`duration`): "for 10 minutes", "a 10 minute timer"
  *
  * Returns the resolved time and the exact substring it consumed so the
  * caller can strip it from the title.
@@ -44,12 +45,19 @@ function parseClock(s: string): { h: number; m: number; matched: string } | null
   return { h, m, matched: r[0] };
 }
 
-export function parseWhen(text: string, now = new Date()): When | null {
+/** Timers only: "for 10 minutes", "10 minute", "10-minute", "an hour" — no "in" needed. */
+const DURATION_RE =
+  /\b(?:(?:in|for)\s+)?(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty-five|half an?)\s*-?\s*(seconds?|secs?|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)\b(\s+and a half)?/;
+
+/** `duration`: the line is a timer, so a bare length ("for 10 minutes") counts from now. */
+export function parseWhen(text: string, now = new Date(), opts: { duration?: boolean } = {}): When | null {
   const s = text.toLowerCase();
   const matched: string[] = [];
 
   // Relative: "in 20 minutes", "in an hour and a half"
-  const rel = s.match(/\bin\s+(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty-five|half an?)\s*(seconds?|secs?|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)\b(\s+and a half)?/);
+  const rel = opts.duration
+    ? s.match(DURATION_RE)
+    : s.match(/\bin\s+(\d+(?:\.\d+)?|a|an|one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty|forty-five|half an?)\s*(seconds?|secs?|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w)\b(\s+and a half)?/);
   if (rel) {
     const n = rel[1].startsWith("half") ? 0.5 : (WORDNUM[rel[1]] ?? Number(rel[1]));
     const unit = rel[2].replace(/s$/, "");

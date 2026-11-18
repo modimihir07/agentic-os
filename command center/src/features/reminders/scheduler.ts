@@ -3,10 +3,12 @@ import { collections, useCollection } from "@/lib/cc-api";
 import { cmd, isTauri, platform } from "@/lib/platform";
 import { announce } from "@/features/voice/voice-controller";
 import { chime, systemNotify, useToasts } from "./notify";
+import { cancelOsAlarm, localAlarmIds, pruneOsAlarms, ringsOnOs, scheduleOsAlarm } from "./os-alarm";
 import { nextOccurrence, type Reminder } from "./types";
 
 const DEVICE = `${platform}-${(crypto.randomUUID?.() ?? Math.random().toString(36)).slice(0, 6)}`;
 const FIRE_WINDOW_MS = 10 * 60_000; // don't fire stale alarms after a device was offline for hours
+let pruned = false; // Windows alarms are pruned once per app run
 
 /**
  * Mounted once at the app root. Every 10 s it fires due reminders on THIS
@@ -15,7 +17,21 @@ const FIRE_WINDOW_MS = 10 * 60_000; // don't fire stale alarms after a device wa
  * forward. On desktop it also mirrors Google Calendar through n8n.
  */
 export function useReminderScheduler() {
-  const { items } = useCollection<Reminder>("reminders"); // keeps the collection syncing
+  const { items, loaded, error } = useCollection<Reminder>("reminders"); // keeps the collection syncing
+
+  // Once per run, after the first successful load (a failed sync leaves the list empty): drop
+  // Windows alarms whose reminder is gone (also deleted on the phone), fired or dismissed.
+  // Alarms saved while the gateway was down are kept.
+  useEffect(() => {
+    if (!loaded || error || pruned) return;
+    pruned = true;
+    const now = Date.now();
+    const live = collections
+      .snapshot<Reminder>("reminders")
+      .filter((r) => ringsOnOs(r) && !r.dismissed && !r.firedAt && r.dueAt > now)
+      .map((r) => r.id);
+    void pruneOsAlarms([...live, ...localAlarmIds()]);
+  }, [loaded, error]);
 
   useEffect(() => {
     const tick = () => {
@@ -48,6 +64,8 @@ export function useReminderScheduler() {
 
 async function fire(r: Reminder & { id: string }) {
   const next = nextOccurrence(r);
+  // This app rings it: the Windows alarm must not ring too. A repeat moves it to the next time.
+  if (ringsOnOs(r)) void (next ? scheduleOsAlarm(r.id, r.title, next) : cancelOsAlarm(r.id));
   // Claim it first so another device doesn't fire it too.
   await collections.update<Reminder>("reminders", r.id, next ? { dueAt: next, firedAt: null, firedBy: DEVICE } : { firedAt: Date.now(), firedBy: DEVICE });
 
@@ -62,7 +80,9 @@ async function fire(r: Reminder & { id: string }) {
       {
         label: "Snooze 5 min",
         run: () => {
-          void collections.update<Reminder>("reminders", r.id, { dueAt: Date.now() + 5 * 60_000, firedAt: null });
+          const dueAt = Date.now() + 5 * 60_000;
+          void collections.update<Reminder>("reminders", r.id, { dueAt, firedAt: null });
+          if (ringsOnOs(r)) void scheduleOsAlarm(r.id, r.title, dueAt);
           useToasts.getState().dismiss(id);
         },
       },

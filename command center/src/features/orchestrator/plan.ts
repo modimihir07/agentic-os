@@ -1,6 +1,6 @@
 import { cmd, isTauri, type ChatMessage, type WorkflowInfo } from "@/lib/platform";
 import { SUB_AGENTS, type AgentRole } from "@/features/dispatcher/agents";
-import { DEFAULT_ROUTING_CONFIG, resolve as resolveRoute } from "@/features/dispatcher/router";
+import { DEFAULT_ROUTING_CONFIG, directTool, resolve as resolveRoute } from "@/features/dispatcher/router";
 import { extractJson } from "@/features/orchestrator/extract-json";
 import { parseDraftEmail, type DraftParse } from "@/features/orchestrator/draft-email";
 import { isOsControlPhrase } from "@/features/os/os-intent-parse";
@@ -84,8 +84,11 @@ const PLAYBACK = /\b(play(ing)?|pause|resume|skip|next|previous|restart|start|ch
 const LIBRARY_EDIT = /\b(add|save|like|remove|delete|create|follow|unfollow|share|send|post|rename)\b/i;
 const isPlayback = (s: string) => PLAYBACK.test(s) && (!LIBRARY_EDIT.test(s) || /\b(spotify|playlists?|liked songs)\b/i.test(s));
 
+/** "update" as a noun ("any updates?", "give me an update", "update me on…") asks for news, not a change. */
+const UPDATE_NOUN = /\b(?:an?|any|the|latest|status|quick)\s+updates?\b|\bupdate me\b|\bgive me (?:an? )?updates?\b/gi;
+
 function looksMutating(utterance: string): boolean {
-  const s = utterance.trim().replace(filler(), "");
+  const s = utterance.trim().replace(filler(), "").replace(UPDATE_NOUN, " ");
   if (!MUTATING.test(s) && !COMMAND_VERB.test(s)) return false;
   return !(QUESTION.test(s) && !CHAINED.test(s));
 }
@@ -101,6 +104,8 @@ const filler = () => {
   if (fillerCache?.key !== key) fillerCache = { key, re: new RegExp(`^((hey|hi|ok(ay)?|yo|aye|ay|ayy|ayo|oi)\\b)?[\\s,]*(${key})?[\\s,]*(please|can you|could you|would you|i need you to|i want you to|go ahead and)?[\\s,]*`, "i") };
   return fillerCache.re;
 };
+/** "aye tony, can you set a timer…" → "set a timer…": interjection, name and politeness lead dropped. */
+export const stripFiller = (s: string) => s.trim().replace(filler(), "");
 /** Drop a leading wake phrase ("Hey Tony,") but keep the request intact. */
 export const stripWake = (s: string) => s.replace(new RegExp(`^((hey|hi|ok(ay)?|yo|aye|ay|ayy|ayo|oi)\\b)?[\\s,]*(${NAME_ALT()})\\b[\\s,:.!-]*`, "i"), "").trim() || s;
 
@@ -159,7 +164,8 @@ export function heuristicPlan(utterance: string, role?: AgentRole): ActionPlan {
   // "turn off gabagool mode" matches MUTATING's `turn (on|off)`, but the OS-control
   // intent layer (voice-controller.ts) owns these phrases before the plan is ever
   // built — they must never become a mutating plan for a gateway agent.
-  const mutating = looksMutating(utterance) && !isOsControlPhrase(utterance, useSettings.getState().osName) && !isPlayback(utterance);
+  // A live-tool read question ("any WhatsApp updates?") is never an action (`directTool`).
+  const mutating = looksMutating(utterance) && !isOsControlPhrase(utterance, useSettings.getState().osName) && !isPlayback(utterance) && !directTool(utterance);
   const plan: ActionPlan = {
     id: crypto.randomUUID(),
     utterance,

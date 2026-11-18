@@ -126,6 +126,18 @@ export interface NativeCommands {
   /** Run one Spotify tool. Kill switch, server on/read-only, `may_read` (reads) or the MCP tier +
    * destructive gate (writes) apply in Rust. Resolves to a speakable reply (no IDs / URIs). */
   spotify_tool: { args: { name: SpotifyToolName; args?: Record<string, unknown>; approved?: boolean }; result: string };
+  /** Speech ducking (Phase 2): Spotify to `level`% (5–50, default 15) while you talk, only when it plays
+   * on this PC with volume control. False = not ducked; never throws for a refusal, never logged. */
+  spotify_duck: { args: { level?: number }; result: boolean };
+  /** Undo `spotify_duck` unless the volume was changed since. Silent no-op when nothing is ducked. */
+  spotify_unduck: { args: undefined; result: void };
+  /** Windows OS-alarm fallback (alarm.rs): a one-shot Scheduled Task under \AgenticOS\ that shows an alarm
+   * toast at `dueAtMs` even when the app is closed. id: 1–64 [A-Za-z0-9-]; title: 1–120 chars; due: 5 s–366 days ahead. */
+  alarm_os_schedule: { args: { id: string; title: string; dueAtMs: number }; result: void };
+  /** Remove reminder `id`'s OS alarm (no error when there is none). */
+  alarm_os_cancel: { args: { id: string }; result: void };
+  /** Remove every OS alarm whose reminder id isn't in `liveIds` (startup cleanup). */
+  alarm_os_prune: { args: { liveIds: string[] }; result: void };
   skills_scan: { args: undefined; result: SkillInfo[] };
   memory_harvest: { args: { req: { month?: string } }; result: LedgerEntry };
   memory_flush: { args: { req: { month: string; includeLocal?: boolean; approved?: boolean } }; result: string[] };

@@ -37,58 +37,62 @@ export const CAR = {
   roofHalfWidth: 0.7,
   /** Beltline (bottom of the side glass). */
   belt: 0.98,
-  roof: 1.45,
+  /** Roof crown: ~1.415 m stock, ~1.40 m on coilovers. */
+  roof: 1.4,
   frontAxle: 1.44,
   rearAxle: -1.285,
-  wheelRadius: 0.32,
+  /** Wheel-centre height: the tyre's radius (WHEEL.tyreR), so the tyres stand on the ground. */
+  wheelRadius: 0.316,
   /** Wheel centre |z| (track/2). */
   track: 0.74,
 } as const;
 
 /**
- * Centre-line side silhouette, rear bumper bottom → up the tailgate → over the long wagon
- * roof → down the raked windshield and the hood → front bumper bottom. The third value is
- * the old plan-view width factor (kept for compatibility; `planHW` is the real plan shape).
+ * Centre-line side silhouette, rear bumper bottom → up the forward-leaning tailgate panel and
+ * the raked hatch glass → over the spoiler lip and the long wagon roof (drooping ~2.5 cm to
+ * the rear) → down the raked windshield and the hood → front bumper bottom. The third value
+ * is the old plan-view width factor (kept for compatibility; `planHW` is the real plan shape).
  */
 export const UPPER_PROFILE: readonly (readonly [number, number, number])[] = [
-  [-2.17, 0.28, 0.9],
-  [-2.225, 0.36, 0.92],
-  [-2.245, 0.5, 0.95],
-  [-2.24, 0.62, 0.96],
-  [-2.228, 0.76, 0.96],
-  [-2.214, 0.9, 0.96],
-  [-2.2, 0.98, 0.96],
-  [-2.15, 1.12, 0.95],
-  [-2.09, 1.26, 0.95],
-  [-2.03, 1.365, 0.96],
-  [-1.98, 1.415, 0.97],
-  [-1.6, 1.44, 0.99],
-  [-1.2, 1.448, 1],
-  [-0.2, 1.45, 1],
-  [0.15, 1.44, 1],
-  [0.32, 1.415, 1],
-  [0.62, 1.24, 1],
-  [1.02, 1.0, 1],
-  [1.4, 0.93, 0.99],
-  [1.8, 0.86, 0.97],
-  [2.08, 0.78, 0.94],
-  [2.18, 0.73, 0.91],
-  [2.235, 0.66, 0.9],
-  [2.26, 0.55, 0.9],
-  [2.25, 0.42, 0.89],
-  [2.2, 0.3, 0.88],
+  [-2.15, 0.24, 0.9],
+  [-2.22, 0.32, 0.92],
+  [-2.245, 0.45, 0.95],
+  [-2.24, 0.6, 0.96],
+  [-2.225, 0.75, 0.96],
+  [-2.2, 0.88, 0.96],
+  [-2.17, 0.98, 0.96],
+  [-2.11, 1.1, 0.95],
+  [-2.04, 1.21, 0.95],
+  [-1.96, 1.3, 0.96],
+  [-1.9, 1.355, 0.97],
+  [-1.82, 1.375, 0.98],
+  [-1.4, 1.388, 0.99],
+  [-0.8, 1.397, 1],
+  [-0.2, 1.4, 1],
+  [0.12, 1.395, 1],
+  [0.3, 1.375, 1],
+  [0.6, 1.21, 1],
+  [1.04, 0.985, 1],
+  [1.4, 0.905, 0.99],
+  [1.8, 0.84, 0.97],
+  [2.08, 0.765, 0.94],
+  [2.18, 0.715, 0.91],
+  [2.235, 0.645, 0.9],
+  [2.26, 0.54, 0.9],
+  [2.25, 0.4, 0.89],
+  [2.2, 0.24, 0.88],
 ];
 
 export const PROFILE_POINTS = 90;
 export const CLAMP_X = 2.27;
-export const CLAMP_Y = 1.45;
-/** Wheel-arch radius (the same r the legacy `lowerProfile` cuts). */
-export const ARCH_R = 0.4;
+export const CLAMP_Y = CAR.roof;
+/** Wheel-arch radius: ~44 mm between tyre and arch, a coilover stance. */
+export const ARCH_R = 0.36;
 export const BELT = CAR.belt;
 /** Bottom edge of the side glass. */
 export const GLASS_Y = BELT + 0.02;
 /** Height of the roof drip line, where the tumblehome ends. */
-const ROOF_EDGE_Y = 1.4;
+const ROOF_EDGE_Y = CAR.roof - 0.05;
 /** Superellipse exponent of the crown (roof, hood, glass). */
 const CROWN_N = 2.6;
 /** Crown arc sample positions, as a fraction of the edge half-width (centre → edge). */
@@ -249,10 +253,10 @@ export function faceProfileX(end: End, y: number): number {
 
 /** Plan-view half-width control points: a rounded tail, full width at the doors, a tapered nose. */
 export const PLAN: readonly V2[] = [
-  [-2.26, 0.6],
-  [-2.22, 0.76],
-  [-2.15, 0.82],
-  [-2.0, 0.848],
+  [-2.26, 0.56],
+  [-2.22, 0.72],
+  [-2.15, 0.8],
+  [-2.0, 0.84],
   [-1.6, 0.865],
   [-1.0, 0.87],
   [0.9, 0.87],
@@ -267,15 +271,23 @@ export const PLAN: readonly V2[] = [
 /** Body half-width at the door bulge for station `x`. */
 export const planHW = (x: number) => pchip(PLAN, x);
 
-/** Sill / floor height: low between the axles, rising into the bumpers. */
-export const floorY = (x: number) => 0.24 + 0.05 * smoothstep(1.8, 2.2, Math.abs(x));
+/** Sill / floor height: low between the axles (coilover stance), rising into the bumpers. */
+export const floorY = (x: number) => 0.2 + 0.04 * smoothstep(1.8, 2.2, Math.abs(x));
+
+/** Greenhouse taper in plan: the roof-edge half-width factor, narrowing over the D-pillars to the tail. */
+export const ROOF_TAPER: readonly V2[] = [
+  [-2.0, 0.88],
+  [-1.4, 1],
+];
+
+export const roofTaper = (x: number) => pchip(ROOF_TAPER, x);
 
 /** Lower-body half-width as a fraction of planHW, by height: tuck-under, bulge, shoulder crease, belt. */
 function lowerFrac(y: number, yFloor: number): number {
   const t: V2[] = [
     [yFloor, 0.9],
     [yFloor + 0.06, 0.965],
-    [0.45, 0.995],
+    [0.42, 0.995],
     [0.58, 1],
     [0.72, 0.996],
     [0.84, 0.99],
@@ -287,16 +299,16 @@ function lowerFrac(y: number, yFloor: number): number {
   return t[t.length - 1][1];
 }
 
-/** Half-width at height `y` for a station with plan half-width `s`: lower body, then the greenhouse tumblehome. */
-function sideHWs(s: number, yFloor: number, y: number): number {
+/** Half-width at height `y` for a station with plan half-width `s` and roof taper `k`: lower body, then the greenhouse tumblehome. */
+function sideHWs(s: number, yFloor: number, y: number, k = 1): number {
   if (y <= BELT) return s * lowerFrac(y, yFloor);
   const g0 = s * 0.95 - 0.035; // the belt step: glass sits inboard of the shoulder
-  const g1 = (0.66 * s) / CAR.halfWidth;
+  const g1 = ((0.66 * s) / CAR.halfWidth) * k;
   return lerp(g0, g1, clamp((y - BELT) / (ROOF_EDGE_Y - BELT), 0, 1));
 }
 
 /** Half-width of the body side at (x, y) (below the crown's edge). */
-export const sideHW = (x: number, y: number) => sideHWs(planHW(x), floorY(x), y);
+export const sideHW = (x: number, y: number) => sideHWs(planHW(x), floorY(x), y, roofTaper(x));
 
 /** Everything a section at `x` needs. */
 export interface Frame {
@@ -312,21 +324,24 @@ export interface Frame {
   /** planHW(x). */
   s: number;
   yFloor: number;
+  /** roofTaper(x). */
+  k: number;
 }
 
 export function frameAt(x: number): Frame {
   const yTop = crownY(x);
   const s = planHW(x);
   const yFloor = floorY(x);
+  const k = roofTaper(x);
   const b = 0.035 + 0.015 * clamp((yTop - 0.95) / 0.25, 0, 1);
   const yEdge = yTop - b;
-  return { x, yTop, yEdge, a: sideHWs(s, yFloor, yEdge), b, s, yFloor };
+  return { x, yTop, yEdge, a: sideHWs(s, yFloor, yEdge, k), b, s, yFloor, k };
 }
 
 /** Half-width of the section at height `y` (0 above the crown or below the floor). */
 export function widthAt(f: Frame, y: number): number {
   if (y < f.yFloor || y > f.yTop) return 0;
-  if (y <= f.yEdge) return sideHWs(f.s, f.yFloor, y);
+  if (y <= f.yEdge) return sideHWs(f.s, f.yFloor, y, f.k);
   const v = clamp((y - f.yEdge) / f.b, 0, 1);
   return f.a * Math.pow(1 - Math.pow(v, CROWN_N), 1 / CROWN_N);
 }
@@ -344,7 +359,7 @@ export function sectionHalf(f: Frame): V2[] {
     const z = f.a * u;
     out.push([z, u === 0 ? f.yTop : u === 1 ? f.yEdge : topY(f.x, z, f)]);
   }
-  const w = (y: number) => sideHWs(f.s, f.yFloor, y);
+  const w = (y: number) => sideHWs(f.s, f.yFloor, y, f.k);
   const gb = GLASS_Y - 0.015;
   const above = f.yEdge > gb;
   for (let j = 1; j <= 3; j++) {
@@ -396,7 +411,7 @@ const capFrame = (end: End) => {
 
 /**
  * x on an end face at (y, z): the cap station at the corners, bulging out to the centre-line
- * profile (bumper, tailgate, nose) in the middle. The tail is squarer than the nose.
+ * profile (bumper, tailgate, nose) in the middle. The tail is a little squarer than the nose.
  */
 export function faceX(end: End, y: number, z: number): number {
   const f = capFrame(end);
@@ -404,7 +419,7 @@ export function faceX(end: End, y: number, z: number): number {
   const r = w > 1e-6 ? clamp(Math.abs(z) / w, 0, 1) : 1;
   const px = faceProfileX(end, y);
   const bulge = end === "front" ? Math.max(0, px - f.x) : Math.min(0, px - f.x);
-  return f.x + bulge * (1 - r ** (end === "front" ? 2.2 : 3.2));
+  return f.x + bulge * (1 - r ** (end === "front" ? 2.2 : 2.6));
 }
 
 // ── Surface points ───────────────────────────────────────────────────────────
@@ -535,26 +550,35 @@ export interface SideGlass {
   quarter: V2[];
 }
 
+/** Side-view width of the D-pillar between the quarter glass and the hatch. */
+const D_PILLAR = 0.12;
+/** x of the quarter glass's rear edge at height `y`: parallel to the raked hatch, a D-pillar ahead of it. */
+const dPillarX = (y: number) => faceProfileX("rear", y) + D_PILLAR;
+
 /** Side glass outlines in the side view (x, y), each closed. */
 export function sideGlass(): SideGlass {
   const xA = aPillarBase();
   const front: V2[] = [[-0.02, GLASS_Y], [xA, GLASS_Y], ...topEdge(xA, -0.02)];
   const rear: V2[] = [[-0.1, GLASS_Y], ...topEdge(-0.1, -0.98), [-1.0, GLASS_Y]];
+  // Where the DLO top meets the D-pillar line (a fixed-point iteration; converges in a few steps).
+  let xe = -1.84;
+  for (let i = 0; i < 4; i++) xe = dPillarX(dloTop(xe));
+  const xr = dPillarX(1.09);
   const quarter: V2[] = [
     [-1.07, GLASS_Y],
-    ...topEdge(-1.06, -1.84),
-    // D-pillar: down and rearward, then the kink sweeps the lower corner forward.
-    [-1.93, 1.13],
-    [-1.94, 1.09],
-    [-1.915, 1.045],
-    [-1.86, GLASS_Y + 0.003],
+    ...topEdge(-1.06, xe),
+    // D-pillar: down along the hatch rake, then the kink sweeps the lower corner forward.
+    [dPillarX(1.13), 1.13],
+    [xr, 1.09],
+    [xr + 0.025, 1.045],
+    [xr + 0.08, GLASS_Y + 0.003],
   ];
   return { front, rear, quarter };
 }
 
 /** Door shut lines in the side view: front door leading edge, B-pillar, rear door trailing edge round the arch. */
 export function doorCuts(): V2[][] {
-  const r = 0.46;
+  const r = ARCH_R + 0.06;
   const ax = CAR.rearAxle;
   const th0 = Math.acos((-1.0 - ax) / r);
   const arc: V2[] = Array.from({ length: 9 }, (_, k) => {
@@ -565,13 +589,13 @@ export function doorCuts(): V2[][] {
     [
       [1.0, BELT],
       [0.995, 0.6],
-      [0.985, 0.29],
+      [0.985, 0.27],
     ],
     [
       [-0.04, BELT],
-      [-0.05, 0.29],
+      [-0.05, 0.27],
     ],
-    [[-1.0, BELT], ...arc, [ax + r, 0.29]],
+    [[-1.0, BELT], ...arc, [ax + r, 0.27]],
   ];
 }
 
@@ -592,16 +616,64 @@ export function sideOutline(): V2[] {
 
 // ── Front and rear details ───────────────────────────────────────────────────
 
+/**
+ * Facelift headlight outline on the nose (z, y), right side, clockwise from the outer top:
+ * the top edge steps down near the inner end (the facelift notch toward the kidney), and the
+ * outer end is the indicator chamber that wraps onto the wing.
+ */
+export const HEADLIGHT: readonly V2[] = [
+  [0.745, 0.704],
+  [0.42, 0.718],
+  [0.38, 0.69],
+  [0.29, 0.68],
+  [0.31, 0.6],
+  [0.762, 0.604],
+];
+/** Inner edge of the indicator chamber (|z|), inside the headlight's outer end. */
+export const INDICATOR_Z = 0.69;
+
 /** Angel-eye halo rings (two per side) and their projector lenses, on the nose. */
 export function angelEyes(): V3[][] {
   const rings: V3[][] = [];
   for (const s of SIDES) {
-    for (const zc of [0.42, 0.605]) {
-      for (const r of [0.047, 0.024]) rings.push(ring2([zc, 0.676], r, r > 0.03 ? 24 : 14).map(([z, y]) => onFace("front", s * z, y, LIFT + 0.004)));
+    for (const zc of [0.455, 0.625]) {
+      for (const r of [0.044, 0.023]) rings.push(ring2([zc, 0.655], r, r > 0.03 ? 24 : 14).map(([z, y]) => onFace("front", s * z, y, LIFT + 0.004)));
     }
   }
   return rings;
 }
+
+/** Facelift kidney (z, y), right side: taller than the pre-facelift's, with a curved lower edge. */
+export function kidneyOutline(grow = 0): V2[] {
+  const z0 = 0.035 - grow;
+  const z1 = 0.224 + grow;
+  const bottom = (t: number) => 0.552 - 0.016 * (1 - t * t) - grow;
+  const out: V2[] = [
+    [z0, 0.692 + grow],
+    [0.2 + grow, 0.68 + grow],
+    [z1, 0.57],
+  ];
+  for (let k = 0; k <= 6; k++) {
+    const t = 1 - k / 6;
+    out.push([lerp(z0, z1, t), bottom(t)]);
+  }
+  return out;
+}
+
+/** M-Tech bumper side intake (z, y), right side: a trapezoid with the fog lamp inside it. */
+export const SIDE_INTAKE: readonly V2[] = [
+  [0.49, 0.4],
+  [0.68, 0.4],
+  [0.7, 0.28],
+  [0.52, 0.27],
+];
+/** Fog lamp centre (z, y), right side: inside the side intake. */
+export const FOG: V2 = [0.595, 0.335];
+
+/** Tail lamp heights on the rear face: top, the inner leg's bottom, the outer leg's bottom. */
+const LAMP_TOP = 0.935;
+const LAMP_INNER = 0.865;
+const LAMP_LOW = 0.775;
 
 export interface TailLamp {
   /** The closed L outline: tailgate leg and corner on the rear face, wrapped onto the flank. */
@@ -610,21 +682,110 @@ export interface TailLamp {
   face: V3[];
   /** Points on the flank (the side of the car). */
   flank: V3[];
+  /** The LED / halogen bars inside the lamp, each a polyline on the rear face. */
+  bars: V3[][];
 }
 
 /** The E46 Touring's body-mounted L-shaped tail lamp on side `s`, wrapping round the corner. */
 export function tailLamp(s: Side): TailLamp {
   const capW = (y: number) => widthAt(capFrame("rear"), y);
-  const face = (z: number, y: number) => onFace("rear", s * z, y);
+  const face = (z: number, y: number, out = LIFT) => onFace("rear", s * z, y, out);
   const flank = (x: number, y: number) => onSide(x, y, s);
   const top: V3[] = [];
-  for (let k = 0; k <= 6; k++) top.push(face(lerp(0.51, capW(0.965), k / 6), 0.965));
-  const flankPts: V3[] = [flank(X_TAIL + 0.04, 0.962), flank(-2.08, 0.958), flank(-2.035, 0.955), flank(-2.06, 0.8), flank(-2.1, 0.8), flank(X_TAIL + 0.04, 0.8)];
+  for (let k = 0; k <= 6; k++) top.push(face(lerp(0.51, capW(LAMP_TOP), k / 6), LAMP_TOP));
+  const flankPts: V3[] = [
+    flank(X_TAIL + 0.04, LAMP_TOP - 0.003),
+    flank(-2.08, LAMP_TOP - 0.007),
+    flank(-2.035, LAMP_TOP - 0.01),
+    flank(-2.06, LAMP_LOW),
+    flank(-2.1, LAMP_LOW),
+    flank(X_TAIL + 0.04, LAMP_LOW),
+  ];
   const bottom: V3[] = [];
-  for (let k = 0; k <= 4; k++) bottom.push(face(lerp(capW(0.8), 0.66, k / 4), 0.8));
-  const inner: V3[] = [face(0.66, 0.895), face(0.51, 0.895)];
-  const faceIdx = [...top, ...bottom, ...inner];
-  return { loop: [...top, ...flankPts, ...bottom, ...inner], face: faceIdx, flank: flankPts };
+  for (let k = 0; k <= 4; k++) bottom.push(face(lerp(capW(LAMP_LOW), 0.66, k / 4), LAMP_LOW));
+  const inner: V3[] = [face(0.66, LAMP_INNER), face(0.51, LAMP_INNER)];
+  const bar = (z0: number, y: number) => Array.from({ length: 5 }, (_, k) => face(lerp(z0, capW(y) - 0.03, k / 4), y, LIFT + 0.002));
+  const bars = [bar(0.535, 0.9), bar(0.685, 0.835), bar(0.685, 0.805)];
+  return { loop: [...top, ...flankPts, ...bottom, ...inner], face: [...top, ...bottom, ...inner], flank: flankPts, bars };
+}
+
+/** Twin tailpipes on the left (driver's) side: centre height, |z| of each, inner and outer x, radius. */
+export const EXHAUST_TIPS = { y: 0.215, z: [-0.5, -0.39], x0: -2.1, x1: -2.29, r: 0.038 } as const;
+
+// ── Rear hatch and roof rails ────────────────────────────────────────────────
+
+/** Bottom and top of the hatch glass (heights on the hatch), and the tailgate's top edge (its x). */
+const HATCH_Y0 = GLASS_Y + 0.03;
+const HATCH_Y1 = CAR.roof - 0.11;
+const gateTopX = () => faceProfileX("rear", CAR.roof - 0.035);
+/** Tailgate half-width at its foot, between the tail lamps. */
+const GATE_FOOT = 0.495;
+
+/** Tailgate half-width on the hatch at station x: between the lamps at the foot, out toward the D-pillars at the top. */
+export function gateHW(x: number): number {
+  const xt = gateTopX();
+  const top = frameAt(xt).a - 0.03;
+  return Math.min(frameAt(x).a - 0.03, lerp(GATE_FOOT, top, clamp((x - X_TAIL) / (xt - X_TAIL), 0, 1)));
+}
+
+export interface Hatch {
+  /** The hatch glass, closed, on the raked hatch surface. */
+  glass: V3[];
+  /** The tailgate shut line, closed: across the bumper top, up beside the lamps, along the hatch, across the roof's rear edge. */
+  gate: V3[];
+  /** The roof spoiler lip over the glass, closed. */
+  spoiler: V3[];
+}
+
+/** The tailgate, derived from the side profile so it follows any change to the hatch rake. */
+export function hatch(): Hatch {
+  const x0 = faceProfileX("rear", HATCH_Y0);
+  const x1 = faceProfileX("rear", HATCH_Y1);
+  const xt = gateTopX();
+  const across = (x: number, w: number, up: number, n = 8) => Array.from({ length: n + 1 }, (_, k) => onTop(x, lerp(w, -w, k / n), up));
+  const sideRun = (xa: number, xb: number, z: (x: number) => number, up = LIFT, n = 8) => Array.from({ length: n + 1 }, (_, k) => {
+    const x = lerp(xa, xb, k / n);
+    return onTop(x, z(x), up);
+  });
+  const gw = (x: number) => gateHW(x) - 0.045;
+  const glass: V3[] = [...sideRun(x0, x1, gw), ...across(x1, gw(x1), LIFT).slice(1, -1), ...sideRun(x1, x0, (x) => -gw(x)), ...across(x0, -gw(x0), LIFT).slice(1, -1)];
+
+  const cap = capFrame("rear");
+  const yFoot = 0.63;
+  const yUp = cap.yEdge - 0.01;
+  const up = (s: Side) => [0.8, yUp].map((y) => onFace("rear", s * GATE_FOOT, y));
+  const gate: V3[] = [
+    ...Array.from({ length: 9 }, (_, k) => onFace("rear", lerp(-GATE_FOOT, GATE_FOOT, k / 8), yFoot)),
+    ...up(1),
+    ...sideRun(X_TAIL, xt, gateHW, LIFT, 10),
+    ...across(xt, gateHW(xt), LIFT).slice(1, -1),
+    ...sideRun(xt, X_TAIL, (x) => -gateHW(x), LIFT, 10),
+    ...up(-1).reverse(),
+  ];
+
+  const xs = x1 + 0.012;
+  const sw = (x: number) => gateHW(x) - 0.012;
+  const spoiler: V3[] = [...across(xs, sw(xs), 0.016), ...across(xt - 0.004, -sw(xt - 0.004), 0.006)];
+  return { glass, gate, spoiler };
+}
+
+/** Roof rail ends and lift off the roof (top and lower bar). */
+const RAIL_X0 = 0.1;
+const RAIL_X1 = -1.75;
+/** Roof rail on side `s`: following the roof crown and its taper, inboard of the drip line. */
+export function roofRail(s: Side): { top: V3[]; low: V3[]; feet: V3[][] } {
+  const rz = (x: number) => s * Math.min(0.58, frameAt(x).a - 0.07);
+  const top: V3[] = [onTop(RAIL_X0 + 0.07, rz(RAIL_X0 + 0.07), 0.008)];
+  const low: V3[] = [];
+  for (let k = 0; k <= 24; k++) {
+    const x = lerp(RAIL_X0, RAIL_X1, k / 24);
+    const end = k === 0 || k === 24 ? 0.012 : 0;
+    top.push(onTop(x, rz(x), 0.035 - end));
+    low.push(onTop(x, rz(x), 0.02 - end * 0.5));
+  }
+  top.push(onTop(RAIL_X1 - 0.07, rz(RAIL_X1 - 0.07), 0.008));
+  const feet = [0.06, -0.6, -1.2, -1.7].map((x) => [onTop(x, rz(x), 0), onTop(x, rz(x), 0.02)]);
+  return { top, low, feet };
 }
 
 // ── The body wireframe ───────────────────────────────────────────────────────
@@ -633,6 +794,8 @@ export interface BodyLines {
   base: number[];
   cyan: number[];
   amber: number[];
+  /** The angel-eye rings, drawn brighter with a glow pass. */
+  halo: number[];
 }
 
 function faceLine(end: End, y: number, out: number[], frac = 1) {
@@ -652,7 +815,7 @@ const faceLoop = (end: End, pts: readonly V2[], out: number[], lift = LIFT) =>
 
 /** The body as coloured line segments (no wheels, no chassis). Deterministic. */
 export function bodyWireframe(): BodyLines {
-  const L: BodyLines = { base: [], cyan: [], amber: [] };
+  const L: BodyLines = { base: [], cyan: [], amber: [], halo: [] };
   const frames = stationFrames();
   const loops = frames.map((f) => loopAt(f));
 
@@ -735,19 +898,11 @@ export function bodyWireframe(): BodyLines {
       L.cyan,
       true,
     );
-    // Roof rails following the roof, on four feet.
-    const rz = s * 0.58;
-    const railTop: V3[] = [];
-    const railLow: V3[] = [];
-    for (let k = 0; k <= 24; k++) {
-      const x = lerp(0.12, -1.9, k / 24);
-      const end = k === 0 || k === 24 ? 0.022 : 0;
-      railTop.push(onTop(x, rz, 0.052 - end));
-      railLow.push(onTop(x, rz, 0.03 - end * 0.5));
-    }
-    polyline([onTop(0.2, rz, 0.012), ...railTop, onTop(-1.97, rz, 0.012)], L.cyan);
-    polyline(railLow, L.cyan);
-    for (const x of [0.08, -0.62, -1.32, -1.86]) seg(onTop(x, rz, 0), onTop(x, rz, 0.03), L.base);
+    // Roof rails following the roof and its taper, on four feet.
+    const rail = roofRail(s);
+    polyline(rail.top, L.cyan);
+    polyline(rail.low, L.cyan);
+    for (const [p, q] of rail.feet) seg(p, q, L.base);
     // Hood power-dome ridges, converging on the kidneys.
     polyline(
       Array.from({ length: 13 }, (_, k) => onTop(lerp(2.06, 1.08, k / 12), s * lerp(0.17, 0.4, k / 12), 0.008)),
@@ -758,9 +913,9 @@ export function bodyWireframe(): BodyLines {
   // Windshield (cyan) and cowl (base).
   const aGlass = (x: number) => {
     const f = frameAt(x);
-    return sideHWs(f.s, f.yFloor, Math.max(f.yEdge, GLASS_Y)) - 0.05;
+    return sideHWs(f.s, f.yFloor, Math.max(f.yEdge, GLASS_Y), f.k) - 0.05;
   };
-  const xsW = 0.38;
+  const xsW = 0.36;
   const xeW = 1.0;
   const ws: V3[] = [];
   for (let k = 0; k <= 10; k++) {
@@ -780,39 +935,16 @@ export function bodyWireframe(): BodyLines {
     L.base,
   );
 
-  // Rear: hatch glass (cyan) inside the tailgate shut line (base).
-  const aHatch = (x: number, inset: number) => frameAt(x).a - inset;
-  const hatch: V3[] = [];
-  const hx0 = -2.155;
-  const hx1 = -2.0;
-  for (let k = 0; k <= 6; k++) {
-    const x = lerp(hx0, hx1, k / 6);
-    hatch.push(onTop(x, aHatch(x, 0.075)));
-  }
-  for (let k = 1; k < 8; k++) hatch.push(onTop(hx1, lerp(aHatch(hx1, 0.075), -aHatch(hx1, 0.075), k / 8)));
-  for (let k = 6; k >= 0; k--) {
-    const x = lerp(hx0, hx1, k / 6);
-    hatch.push(onTop(x, -aHatch(x, 0.075)));
-  }
-  for (let k = 1; k < 8; k++) hatch.push(onTop(hx0, lerp(-aHatch(hx0, 0.075), aHatch(hx0, 0.075), k / 8)));
-  polyline(hatch, L.cyan, true);
-  const gateHalf = (s: Side): V3[] => {
-    const pts: V3[] = [onFace("rear", s * 0.25, 0.63), onFace("rear", s * 0.495, 0.63), onFace("rear", s * 0.495, 0.8), onFace("rear", s * 0.495, 0.975)];
-    pts.push(onFace("rear", s * (widthAt(capFrame("rear"), 0.99) - 0.03), 0.99));
-    for (let k = 0; k <= 6; k++) {
-      const x = lerp(X_TAIL, -1.99, k / 6);
-      pts.push(onTop(x, s * aHatch(x, 0.03)));
-    }
-    pts.push(onTop(-1.99, s * aHatch(-1.99, 0.03) * 0.5));
-    return pts;
-  };
-  const right = gateHalf(1);
-  const left = gateHalf(-1);
-  polyline([onFace("rear", 0, 0.63), ...right, onTop(-1.99, 0), ...left.reverse()], L.base, true);
+  // Rear: hatch glass (cyan) inside the tailgate shut line, under the spoiler lip (base).
+  const h = hatch();
+  polyline(h.glass, L.cyan, true);
+  polyline(h.gate, L.base, true);
+  polyline(h.spoiler, L.base, true);
 
-  // Rear bumper lines, reflectors (amber) and the L tail lamps (amber).
+  // Rear bumper lines and valance, reflectors (amber) and the L tail lamps with their bars (amber).
   faceLine("rear", 0.62, L.base);
   faceLine("rear", 0.36, L.base, 0.92);
+  faceLine("rear", 0.29, L.base, 0.88);
   for (const s of SIDES) {
     faceLoop(
       "rear",
@@ -830,24 +962,28 @@ export function bodyWireframe(): BodyLines {
     );
     const lamp = tailLamp(s);
     polyline(lamp.loop, L.amber, true);
-    seg(onSide(X_TAIL + 0.04, 0.88, s), onSide(-2.05, 0.88, s), L.amber);
+    for (const bar of lamp.bars) polyline(bar, L.amber);
+    seg(onSide(X_TAIL + 0.04, 0.855, s), onSide(-2.05, 0.855, s), L.amber);
   }
 
-  // Nose: bumper lines, kidneys (cyan) with surround and slats (base), headlights, fogs, intake, plate.
+  // Nose: M-Tech bumper (trapezoid centre intake, side intakes with fogs, splitter), plate,
+  // facelift kidneys (cyan) with surround and slats (base), notched headlights, angel eyes (halo).
   faceLine("front", 0.525, L.base);
+  faceLine("front", 0.25, L.base, 0.9);
   faceLoop(
     "front",
     roundedPoly(
       [
-        [-0.36, 0.395],
-        [0.36, 0.395],
-        [0.33, 0.305],
-        [-0.33, 0.305],
+        [-0.4, 0.4],
+        [0.4, 0.4],
+        [0.36, 0.27],
+        [-0.36, 0.27],
       ],
       0.03,
     ),
     L.base,
   );
+  for (let k = 1; k <= 3; k++) faceLine("front", lerp(0.27, 0.4, k / 4), L.base, 0.36 / widthAt(capFrame("front"), lerp(0.27, 0.4, k / 4)));
   faceLoop(
     "front",
     [
@@ -859,46 +995,27 @@ export function bodyWireframe(): BodyLines {
     L.base,
   );
   for (const s of SIDES) {
-    const kid: V2[] = [
-      [0.035, 0.685],
-      [0.2, 0.672],
-      [0.218, 0.548],
-      [0.035, 0.553],
-    ];
-    const sur: V2[] = [
-      [0.022, 0.698],
-      [0.213, 0.685],
-      [0.233, 0.536],
-      [0.022, 0.54],
-    ];
     const mirror = (pts: readonly V2[]) => pts.map(([z, y]) => [s * z, y] as V2);
-    faceLoop("front", mirror(roundedPoly(kid, 0.035)), L.cyan, LIFT + 0.006);
-    faceLoop("front", mirror(roundedPoly(sur, 0.045)), L.base, LIFT + 0.008);
+    faceLoop("front", mirror(roundedPoly(kidneyOutline(), 0.03)), L.cyan, LIFT + 0.006);
+    faceLoop("front", mirror(roundedPoly(kidneyOutline(0.013), 0.04)), L.base, LIFT + 0.008);
+    const kid = kidneyOutline();
     for (let k = 1; k <= 6; k++) {
       const t = k / 7;
       const z = lerp(0.035, 0.205, t);
-      const yTop = lerp(0.685, 0.672, t) - 0.012;
-      const yBot = lerp(0.553, 0.548, t) + 0.012;
+      const yTop = lerp(kid[0][1], kid[1][1], t) - 0.012;
+      const yBot = 0.552 - 0.016 * (1 - ((z - 0.035) / (0.224 - 0.035)) ** 2) + 0.012;
       seg(onFace("front", s * z, yTop, LIFT + 0.002), onFace("front", s * z, yBot, LIFT + 0.002), L.base);
     }
-    const lamp: V2[] = [
-      [0.3, 0.738],
-      [0.73, 0.72],
-      [0.75, 0.62],
-      [0.33, 0.612],
-    ];
-    faceLoop("front", mirror(roundedPoly(lamp, 0.03)), L.cyan);
+    faceLoop("front", mirror(roundedPoly(HEADLIGHT, 0.022)), L.cyan);
+    seg(onFace("front", s * INDICATOR_Z, 0.61), onFace("front", s * INDICATOR_Z, 0.7), L.cyan);
+    faceLoop("front", mirror(roundedPoly(SIDE_INTAKE, 0.025)), L.base);
     for (const [r, n, group] of [
       [0.04, 18, L.cyan],
-      [0.056, 20, L.base],
+      [0.052, 20, L.base],
     ] as const)
-      faceLoop(
-        "front",
-        ring2([s * 0.6, 0.39], r, n),
-        group,
-      );
+      faceLoop("front", ring2([s * FOG[0], FOG[1]], r, n), group);
   }
-  for (const ring of angelEyes()) polyline(ring, L.cyan, true);
+  for (const ring of angelEyes()) polyline(ring, L.halo, true);
 
   return L;
 }
@@ -1117,7 +1234,7 @@ export function chassisWireframe(): number[] {
     o,
   );
   box([-1.9, 0.27, -0.42], [0.32, 0.13, 0.3], o);
-  for (const z of [-0.5, -0.39]) seg([-2.06, 0.24, z], [-2.1, 0.24, z], o);
+  for (const z of EXHAUST_TIPS.z) seg([-2.06, EXHAUST_TIPS.y, z], [EXHAUST_TIPS.x0, EXHAUST_TIPS.y, z], o);
   // Gearbox: bellhousing cone to the tail.
   const gx = [1.27, 1.12, 0.95, 0.7, 0.45];
   const gr = [0.17, 0.15, 0.11, 0.09, 0.06];

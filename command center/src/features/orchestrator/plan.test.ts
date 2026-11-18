@@ -93,3 +93,22 @@ describe("heuristicPlan — trailing addressed name", () => {
     expect(JSON.stringify(p.target)).not.toMatch(/tony/i);
   });
 });
+
+describe("heuristicPlan — 'update' questions are read-only", () => {
+  it.each(["give me an update on whatsapp", "any whatsapp updates?", "update me on the self-tape", "what's the latest update from the coder", "any updates from finance"])("%s", (s) => {
+    expect(heuristicPlan(s, "general").mutating).toBe(false);
+  });
+
+  it("'ask the coder for an update' is read-only and stays Named to the coder", () => {
+    const p = heuristicPlan("ask the coder for an update");
+    expect(p.mutating).toBe(false);
+    expect(p.role).toBe("coder");
+  });
+
+  it("real updates and settings stay mutating", () => {
+    expect(heuristicPlan("update the invoice", "ops").mutating).toBe(true);
+    expect(heuristicPlan("set the meeting for Friday", "booking").mutating).toBe(true);
+    expect(heuristicPlan("update my status update template", "general").mutating).toBe(true);
+    expect(heuristicPlan("reply to Sam on WhatsApp", "general").mutating).toBe(true);
+  });
+});

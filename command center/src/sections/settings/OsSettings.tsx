@@ -18,6 +18,8 @@ function BlurInput({ value, onSave, ...rest }: { value: string; onSave: (v: stri
 export function OsIdentityCard() {
   const { cfg, error, save } = useOsCfg();
   const wakeMode = useSettings((s) => s.wakeMode);
+  const osAlarms = useSettings((s) => s.reminders.osFallback);
+  const setSettings = useSettings((s) => s.set);
   const [preview, setPreview] = useState<string | null>(null);
   if (!cfg) return <Card title="OS identity">{error ?? "Loading…"}</Card>;
   return (
@@ -54,6 +56,12 @@ export function OsIdentityCard() {
           onChange={setWakeMode}
           label={`Hands-free wake word (“${cfg.wakeWords[0] ?? "hey tony"}”)`}
           hint="Keeps the mic listening through Whisper and acts only on sentences that start with a wake word. Uses some CPU; the mic button and Ctrl+Shift+Space still work either way."
+        />
+        <Toggle
+          on={osAlarms}
+          onChange={(v) => setSettings({ reminders: { osFallback: v } })}
+          label="Alarms ring with the app closed (Windows)"
+          hint="Each alarm, timer or reminder also gets a one-time Windows Task Scheduler alarm (folder \AgenticOS) that shows a toast at the due time. While the app runs it rings first and removes that task, so nothing rings twice."
         />
       </div>
       <CfgError error={error} />

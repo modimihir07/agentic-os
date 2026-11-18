@@ -41,6 +41,26 @@ describe("parseReflex — cut", () => {
   });
 });
 
+describe("parseReflex — bare hard stops (whole utterance only)", () => {
+  for (const s of ["Stop.", "stop it", "Shut it off!", "shut it down", "Tony, stop please", "hey Tony stop", "stop it now", "okay shut it off then"]) {
+    it(`"${s}" cuts in every state, flagged as needing the wake word in a room listen`, () => {
+      for (const ctx of [IDLE, BUSY, HOLDING, { busy: true, holding: false, ttsAudible: true, musicAudible: true }]) {
+        expect(parseReflex(s, ctx)).toEqual({ kind: "cut", rest: "", needsAddress: true });
+      }
+    });
+  }
+  for (const s of ["don't stop the music", "stop at the store", "stop playing Bilmuri", "shut it off at 11", "stop the timer", "shut it down after this song", "stop it from raining"]) {
+    it(`"${s}" is not a cut (falls through to the normal grammars)`, () => {
+      for (const ctx of [IDLE, BUSY]) expect(parseReflex(s, ctx)).toBeNull();
+    });
+  }
+  it("the classic cut phrases carry no wake-word requirement", () => {
+    expect(parseReflex("cut it", IDLE)).toEqual({ kind: "cut", rest: "" });
+    expect(parseReflex("stop talking", IDLE)?.needsAddress).toBeUndefined();
+  });
+  it("hey kitties stays a hold", () => expect(parseReflex("hey kitties", BUSY)).toEqual({ kind: "hold", rest: "" }));
+});
+
 describe("parseReflex — hold", () => {
   for (const s of ["take it ees", "take it knees", "take at ease", "take it is", "madonna", "ma donna", "my donna", "mad one", "a spetta", "ah spet", "Madone!", "Aspetta, aspetta"]) {
     it(`"${s}" holds even when idle (thought-form lock)`, () => expect(parseReflex(s, IDLE)?.kind).toBe("hold"));
@@ -65,6 +85,13 @@ describe("parseReflex — hold", () => {
     expect(parseReflex("take it ease", loud)?.kind).toBe("hold");
     expect(parseReflex("aspetta", loud)?.kind).toBe("hold");
     expect(parseReflex("cut it", loud)?.kind).toBe("cut");
+  });
+  it("speakers mode: single syllables ignored while Spotify is audible (a lyric's oh)", () => {
+    const music = { busy: true, holding: false, musicAudible: true };
+    expect(parseReflex("oh", music)).toBeNull();
+    expect(parseReflex("eh eh", { busy: false, holding: true, musicAudible: true })).toBeNull();
+    expect(parseReflex("take it ease", music)?.kind).toBe("hold");
+    expect(parseReflex("cut it", music)?.kind).toBe("cut");
   });
   it("speakers mode: single syllables count while only thinking (not audible)", () => {
     expect(parseReflex("oh", { busy: true, holding: false, ttsAudible: false })?.kind).toBe("hold");

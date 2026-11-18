@@ -8,6 +8,7 @@ import { audioContext } from "@/features/voice/engines";
 import { detectRoute, detectedRoute, detectedRouteLabel, effectiveRoute, onRouteChange } from "@/features/voice/audio-route";
 import { modelsFor, useProviders } from "./use-providers";
 import { ModelSelect } from "./ServicesSettings";
+import { Toggle } from "./os-ui";
 
 const LANGS: [string, string][] = [
   ["auto", "Auto-detect"], ["en", "English"], ["fr", "French"], ["es", "Spanish"], ["it", "Italian"], ["pt", "Portuguese"],
@@ -302,6 +303,11 @@ export function AgentVoiceRoster() {
   const { view, agentVoice } = useProviders();
   if (!view) return null;
   const defaultEngine = view.providers.find((p) => p.id === view.policy.tts)?.engine ?? "kokoro";
+  // Mirrors voice.rs `roster_entry_for`: once the roster is in use, a sub-agent without a row
+  // speaks a built-in Kokoro voice (when Kokoro is set up), else Tony's.
+  const rosterInUse = Object.keys(view.agentVoices).length > 0;
+  const kokoro = view.providers.some((p) => p.kind === "tts" && p.engine === "kokoro");
+  const fallbackNote = (role: string) => (role === "general" || view.agentVoices[role] || !rosterInUse ? undefined : kokoro ? "No row yet: speaks a built-in Kokoro voice" : "No row yet: speaks with Tony's voice");
 
   return (
     <Card
@@ -322,7 +328,7 @@ export function AgentVoiceRoster() {
           </thead>
           <tbody>
             {ROSTER_ORDER.map((role) => (
-              <RosterRow key={role} role={role} entry={view.agentVoices[role]} defaultEngine={defaultEngine} onPatch={(patch) => void agentVoice(role, patch)} />
+              <RosterRow key={role} role={role} entry={view.agentVoices[role]} defaultEngine={defaultEngine} note={fallbackNote(role)} onPatch={(patch) => void agentVoice(role, patch)} />
             ))}
           </tbody>
         </table>
@@ -331,7 +337,7 @@ export function AgentVoiceRoster() {
   );
 }
 
-function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entry: AgentVoice | undefined; defaultEngine: string; onPatch: (p: AgentVoicePatch) => void }) {
+function RosterRow({ role, entry, defaultEngine, note, onPatch }: { role: string; entry: AgentVoice | undefined; defaultEngine: string; note?: string; onPatch: (p: AgentVoicePatch) => void }) {
   const engine = entry?.engine ?? defaultEngine;
   const [voices, setVoices] = useState<VoicesView | null>(null);
   const [models, setModels] = useState<string[]>([]);
@@ -367,7 +373,10 @@ function RosterRow({ role, entry, defaultEngine, onPatch }: { role: string; entr
 
   return (
     <tr className="border-t border-white/[0.06]">
-      <td className="px-1 py-1.5 font-medium text-ink">{roleLabel(role)}</td>
+      <td className="px-1 py-1.5 font-medium text-ink">
+        {roleLabel(role)}
+        {note && <span className="block text-[10px] font-normal text-ink-3">{note}</span>}
+      </td>
       <td className="px-1 py-1.5">
         <Select value={engine} onChange={(e) => onPatch({ engine: e.target.value as AgentVoice["engine"] })} className="!h-9 !w-36 !py-0 !text-xs !leading-normal">
           <option value="elevenlabs">ElevenLabs (cloud)</option>
@@ -441,6 +450,8 @@ export function ConversationReflexesCard() {
   const conversation = useSettings((s) => s.conversation);
   const set = useSettings((s) => s.set);
   const up = (p: Partial<typeof conversation>) => set({ conversation: { ...conversation, ...p } });
+  const duck = conversation.spotifyDuck;
+  const upDuck = (p: Partial<typeof duck>) => up({ spotifyDuck: { ...duck, ...p } });
   const [detected, setDetected] = useState(detectedRoute());
   const [label, setLabel] = useState(detectedRouteLabel());
   useEffect(() => {
@@ -485,6 +496,41 @@ export function ConversationReflexesCard() {
       <p className="mt-1 text-[11px] text-ink-3">
         Speakers: “oh / eh / whoa” only count while Tony is silent, and talking over him needs a clearer voice. A short pause means quick reflexes; a long command said over Tony may be split, and the follow-up listen catches the rest.
       </p>
+      <div className="mt-3 border-t border-white/5 pt-2">
+        <Toggle
+          on={duck.enabled}
+          onChange={(enabled) => upDuck({ enabled })}
+          label="Duck Spotify while I talk"
+          hint="Only when Spotify plays on this PC. It comes back after you stop talking; a cut or a hold pauses it instead."
+        />
+        <div className="mt-1 grid gap-2 sm:grid-cols-2">
+          <Field label="Ducked level">
+            <Select value={String(duck.level)} disabled={!duck.enabled} onChange={(e) => upDuck({ level: Number(e.target.value) })}>
+              {[10, 15, 25, 35].map((p) => (
+                <option key={p} value={p}>
+                  {p}%{p === 15 ? " (default)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Back to full after you stop">
+            <Select value={String(duck.restoreMs)} disabled={!duck.enabled} onChange={(e) => upDuck({ restoreMs: Number(e.target.value) })}>
+              {[1500, 2500, 4000].map((ms) => (
+                <option key={ms} value={ms}>
+                  {ms / 1000} s{ms === 2500 ? " (default)" : ""}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Toggle
+          on={duck.onWakeListen}
+          disabled={!duck.enabled}
+          onChange={(onWakeListen) => upDuck({ onWakeListen })}
+          label="Also while hands-free waits for the wake word"
+          hint="Room talk and loud vocals can trip it; after a line that wasn't for Tony it waits a few seconds before ducking again."
+        />
+      </div>
     </Card>
   );
 }

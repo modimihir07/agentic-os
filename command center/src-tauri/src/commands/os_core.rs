@@ -319,6 +319,8 @@ pub fn default_mcps() -> Vec<McpServer> {
             builtin: true,
             description: "lharries/whatsapp-mcp — start the Go bridge (whatsapp-bridge) first.".into(),
             agents: None,
+            // Read-only by default: send_message / send_file are refused for every caller.
+            read_only: true,
             ..Default::default()
         },
     ];
@@ -436,6 +438,10 @@ pub struct OsConfig {
     pub overseer: OverseerConfig,
     pub memory: MemoryConfig,
     pub scheduler: super::scheduler::SchedulerConfig,
+    /// One-time config migrations already applied (`apply_migrations`), so a setting the user
+    /// changes afterwards is never flipped back.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub migrations: Vec<String>,
 }
 
 impl Default for OsConfig {
@@ -457,7 +463,23 @@ impl Default for OsConfig {
             overseer: OverseerConfig::default(),
             memory: MemoryConfig::default(),
             scheduler: super::scheduler::SchedulerConfig::default(),
+            migrations: vec![],
         }
+    }
+}
+
+/// Migration id: WhatsApp became read-only by default.
+const MIGRATE_WHATSAPP_READ_ONLY: &str = "whatsapp-read-only";
+
+/// One-time upgrades of a saved config. `read_only: false` is never written to disk, so an
+/// older os.json can't say whether WhatsApp was left writable on purpose: mark it read-only
+/// once, record that, and leave any later untick alone.
+pub(crate) fn apply_migrations(cfg: &mut OsConfig) {
+    if !cfg.migrations.iter().any(|m| m == MIGRATE_WHATSAPP_READ_ONLY) {
+        for m in cfg.mcps.iter_mut().filter(|m| m.id == "whatsapp") {
+            m.read_only = true;
+        }
+        cfg.migrations.push(MIGRATE_WHATSAPP_READ_ONLY.into());
     }
 }
 
@@ -526,6 +548,7 @@ impl OsState {
                 m.agents = Some(default_mcp_grants(&m.id));
             }
         }
+        apply_migrations(&mut cfg);
         // Designer starts with the UI/UX pack attached (taste, impeccable, Kowalski motion, Stitch).
         if !cfg.skills.grants.values().any(|a| a.iter().any(|x| x == "designer")) {
             let dir = std::path::PathBuf::from(&cfg.skills.dir);
@@ -1320,6 +1343,25 @@ mod tests {
         }
         assert_eq!(cfg.mcps[0].agents, Some(vec!["booking".to_string(), "ops".to_string()]));
         assert_eq!(cfg.mcps[1].agents, Some(vec!["booking".to_string()])); // untouched: user-edited value kept
+    }
+
+    #[test]
+    fn whatsapp_is_read_only_by_default_and_migrated_once() {
+        assert!(default_mcps().iter().find(|m| m.id == "whatsapp").unwrap().read_only);
+        // An os.json saved before the default: readOnly absent (= false), no migration marker.
+        let raw = r#"{"mcps":[{"id":"whatsapp","name":"WhatsApp Bridge","transport":"stdio","enabled":true},{"id":"git","name":"Git","transport":"builtin","enabled":true}]}"#;
+        let mut cfg: OsConfig = serde_json::from_str(raw).unwrap();
+        assert!(!cfg.mcps[0].read_only);
+        apply_migrations(&mut cfg);
+        assert!(cfg.mcps[0].read_only);
+        assert!(!cfg.mcps[1].read_only, "only WhatsApp");
+        // The user unticks Read-only later: the saved marker keeps the migration from re-running.
+        cfg.mcps[0].read_only = false;
+        let saved = serde_json::to_string(&cfg).unwrap();
+        let mut reloaded: OsConfig = serde_json::from_str(&saved).unwrap();
+        apply_migrations(&mut reloaded);
+        assert!(!reloaded.mcps[0].read_only);
+        assert_eq!(reloaded.migrations, vec![MIGRATE_WHATSAPP_READ_ONLY.to_string()]);
     }
 
     #[test]

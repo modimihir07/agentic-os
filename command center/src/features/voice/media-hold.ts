@@ -46,8 +46,10 @@ export async function releaseMedia(held: HeldMedia | null): Promise<void> {
   if (held.spotify) await spotify("resume");
 }
 
-/** "Cut it" (Decision 1): stop the cue theme and pause Spotify. Never disconnects, never auto-resumes. */
-export function cutMedia(): void {
+/** "Cut it" (Decision 1): stop the cue theme and pause Spotify. Never disconnects, never auto-resumes.
+ * Resolves once the pause has landed (or failed), so a speech duck can be restored after it. */
+export function cutMedia(): Promise<void> {
   stopAllAudio(); // also cancels Tony's speech (registered cancel), already done by the caller
-  if (isTauri()) void spotify("pause"); // an already-paused / idle player is a harmless no-op
+  // An already-paused / idle player is a harmless no-op.
+  return isTauri() ? spotify("pause").then(() => undefined) : Promise.resolve();
 }

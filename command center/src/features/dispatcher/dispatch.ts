@@ -1,7 +1,7 @@
 import { api, gateway } from "@/lib/gateway";
 import { cmd, isTauri, type ChatMessage, type DispatchResult } from "@/lib/platform";
 import { SUB_AGENTS, type AgentRole } from "./agents";
-import { DEFAULT_ROUTING_CONFIG, resolve } from "./router";
+import { DEFAULT_ROUTING_CONFIG, directTool, resolve } from "./router";
 
 export interface DispatchOutcome {
   role: AgentRole;
@@ -56,9 +56,13 @@ export async function dispatch(text: string, opts: DispatchOptions = {}): Promis
   // rather than "any role other than general" (previously *every* classified
   // role was treated as explicit, so a wrong keyword guess went straight to
   // that agent's raw reply with no Tony synthesis or fallback).
-  const routed = resolve(text, DEFAULT_ROUTING_CONFIG);
-  const role = opts.role ?? (routed.role as AgentRole) ?? "general";
-  const explicit = !opts.role && routed.kind === "Named";
+  const resolved = resolve(text, DEFAULT_ROUTING_CONFIG);
+  // A live-tool read question ("any WhatsApp updates?") is Tony's own tool path on any tab;
+  // only a Named delegation keeps its agent (Rust applies the same backstop to inbox turns).
+  const direct = resolved.kind === "Named" ? null : directTool(text);
+  const routed = direct ? { ...resolved, role: "general", kind: "Direct" as const, reason: `live ${direct} tool` } : resolved;
+  const role = direct ? "general" : (opts.role ?? (routed.role as AgentRole) ?? "general");
+  const explicit = !direct && !opts.role && routed.kind === "Named";
   const agent = SUB_AGENTS[role];
 
   if (isTauri()) {

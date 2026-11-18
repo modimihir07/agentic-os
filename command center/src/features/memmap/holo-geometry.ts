@@ -1,6 +1,6 @@
 import type { TraceStep, TraceZone } from "@/lib/platform";
-import { bodyShell, bodyWireframe, CAR, chassisWireframe, type BodyShell, type V2, type V3 } from "./e46-body";
-import { wheelGeometry } from "./wheel-geometry";
+import { ARCH_R, bodyShell, bodyWireframe, CAR, chassisWireframe, EXHAUST_TIPS, faceProfileX, floorY, type BodyShell, type V2, type V3 } from "./e46-body";
+import { REAR_TYRE, WHEEL, wheelGeometry } from "./wheel-geometry";
 
 export { CAR, UPPER_PROFILE } from "./e46-body";
 export type { V2, V3 } from "./e46-body";
@@ -9,12 +9,12 @@ export type { V2, V3 } from "./e46-body";
  * Pure geometry for the System Map's holographic E46 Touring (2004 325i, "GABAGOUL") —
  * no three.js import, so it unit-tests in node and stays tree-shakeable. Everything is in
  * metres: x runs rear (−) to front (+), y is up from the ground, z is the car's width
- * (+z = right side). Real E46 Touring proportions: 4.48 m long, 1.74 m wide, ~1.45 m
- * tall, 2.725 m wheelbase.
+ * (+z = right side). Real E46 Touring proportions: 4.48 m long, 1.74 m wide, 2.725 m
+ * wheelbase; 1.40 m tall on coilovers.
  *
  * Wireframe output is flat segment lists ([x1,y1,z1, x2,y2,z2, …]) grouped by colour:
- * `base` (Orient Blue body lines), `cyan` (glass, beltline, wheels, grille and lamps) and
- * `amber` (tail lamps, exhaust). The body itself (profile spline, loft, details, shell,
+ * `base` (Orient Blue body lines), `cyan` (glass, beltline, wheels, grille and lamps),
+ * `amber` (tail lamps, exhaust) and `halo` (the angel eyes, drawn brighter). The body itself (profile spline, loft, details, shell,
  * inner chassis) lives in e46-body.ts and the wheels in wheel-geometry.ts; this module
  * keeps the original exports as a facade and adds the zone, pulse, leader, camera and
  * pedestal helpers.
@@ -32,16 +32,17 @@ function arch(cx: number, r: number, fromDeg: number, toDeg: number, n: number):
 
 /** Lower edge, front bumper bottom → rear bumper bottom, with both wheel arches cut in. */
 export function lowerProfile(): V2[] {
-  const r = 0.4;
+  const r = ARCH_R;
+  const at = (x: number): V2 => [x, floorY(x)];
   return [
-    [2.22, 0.3],
-    [CAR.frontAxle + r + 0.02, 0.28],
+    at(2.22),
+    at(CAR.frontAxle + r + 0.02),
     ...arch(CAR.frontAxle, r, 0, 180, 10),
-    [CAR.frontAxle - r - 0.08, 0.24],
-    [CAR.rearAxle + r + 0.08, 0.24],
+    at(CAR.frontAxle - r - 0.08),
+    at(CAR.rearAxle + r + 0.08),
     ...arch(CAR.rearAxle, r, 0, 180, 10),
-    [CAR.rearAxle - r - 0.02, 0.28],
-    [-2.22, 0.3],
+    at(CAR.rearAxle - r - 0.02),
+    at(-2.22),
   ];
 }
 
@@ -97,6 +98,8 @@ export interface Wireframe {
   base: number[];
   cyan: number[];
   amber: number[];
+  /** The angel-eye rings: drawn at full brightness plus a glow pass. */
+  halo?: number[];
   /** Inner chassis and drivetrain (engine, gearbox, shaft, diff, exhaust run, subframes): an x-ray layer. */
   inner?: number[];
   /** The closed body skin, for a depth-only occluder and the Fresnel rim. */
@@ -132,28 +135,60 @@ function append(dst: number[], src: readonly number[]) {
   for (let i = 0; i < src.length; i++) dst.push(src[i]);
 }
 
+export interface RearPlate {
+  /** Plate centre on the tailgate surface (z = 0). */
+  center: V3;
+  /** Forward lean of the tailgate panel at the plate, radians (top toward +x). */
+  lean: number;
+  /** Plate size (m). */
+  w: number;
+  h: number;
+}
+
+const PLATE_Y = 0.86;
+
+/** The rear plate's frame: on the tailgate panel at the profile, leaning with it. */
+export function rearPlate(): RearPlate {
+  const lean = Math.atan2(faceProfileX("rear", PLATE_Y + 0.05) - faceProfileX("rear", PLATE_Y - 0.05), 0.1);
+  return { center: [faceProfileX("rear", PLATE_Y), PLATE_Y, 0], lean, w: 0.52, h: 0.114 };
+}
+
+/** A point in the plate's plane: `u` across (z), `v` up the leaning panel, `out` along its rear-facing normal. */
+export function platePoint(p: RearPlate, u: number, v: number, out = 0): V3 {
+  const s = Math.sin(p.lean);
+  const c = Math.cos(p.lean);
+  return [p.center[0] + v * s - out * c, p.center[1] + v * c + out * s, u];
+}
+
 /**
  * The whole car: body lines (e46-body), plate recess and twin tailpipes, four 18-inch
- * wheels (wheel-geometry), the inner chassis and the body shell. Deterministic.
- * `base`/`cyan`/`amber` stay inside the car's bounding box and `base` stays mirror-symmetric.
+ * wheels (wheel-geometry; staggered 225/40 front, 255/35 rear), the inner chassis and the
+ * body shell. Deterministic. `base`/`cyan`/`amber`/`halo` stay inside the car's bounding box
+ * and `base` stays mirror-symmetric.
  */
 export function e46Wireframe(): Wireframe {
   const body = bodyWireframe();
-  const out: Wireframe = { base: body.base, cyan: body.cyan, amber: body.amber };
+  const out: Wireframe = { base: body.base, cyan: body.cyan, amber: body.amber, halo: body.halo };
 
-  // Rear plate recess and the twin tailpipes on the left (driver's) side.
-  polyline(roundedRect([-2.23, 0.86, 0], 0.58, 0.15, "x", 0.25), out.base, true);
-  for (const z of [-0.5, -0.39]) {
-    const front = circle([-2.1, 0.24, z], 0.038, "x", 10);
-    const back = circle([-2.29, 0.24, z], 0.038, "x", 10);
+  // Rear plate recess (on the leaning tailgate panel) and the twin tailpipes on the left (driver's) side.
+  const plate = rearPlate();
+  polyline(
+    roundedRect([0, 0, 0], 0.58, 0.15, "x", 0.25).map(([, v, u]) => platePoint(plate, u, v, 0.004)),
+    out.base,
+    true,
+  );
+  const { y, x0, x1, r } = EXHAUST_TIPS;
+  for (const z of EXHAUST_TIPS.z) {
+    const front = circle([x0, y, z], r, "x", 10);
+    const back = circle([x1, y, z], r, "x", 10);
     polyline(back, out.amber, true);
-    polyline(circle([-2.29, 0.24, z], 0.026, "x", 10), out.amber, true);
+    polyline(circle([x1, y, z], r * 0.68, "x", 10), out.amber, true);
     for (let i = 0; i < back.length; i += 5) seg(front[i], back[i], out.amber);
   }
 
   for (const cx of [CAR.frontAxle, CAR.rearAxle]) {
     for (const side of [1, -1] as const) {
-      const w = wheelGeometry({ cx, cy: CAR.wheelRadius, zc: side * CAR.track, side });
+      const w = wheelGeometry({ cx, cy: CAR.wheelRadius, zc: side * CAR.track, side, halfWidth: cx < 0 ? REAR_TYRE.halfWidth : WHEEL.halfWidth });
       append(out.base, w.tyre);
       append(out.cyan, w.rim);
       append(out.cyan, w.brake);
@@ -263,11 +298,11 @@ export interface ZoneVolume {
  * Every anchor but the exhaust's sits inside the lofted body (e46-body.test.ts checks it):
  * the engine anchor is under the hood skin, the ECU's in the cowl box below the windshield. */
 export const ZONE_VOLUMES: readonly ZoneVolume[] = [
-  { zone: "engine", label: "Engine bay", center: [1.69, 0.68, 0], size: [1.1, 0.6, 1.62], anchor: [1.7, 0.84, 0] },
-  { zone: "ecu", label: "ECU & wiring harness", center: [0.98, 0.98, 0], size: [0.26, 0.34, 1.5], anchor: [0.98, 0.96, 0] },
-  { zone: "cockpit", label: "Dashboard & console", center: [0, 1.14, 0], size: [1.6, 0.62, 1.5], anchor: [0.15, 1.2, 0] },
-  { zone: "cargo", label: "Cargo trunk", center: [-1.5, 1.1, 0], size: [1.36, 0.7, 1.5], anchor: [-1.5, 1.22, 0] },
-  { zone: "exhaust", label: "Exhaust", center: [-2.2, 0.24, -0.445], size: [0.3, 0.2, 0.36], anchor: [-2.3, 0.24, -0.445] },
+  { zone: "engine", label: "Engine bay", center: [1.69, 0.66, 0], size: [1.1, 0.56, 1.62], anchor: [1.7, 0.78, 0] },
+  { zone: "ecu", label: "ECU & wiring harness", center: [0.98, 0.96, 0], size: [0.26, 0.34, 1.5], anchor: [0.98, 0.93, 0] },
+  { zone: "cockpit", label: "Dashboard & console", center: [0, 1.11, 0], size: [1.6, 0.56, 1.5], anchor: [0.15, 1.18, 0] },
+  { zone: "cargo", label: "Cargo trunk", center: [-1.5, 1.06, 0], size: [1.36, 0.62, 1.5], anchor: [-1.5, 1.18, 0] },
+  { zone: "exhaust", label: "Exhaust", center: [-2.2, EXHAUST_TIPS.y, -0.445], size: [0.3, 0.2, 0.36], anchor: [-2.3, EXHAUST_TIPS.y, -0.445] },
 ];
 
 export function zoneVolume(zone: TraceZone): ZoneVolume {
@@ -275,6 +310,26 @@ export function zoneVolume(zone: TraceZone): ZoneVolume {
 }
 
 export const zoneAnchor = (zone: TraceZone): V3 => zoneVolume(zone).anchor;
+
+// ── Telemetry nodes (in-scene pins, not trace zones) ─────────────────────────
+
+export interface TelemetryNode {
+  id: "wheel-fl" | "wheel-fr" | "wheel-rl" | "wheel-rr";
+  label: string;
+  /** Hub centre on the wheel's outer face. */
+  anchor: V3;
+}
+
+/** The four wheel hubs. Labels only: no hit volume, no inspector, no pulses. */
+export const TELEMETRY_NODES: readonly TelemetryNode[] = [
+  { id: "wheel-fl", label: "Front left wheel", anchor: [CAR.frontAxle, CAR.wheelRadius, -(CAR.track + WHEEL.halfWidth)] },
+  { id: "wheel-fr", label: "Front right wheel", anchor: [CAR.frontAxle, CAR.wheelRadius, CAR.track + WHEEL.halfWidth] },
+  { id: "wheel-rl", label: "Rear left wheel", anchor: [CAR.rearAxle, CAR.wheelRadius, -(CAR.track + REAR_TYRE.halfWidth)] },
+  { id: "wheel-rr", label: "Rear right wheel", anchor: [CAR.rearAxle, CAR.wheelRadius, CAR.track + REAR_TYRE.halfWidth] },
+];
+
+/** The wheels pin's text: rim size, front and rear tyres. */
+export const WHEELS_LABEL = `WHEELS // 18" · ${WHEEL.size} · ${REAR_TYRE.size}`;
 
 /** Do two axis-aligned boxes overlap (strictly)? Used by the tests to keep hit volumes apart. */
 export function boxesOverlap(a: ZoneVolume, b: ZoneVolume): boolean {
@@ -391,6 +446,41 @@ export function leaderStart(r: Rect, p: V2): V2 | null {
   const inside = px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h;
   if (inside) return null;
   return [Math.max(r.x, Math.min(r.x + r.w, px)), Math.max(r.y, Math.min(r.y + r.h, py))];
+}
+
+/**
+ * An elbowed leader for the frame loop, allocation-free: writes the card-edge start and the
+ * elbow into `out` as [sx, sy, ex, ey] (the path then runs on to the target). It leaves the
+ * card square to the edge it starts from for up to `elbowPx`, then runs diagonally. `false`
+ * when the target is under the card.
+ */
+export function leaderElbow(r: Rect, px: number, py: number, out: { [i: number]: number }, elbowPx = 18): boolean {
+  if (px > r.x && px < r.x + r.w && py > r.y && py < r.y + r.h) return false;
+  const sx = Math.max(r.x, Math.min(r.x + r.w, px));
+  const sy = Math.max(r.y, Math.min(r.y + r.h, py));
+  const dx = px - sx;
+  const dy = py - sy;
+  out[0] = sx;
+  out[1] = sy;
+  if (dx !== 0 && Math.abs(dx) >= Math.abs(dy)) {
+    out[2] = sx + Math.sign(dx) * Math.min(elbowPx, Math.abs(dx));
+    out[3] = sy;
+  } else {
+    out[2] = sx;
+    out[3] = sy + Math.sign(dy) * Math.min(elbowPx, Math.abs(dy));
+  }
+  return true;
+}
+
+/** The elbowed leader as points: [card edge, elbow, target]; `null` when the target is under the card. */
+export function leaderPath(r: Rect, p: V2, elbowPx = 18): V2[] | null {
+  const o = [0, 0, 0, 0];
+  if (!leaderElbow(r, p[0], p[1], o, elbowPx)) return null;
+  return [
+    [o[0], o[1]],
+    [o[2], o[3]],
+    [p[0], p[1]],
+  ];
 }
 
 /** NDC (−1…1, y up) → pixels in a `w`×`h` box (y down). */

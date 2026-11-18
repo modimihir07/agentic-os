@@ -10,7 +10,8 @@ import type { RoutingConfig } from "@/lib/platform";
  * for the full algorithm description; this file follows it step for step.
  */
 
-export type RouteKind = "Named" | "Domain" | "Tab" | "Llm" | "Default";
+/** "Direct": a live-tool read question Tony answers himself (`directTool`); never from `resolve`. */
+export type RouteKind = "Named" | "Domain" | "Tab" | "Llm" | "Default" | "Direct";
 export type Confidence = "high" | "medium" | "low";
 
 export interface Route {
@@ -224,4 +225,39 @@ export function resolve(text: string, cfg: RoutingConfig): Route {
   }
   // (d) nothing matched.
   return { role: null, reason: "no name or trigger matched", confidence: "low", kind: "Default", task: original };
+}
+
+// ── Direct live-tool questions ──────────────────────────────────────────────
+// Mirrors `direct_tool` in routing.rs exactly (shared fixtures, `direct` field).
+
+/** Write verbs: the line asks to change something, not to read it. */
+const DIRECT_WRITE = /\b(?:send|sending|reply|replying|respond|draft|delete|write|compose|forward|archive|trash|unsubscribe)\b|\b(?:text|message|tell|email|ping|call) (?:him|her|them|back)\b|\blet (?:him|her|them) know\b/;
+const DIRECT_WHATSAPP_READ = /\b(?:check|read|any|anything|new|latest|last|recent|unread|updates?|messages?|texts?|chats?|today|whats new|who)\b/;
+/** Whisper's "what's up" also normalizes to "whatsapp": that form needs a messaging noun. */
+const DIRECT_WHATSAPP_NOUN = /\b(?:messages?|texts?|chats?|updates?|unread)\b/;
+const DIRECT_GMAIL = /\b(?:gmail|inbox|emails?|mail)\b/;
+const DIRECT_GMAIL_READ = /\b(?:check|read|any|anything|new|latest|last|recent|unread|updates?|whats in|from|today|got)\b/;
+const DIRECT_WEATHER = /\b(?:weather|forecast|umbrella)\b|\bhow (?:hot|cold|warm) is it\b|\b(?:is it|will it|gonna|going to) (?:rain|snow)\b|\btemperature (?:outside|today|tonight|tomorrow|in|out)\b|\bwhats the temperature\b/;
+const DIRECT_SPOTIFY = /\b(?:whats playing|what is playing|now playing|what song is this|whats this song|what song is playing|which song is this)\b/;
+
+export type DirectTool = "whatsapp" | "gmail" | "weather" | "spotify";
+
+/**
+ * "Any WhatsApp updates?", "check my inbox", "will it rain tomorrow", "what's playing":
+ * read questions Tony answers from his own live tools, whichever tab is open. The caller
+ * keeps a Named delegation; a write aimed at the service never matches.
+ */
+export function directTool(text: string): DirectTool | null {
+  const n = normalize(text);
+  if (!n || DIRECT_WRITE.test(n)) return null;
+  if (/\bwhatsapp\b/.test(n)) {
+    const lower = text.toLowerCase();
+    const saysApp = lower.includes("sapp") || lower.includes("s app");
+    const read = saysApp ? n === "whatsapp" || DIRECT_WHATSAPP_READ.test(n) : DIRECT_WHATSAPP_NOUN.test(n);
+    if (read) return "whatsapp";
+  }
+  if (DIRECT_GMAIL.test(n) && DIRECT_GMAIL_READ.test(n)) return "gmail";
+  if (DIRECT_WEATHER.test(n)) return "weather";
+  if (DIRECT_SPOTIFY.test(n)) return "spotify";
+  return null;
 }

@@ -1797,6 +1797,16 @@ mod tests {
     }
 
     #[test]
+    fn whatsapp_send_is_refused_by_default() {
+        // `call_tool_with` runs this refusal first, for every caller.
+        let cfg = OsConfig::default();
+        let e = read_only_refusal(&cfg, "whatsapp.send_message").expect("send refused");
+        assert!(e.starts_with(READ_ONLY_PREFIX));
+        assert!(read_only_refusal(&cfg, "whatsapp.send_file").is_some());
+        assert_eq!(read_only_refusal(&cfg, "whatsapp.list_messages"), None);
+    }
+
+    #[test]
     fn read_only_servers_hide_and_refuse_write_tools() {
         let mut cfg = os_core::OsConfig::default();
         cfg.mcps = vec![McpServer { id: "sqlite".into(), name: "SQLite".into(), transport: "stdio".into(), enabled: true, read_only: true, ..Default::default() }, McpServer { id: "rw".into(), name: "RW".into(), transport: "stdio".into(), enabled: true, ..Default::default() }];

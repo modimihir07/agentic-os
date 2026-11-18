@@ -12,6 +12,15 @@ export type SystemMapMode = "streamlined" | "xray";
 /** Where Tony's voice comes out (Phase 2): see `features/voice/audio-route.ts`. */
 export type AudioRoute = "auto" | "headset" | "speakers";
 
+/** Spotify ducking while you talk (Phase 2): see `features/voice/spotify-duck.ts`.
+ * `onWakeListen`: also duck for speech heard by a passive hands-free wake listen. */
+export interface SpotifyDuckSettings {
+  enabled: boolean;
+  level: number;
+  restoreMs: number;
+  onWakeListen: boolean;
+}
+
 export interface SettingsState {
   /** Agentic OS FastAPI backend. On mobile, use the desktop's NetBird IP. */
   gatewayUrl: string;
@@ -57,10 +66,13 @@ export interface SettingsState {
    * Conversation: reopen the mic after Tony answers; let you talk over him.
    * `bargeEndSilenceMs`: end-of-speech pause for a listen opened over Tony (Phase 2 reflexes).
    * `audioRoute`: headset vs open speakers ("auto" reads the default output device's name).
+   * `spotifyDuck`: Spotify (on this PC) drops to `level`% while you talk, back `restoreMs` after you stop.
    */
-  conversation: { followUp: boolean; followUpSecs: number; bargeIn: boolean; bargeEndSilenceMs: number; audioRoute: AudioRoute };
+  conversation: { followUp: boolean; followUpSecs: number; bargeIn: boolean; bargeEndSilenceMs: number; audioRoute: AudioRoute; spotifyDuck: SpotifyDuckSettings };
   /** Voice routing: `announcerHandoff` = Tony introduces a delegated agent, which then speaks its own answer in its own voice. */
   routing: { announcerHandoff: boolean };
+  /** Alarms & reminders: `osFallback` = also register a Windows alarm that rings even when the app is closed. */
+  reminders: { osFallback: boolean };
   /** System Map: Streamlined OS (default) or Dev X-Ray. */
   systemMapMode: SystemMapMode;
   /** System Map routing flowchart strip: expanded / collapsed; null = expand only on tall screens (≥ 900 px). */
@@ -91,8 +103,9 @@ const defaults: Omit<SettingsState, "set"> = {
   glassOpacity: 8,
   gatewayToken: "",
   vad: { sensitivity: 60, endSilenceMs: 700, maxUtteranceMs: 15000 },
-  conversation: { followUp: true, followUpSecs: 6, bargeIn: true, bargeEndSilenceMs: 500, audioRoute: "auto" },
+  conversation: { followUp: true, followUpSecs: 6, bargeIn: true, bargeEndSilenceMs: 500, audioRoute: "auto", spotifyDuck: { enabled: true, level: 15, restoreMs: 2500, onWakeListen: true } },
   routing: { announcerHandoff: true },
+  reminders: { osFallback: true },
   systemMapMode: "streamlined",
   systemMapFlowOpen: null,
   waveColors: ["#00F0FF", "#A855F7", "#FF6B4A"],

@@ -143,8 +143,8 @@ Each one is a hold when `busy`. Negative cases: `"oh and add milk"` (busy) → n
 ## 4. Multi-agent voice handoff — BUILD IT (Decision 3), default ON
 
 Today a delegated answer is re-synthesised and spoken by **Tony**, on purpose, so nobody talks twice. Add
-`routing.announcerHandoff` (default **on**, with a toggle in Routing settings to go back to the old behaviour). When it's on: Tony says a short intro in his own voice ("Booking
-Desk, you're up."); then the sub-agent's own `reply` step (`r.steps`, `kind: "reply"`) is spoken in **its**
+`routing.announcerHandoff` (default **on**, with a toggle in Routing settings to go back to the old behaviour). When it's on: Tony says a short intro in his own voice ("Here's
+Booking Desk."; also on an agent's own tab, before its first streamed words); then the sub-agent's own `reply` step (`r.steps`, `kind: "reply"`) is spoken in **its**
 roster voice; Tony does not re-summarise it. Cache each agent's intro line as audio, so the intro costs no
 ElevenLabs call or wait after the first time.
 

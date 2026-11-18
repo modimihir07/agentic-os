@@ -298,6 +298,62 @@ pub fn resolve(text: &str, cfg: &OsConfig) -> Route {
     Route { role: None, reason: "no name or trigger matched".into(), confidence: "low".into(), kind: RouteKind::Default, task: original }
 }
 
+// ── Direct live-tool questions ──────────────────────────────────────────────
+//
+// "Any WhatsApp updates?", "check my inbox", "will it rain tomorrow", "what's playing":
+// read questions Tony answers from his own live tools, whichever tab is open. A
+// Named delegation still wins (the caller checks that); a write aimed at the
+// service ("reply to Sam on WhatsApp", "draft an email") never matches.
+
+/// Write verbs: the line asks to change something, not to read it.
+const DIRECT_WRITE: &str = r"\b(?:send|sending|reply|replying|respond|draft|delete|write|compose|forward|archive|trash|unsubscribe)\b|\b(?:text|message|tell|email|ping|call) (?:him|her|them|back)\b|\blet (?:him|her|them) know\b";
+const DIRECT_WHATSAPP_READ: &str = r"\b(?:check|read|any|anything|new|latest|last|recent|unread|updates?|messages?|texts?|chats?|today|whats new|who)\b";
+/// Whisper's "what's up" also normalizes to "whatsapp": that form needs a messaging noun.
+const DIRECT_WHATSAPP_NOUN: &str = r"\b(?:messages?|texts?|chats?|updates?|unread)\b";
+const DIRECT_GMAIL: &str = r"\b(?:gmail|inbox|emails?|mail)\b";
+const DIRECT_GMAIL_READ: &str = r"\b(?:check|read|any|anything|new|latest|last|recent|unread|updates?|whats in|from|today|got)\b";
+const DIRECT_WEATHER: &str = r"\b(?:weather|forecast|umbrella)\b|\bhow (?:hot|cold|warm) is it\b|\b(?:is it|will it|gonna|going to) (?:rain|snow)\b|\btemperature (?:outside|today|tonight|tomorrow|in|out)\b|\bwhats the temperature\b";
+const DIRECT_SPOTIFY: &str = r"\b(?:whats playing|what is playing|now playing|what song is this|whats this song|what song is playing|which song is this)\b";
+
+fn direct_re(slot: &'static std::sync::OnceLock<regex::Regex>, pat: &str) -> &'static regex::Regex {
+    slot.get_or_init(|| regex::Regex::new(pat).unwrap())
+}
+
+/// The live tool a read question is for: "whatsapp" | "gmail" | "weather" | "spotify".
+/// Mirrored exactly by `directTool()` in router.ts (shared fixtures, `direct` field).
+pub fn direct_tool(text: &str) -> Option<&'static str> {
+    static WRITE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static WA: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static WA_READ: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static WA_NOUN: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static GMAIL: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static GMAIL_READ: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static WEATHER: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static SPOTIFY: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let n = normalize(text);
+    if n.is_empty() || direct_re(&WRITE, DIRECT_WRITE).is_match(&n) {
+        return None;
+    }
+    if direct_re(&WA, r"\bwhatsapp\b").is_match(&n) {
+        let lower = text.to_lowercase();
+        let says_app = lower.contains("sapp") || lower.contains("s app");
+        let read = if says_app { n == "whatsapp" || direct_re(&WA_READ, DIRECT_WHATSAPP_READ).is_match(&n) } else { direct_re(&WA_NOUN, DIRECT_WHATSAPP_NOUN).is_match(&n) };
+        if read {
+            return Some("whatsapp");
+        }
+    }
+    if direct_re(&GMAIL, DIRECT_GMAIL).is_match(&n) && direct_re(&GMAIL_READ, DIRECT_GMAIL_READ).is_match(&n) {
+        return Some("gmail");
+    }
+    if direct_re(&WEATHER, DIRECT_WEATHER).is_match(&n) {
+        return Some("weather");
+    }
+    if direct_re(&SPOTIFY, DIRECT_SPOTIFY).is_match(&n) {
+        return Some("spotify");
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -312,6 +368,9 @@ mod tests {
         kind: String,
         #[serde(default)]
         task_contains: Option<String>,
+        /// `direct_tool`'s answer; missing = None.
+        #[serde(default)]
+        direct: Option<String>,
     }
 
     fn kind_str(k: RouteKind) -> &'static str {
@@ -337,6 +396,26 @@ mod tests {
             if let Some(needle) = &f.task_contains {
                 assert!(r.task.contains(needle.as_str()), "task {:?} should contain {:?} (text: {:?})", r.task, needle, f.text);
             }
+            assert_eq!(direct_tool(&f.text), f.direct.as_deref(), "direct tool mismatch for {:?}", f.text);
+        }
+    }
+
+    #[test]
+    fn direct_tool_reads_match_and_writes_never_do() {
+        for (text, tool) in [
+            ("any WhatsApp updates?", "whatsapp"),
+            ("Hey Tony, anything new on WhatsApp", "whatsapp"),
+            ("read my last 3 whatsapp messages", "whatsapp"),
+            ("what's in my inbox", "gmail"),
+            ("did I get any mail today", "gmail"),
+            ("is it going to snow tonight", "weather"),
+            ("how cold is it outside", "weather"),
+            ("what song is this", "spotify"),
+        ] {
+            assert_eq!(direct_tool(text), Some(tool), "{text}");
+        }
+        for text in ["send a whatsapp to Sam", "delete my last email", "tell him on whatsapp I'm late", "play purple rain", "what's the CPU temperature", "hey what's up", ""] {
+            assert_eq!(direct_tool(text), None, "{text}");
         }
     }
 
