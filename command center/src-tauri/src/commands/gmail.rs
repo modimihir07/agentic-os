@@ -29,13 +29,15 @@ pub(crate) enum Source {
     None,
 }
 
-/// The Apps Script deployment ID + key: the keychain pair Settings saves (or the AnythingLLM
-/// import writes), else `GMAIL_SCRIPT_ID` / `GMAIL_SCRIPT_KEY` from the environment or the
-/// repo-root `.env`. Read on every call, so a change takes effect without a restart.
+/// The Apps Script deployment ID + key, in priority order: `GMAIL_SCRIPT_ID` /
+/// `GMAIL_SCRIPT_KEY` from the environment or repo-root `.env` (the direct credential),
+/// then the keychain pair (Settings, or the AnythingLLM import). `source()` falls back to
+/// an n8n workflow after that. Read on every call, so a change takes effect without a restart.
 fn creds(state: &DispatchState) -> Option<(String, String)> {
-    match (os_core::os_secret(SECRET_ID), os_core::os_secret(SECRET_KEY)) {
+    let env = |k| super::envfile::env_or_file(state, k);
+    match (env("GMAIL_SCRIPT_ID"), env("GMAIL_SCRIPT_KEY")) {
         (Some(id), Some(key)) => Some((id, key)),
-        _ => Some((super::envfile::env_or_file(state, "GMAIL_SCRIPT_ID")?, super::envfile::env_or_file(state, "GMAIL_SCRIPT_KEY")?)),
+        _ => Some((os_core::os_secret(SECRET_ID)?, os_core::os_secret(SECRET_KEY)?)),
     }
 }
 

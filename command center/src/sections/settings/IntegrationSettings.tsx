@@ -265,7 +265,7 @@ export function GmailCard() {
       <div key={rev}>
         <SecretRow name="gmail-script-id" label="Apps Script deployment ID" placeholder="AKfycb…" onChange={refresh} />
         <SecretRow name="gmail-script-key" label="Apps Script API key" onChange={refresh} />
-        <p className="mt-1 text-xs text-ink-3">Or set GMAIL_SCRIPT_ID and GMAIL_SCRIPT_KEY in the repo-root .env (used when the keychain pair isn't set; the keychain wins).</p>
+        <p className="mt-1 text-xs text-ink-3">GMAIL_SCRIPT_ID and GMAIL_SCRIPT_KEY in the repo-root .env take priority; this keychain pair (or Import from AnythingLLM) is the fallback.</p>
       </div>
       {out && <pre className={`well mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-[8px] p-2 text-[11px] ${out.ok ? "text-ink-2" : "text-alert"}`}>{out.text}</pre>}
     </Card>
@@ -293,7 +293,7 @@ export function BraveCard() {
   return (
     <Card title="Brave Search" hint="Web search for Tony and the Coder / Librarian. Get a key at api-dashboard.search.brave.com (the free plan is enough).">
       {server && <Toggle on={server.enabled} onChange={(v) => void setMcpEnabled("brave-search", v)} label="Brave Search tools on" />}
-      <SecretRow name="brave" label="Brave Search API key" hint="Or set BRAVE_API_KEY in the repo-root .env — the keychain value wins." />
+      <SecretRow name="brave" label="Brave Search API key" hint="BRAVE_API_KEY in the repo-root .env takes priority; this keychain value is the fallback." />
       <button onClick={() => void test()} disabled={busy || !server?.enabled} className="pill-glass mt-1 !h-8 text-xs">
         {busy ? <Loader2 size={13} className="animate-spin" /> : <FlaskConical size={13} />} Test search
       </button>

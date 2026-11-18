@@ -751,7 +751,11 @@ pub fn gate(bridge: &BridgeState, tier: Tier, what: &str, approved: bool, detail
 // to that service. The webview can set / check / delete, never read.
 
 const SERVICE: &str = "agentic-os-command-center";
-pub const OS_SECRETS: [&str; 10] = ["anthropic", "gemini", "brave", "twelvedata", "vault", "gateway-token", "anythingllm-remote", "gmail-script-id", "gmail-script-key", "spotify-refresh"];
+pub const OS_SECRETS: [&str; 13] = [
+    "anthropic", "gemini", "brave", "twelvedata", "vault", "gateway-token", "anythingllm-remote", "gmail-script-id", "gmail-script-key", "spotify-refresh",
+    // Remote MCP tokens: each is only ever sent to its own host (see `mcp::REMOTE_AUTH`).
+    "github-pat", "sentry-token", "agentmail-key",
+];
 
 fn os_entry(name: &str) -> Result<keyring::Entry, String> {
     if !OS_SECRETS.contains(&name) {

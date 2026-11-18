@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Cloud, FolderOpen, Loader2, Plus, RefreshCw, Trash2, Wrench, X } from "lucide-react";
+import { Cloud, FolderOpen, KeyRound, Loader2, Plus, RefreshCw, Trash2, Wrench, X } from "lucide-react";
 import { Card, Field, Input, Select } from "@/components/ui";
 import { cmd, type AllmSyncReport, type McpServer, type ServerTools, type SkillInfo } from "@/lib/platform";
 import { SUB_AGENT_IDS, roleLabel, toggleGrant } from "@/features/dispatcher/roles";
@@ -130,12 +130,14 @@ export function McpRegistryCard() {
   const [loading, setLoading] = useState(false);
   const [adding, setAdding] = useState(false);
   const [testOut, setTestOut] = useState<Record<string, string>>({});
+  const [configuring, setConfiguring] = useState<string | null>(null);
   const [sync, setSync] = useState<{ loading: boolean; report: AllmSyncReport | null; err: string | null }>({ loading: false, report: null, err: null });
   const reloadOnAuth = useCallback(() => load(), []); // eslint-disable-line react-hooks/exhaustive-deps
   const load = (refresh = false) => {
     setLoading(true);
     void cmd("mcp_list_tools", { refresh })
       .then(setTools)
+      .catch(() => setTools(null))
       .finally(() => setLoading(false));
   };
   useEffect(() => load(), [cfg?.mcps.map((m) => `${m.id}:${m.enabled}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -217,7 +219,12 @@ export function McpRegistryCard() {
                 </button>
                 <span className="text-sm text-ink">{m.name}</span>
                 <span className="label-caps text-ink-3">{m.transport}</span>
-                {m.enabled && t && <span className={`text-[11px] ${t.ok ? "text-teal" : "text-alert"}`}>{t.ok ? `${t.tools.length} tool${t.tools.length === 1 ? "" : "s"}` : (t.error ?? "error").slice(0, 80)}</span>}
+                {m.enabled && t && <ServerStatus t={t} />}
+                {t?.auth && (
+                  <button onClick={() => setConfiguring(configuring === m.id ? null : m.id)} className="pill-glass !h-6 !px-2 text-[11px]" aria-expanded={configuring === m.id}>
+                    <KeyRound size={11} /> {t.status === "needs_token" ? "Add token" : t.status === "auth_failed" ? "Update token" : "Configure"}
+                  </button>
+                )}
                 {!m.builtin && (
                   <button onClick={() => setMcps(cfg.mcps.filter((x) => x.id !== m.id))} className="ml-auto text-ink-3 hover:text-alert" aria-label={`Remove ${m.name}`}>
                     <Trash2 size={13} />
@@ -225,6 +232,11 @@ export function McpRegistryCard() {
                 )}
               </div>
               {m.description && <p className="mt-0.5 text-xs text-ink-3">{m.description}</p>}
+              {t?.auth && configuring === m.id && (
+                <div className="well mt-1.5 rounded-[10px] px-2">
+                  <SecretRow name={t.auth.secret} label={t.auth.label} hint={`Sent only to ${m.url ? new URL(m.url).host : "this server"}. ${t.auth.env} in the repo-root .env takes priority over this keychain value.`} onChange={() => load(true)} />
+                </div>
+              )}
               {m.transport !== "builtin" && <p className="mt-0.5 truncate font-mono text-[11px] text-ink-3">{m.transport === "http" ? m.url : `${m.command} ${m.args.join(" ")}`}</p>}
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {AGENTS.filter(([id]) => id !== "claude").map(([id, label]) => {
@@ -350,3 +362,13 @@ function AddMcp({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (m: 
   );
 }
 
+/** One server's listing state: tool count, a token to add / update (amber, not an error), or a failure. */
+function ServerStatus({ t }: { t: ServerTools }) {
+  if (t.ok) return <span className="text-[11px] text-teal">{`${t.tools.length} tool${t.tools.length === 1 ? "" : "s"}`}</span>;
+  const text = t.status === "needs_token" ? "needs a token" : t.status === "auth_failed" ? "token rejected — update it" : (t.error ?? "error").slice(0, 80);
+  return (
+    <span className={`text-[11px] ${t.status === "needs_token" ? "text-amber-light" : "text-alert"}`} title={t.error ?? undefined}>
+      {text}
+    </span>
+  );
+}

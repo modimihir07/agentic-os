@@ -48,18 +48,24 @@ function SpotifyDesktop(props: WidgetProps<Config>) {
       </div>
     );
   if (!status.connected) return <ConnectPanel onDone={refresh} />;
+  // A token Spotify refuses for good (revoked, expired, app owner needs Premium): show why and
+  // how to fix it instead of polling into errors. Transient problems (rate limit, outage,
+  // network) keep the Player, whose polling recovers on its own.
+  if (status.problem && needsReconnect(status.problem)) return <ConnectPanel onDone={refresh} problem={status.problem} />;
   return <Player {...props} onDisconnected={refresh} />;
 }
 
-function ConnectPanel({ onDone }: { onDone: () => void }) {
+function ConnectPanel({ onDone, problem }: { onDone: () => void; problem?: string }) {
   const { state, connect } = useSpotifyConnect(onDone);
   const waiting = state.phase === "waiting";
+  // The app-owner-needs-Premium block can't be fixed by signing in again: offer a re-check.
+  const recheckOnly = !!problem && /won't help/i.test(problem);
   return (
     <div className="flex h-full flex-col">
       <WidgetHeader title="Spotify" />
-      <p className="mb-3 text-sm text-ink-2">Connect your Spotify account to see what's playing and control it from here.</p>
-      <button onClick={() => void connect()} disabled={waiting} className="pill-primary !h-9 w-fit text-[13px]">
-        {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} Connect Spotify
+      <p className={`mb-3 text-sm ${problem ? "text-alert" : "text-ink-2"}`}>{problem ?? "Connect your Spotify account to see what's playing and control it from here."}</p>
+      <button onClick={() => void (recheckOnly ? onDone() : connect())} disabled={waiting} className="pill-primary !h-9 w-fit text-[13px]">
+        {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {recheckOnly ? "Check again" : problem ? "Re-authenticate" : "Connect Spotify"}
       </button>
       {waiting && (
         <p className="mt-2 text-xs text-ink-2">

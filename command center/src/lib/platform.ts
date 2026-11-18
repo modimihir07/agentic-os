@@ -382,7 +382,20 @@ export interface NetbirdStatus {
 
 export type Tier = "allow" | "ask" | "deny";
 export type ComputeMode = "local" | "hybrid" | "cloud";
-export type OsSecret = "anthropic" | "gemini" | "brave" | "twelvedata" | "vault" | "gateway-token" | "anythingllm-remote" | "gmail-script-id" | "gmail-script-key" | "spotify-refresh";
+export type OsSecret =
+  | "anthropic"
+  | "gemini"
+  | "brave"
+  | "twelvedata"
+  | "vault"
+  | "gateway-token"
+  | "anythingllm-remote"
+  | "gmail-script-id"
+  | "gmail-script-key"
+  | "spotify-refresh"
+  | "github-pat"
+  | "sentry-token"
+  | "agentmail-key";
 export type OverseerEngine = "claude-cli" | "claude-api" | "gemini-cli" | "gemini-api" | "droplet" | "local";
 
 export interface AgentTriggers {
@@ -602,6 +615,9 @@ export interface ServerTools {
   ok: boolean;
   error: string | null;
   tools: ToolInfo[];
+  status: "ok" | "off" | "needs_token" | "auth_failed" | "error";
+  /** A remote server that takes a token: where it's read from (`.env` key first, then this keychain secret). */
+  auth: { secret: OsSecret; env: string; label: string } | null;
 }
 
 export type SpotifyAction = "play" | "pause" | "resume" | "next" | "previous" | "volume" | "shuffle";

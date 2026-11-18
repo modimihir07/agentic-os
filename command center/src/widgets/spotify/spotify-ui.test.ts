@@ -31,5 +31,8 @@ describe("spotify widget helpers", () => {
   it("knows when to show Connect again", () => {
     expect(needsReconnect("Spotify isn't connected — connect it in Settings → Integrations.")).toBe(true);
     expect(needsReconnect("Open Spotify on this PC or your phone first.")).toBe(false);
+    expect(needsReconnect("Spotify session expired — connect it again in Settings → Integrations")).toBe(true);
+    expect(needsReconnect("Spotify is blocking this app: the Spotify account that owns it in the Developer Dashboard needs an active Premium subscription")).toBe(true);
+    expect(needsReconnect("Spotify playback control needs Premium")).toBe(false);
   });
 });

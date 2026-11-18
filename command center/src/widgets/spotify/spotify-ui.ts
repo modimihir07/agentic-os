@@ -33,5 +33,6 @@ export function shownVolume(polled: number | null, local: { value: number; at: n
   return polled;
 }
 
-/** Errors that mean "connect again", so the widget swaps back to its Connect button. */
-export const needsReconnect = (msg: string) => /isn't connected/i.test(msg);
+/** Errors that mean "connect again" (or that polling can't fix), so the widget stops polling
+ * and re-reads its status, which then shows Connect / Re-authenticate with the reason. */
+export const needsReconnect = (msg: string) => /isn't connected|session expired|revoked|owner of it in the developer dashboard|blocking this app/i.test(msg);

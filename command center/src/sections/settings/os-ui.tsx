@@ -96,7 +96,11 @@ export function SecretRow({ name, label, placeholder, hint, onChange }: { name: 
             Save
           </button>
           {has && (
-            <button type="button" aria-label={`Delete ${label}`} onClick={() => void cmd("os_secret_delete", { name }).then(() => (refresh(), onChange?.(), notifyIntegrationsChanged()))} className="pill-glass !h-9 !w-9 !p-0 hover:!border-alert/50">
+            <button type="button" aria-label={`Delete ${label}`} onClick={() =>
+                void cmd("os_secret_delete", { name })
+                  .then(() => (refresh(), onChange?.(), notifyIntegrationsChanged()))
+                  .catch((er) => setMsg(String(er)))
+              } className="pill-glass !h-9 !w-9 !p-0 hover:!border-alert/50">
               <Trash2 size={13} />
             </button>
           )}

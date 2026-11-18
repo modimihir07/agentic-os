@@ -16,7 +16,8 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Mutex;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -97,7 +98,8 @@ pub(crate) fn unavailable_reason(state: &DispatchState, cfg: &OsConfig, id: &str
         return Some(format!("{} is switched off — enable it in Settings → Skills & MCP Library", s.name));
     }
     if s.transport != "builtin" {
-        return None;
+        // Cheap, no network: a remote server whose token is missing.
+        return remote_token(state, s).err();
     }
     listing(state, id).err()
 }
@@ -117,6 +119,115 @@ pub struct ServerTools {
     ok: bool,
     error: Option<String>,
     tools: Vec<ToolInfo>,
+    /// "ok" | "off" | "needs_token" | "auth_failed" | "error": lets the UI offer a Configure action.
+    status: &'static str,
+    /// For a remote server that takes a token: which keychain secret / `.env` key holds it.
+    auth: Option<AuthInfo>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct AuthInfo {
+    secret: &'static str,
+    env: &'static str,
+    label: &'static str,
+}
+
+// ── Remote MCP tokens ───────────────────────────────────────────────────────
+
+/// A remote MCP host that needs a bearer token. The token is bound to `host`: it is only
+/// ever attached to requests for a server whose URL is on that exact host.
+pub(crate) struct RemoteAuth {
+    host: &'static str,
+    secret: &'static str,
+    env: &'static str,
+    label: &'static str,
+}
+
+pub(crate) const REMOTE_AUTH: [RemoteAuth; 3] = [
+    RemoteAuth { host: "api.githubcopilot.com", secret: "github-pat", env: "GITHUB_PAT", label: "GitHub personal access token" },
+    RemoteAuth { host: "mcp.sentry.dev", secret: "sentry-token", env: "SENTRY_AUTH_TOKEN", label: "Sentry auth token" },
+    RemoteAuth { host: "mcp.agentmail.to", secret: "agentmail-key", env: "AGENTMAIL_API_KEY", label: "AgentMail API key" },
+];
+
+fn remote_auth(s: &McpServer) -> Option<&'static RemoteAuth> {
+    if s.transport != "http" {
+        return None;
+    }
+    let u = reqwest::Url::parse(&s.url).ok()?;
+    // Only over TLS to the service's own port: a plain-http or odd-port URL never gets a token.
+    if u.scheme() != "https" || u.port_or_known_default() != Some(443) {
+        return None;
+    }
+    let host = u.host_str()?.to_ascii_lowercase();
+    REMOTE_AUTH.iter().find(|a| a.host == host)
+}
+
+/// The token for a token-taking remote server: `.env` / environment first, then the
+/// keychain (Settings → Skills & MCP Library). `Ok(None)` = this server takes no token.
+fn remote_token(state: &DispatchState, s: &McpServer) -> Result<Option<String>, String> {
+    let Some(a) = remote_auth(s) else { return Ok(None) };
+    // The user set their own Authorization header on this server: use only that one.
+    if s.env.keys().any(|k| k.eq_ignore_ascii_case("authorization")) {
+        return Ok(None);
+    }
+    super::envfile::env_or_file(state, a.env)
+        .or_else(|| os_core::os_secret(a.secret))
+        .map(Some)
+        .ok_or_else(|| needs_token_msg(&s.name, a))
+}
+
+fn needs_token_msg(name: &str, a: &RemoteAuth) -> String {
+    format!("{name}: needs a {} ({NEEDS_TOKEN}) — add it under Configure in Settings → Skills & MCP Library, or set {} in the repo .env", a.label, a.env)
+}
+
+const NEEDS_TOKEN: &str = "no token set";
+const TOKEN_REJECTED: &str = "token was rejected";
+
+fn status_of(err: &str) -> &'static str {
+    if err.contains(NEEDS_TOKEN) {
+        "needs_token"
+    } else if err.contains(TOKEN_REJECTED) {
+        "auth_failed"
+    } else {
+        "error"
+    }
+}
+
+fn rejected_msg(name: &str, code: u16) -> String {
+    format!("{name}: {TOKEN_REJECTED} (HTTP {code}) — it may have expired; update it under Configure in Settings → Skills & MCP Library")
+}
+
+/// Failed listings of external servers, so a server that's down or refusing us isn't
+/// re-asked (and re-logged) on every chat turn. Keyed by server id plus a fingerprint of
+/// its token, so saving a new token retries at once. Memory only; the token isn't kept.
+static FAILED: Mutex<Option<HashMap<String, (u64, u64, String)>>> = Mutex::new(None);
+const FAILED_TTL: u64 = 300;
+
+fn token_fingerprint(token: Option<&str>) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    token.hash(&mut h);
+    h.finish()
+}
+
+fn failed_get(id: &str, fp: u64, now: u64) -> Option<String> {
+    let g = FAILED.lock().unwrap();
+    let (at, f, e) = g.as_ref()?.get(id)?;
+    (*f == fp && now.saturating_sub(*at) < FAILED_TTL).then(|| e.clone())
+}
+
+fn failed_set(id: &str, entry: Option<(u64, u64, String)>) {
+    let mut g = FAILED.lock().unwrap();
+    let m = g.get_or_insert_with(HashMap::new);
+    match entry {
+        Some(e) => {
+            m.insert(id.to_string(), e);
+        }
+        None => {
+            m.remove(id);
+        }
+    }
 }
 
 /// Tools of every enabled server (external ones cached for 10 minutes).
@@ -149,10 +260,8 @@ pub async fn enabled_tools(state: &DispatchState, os: &OsState, agent: &str) -> 
     let results = futures_util::future::join_all(servers.iter().map(|s| async move {
         match tokio::time::timeout(Duration::from_secs(10), tools_of(state, os, s, false)).await {
             Ok(Ok(v)) => v,
-            Ok(Err(e)) => {
-                eprintln!("[mcp] {}: {e}", s.id);
-                vec![]
-            }
+            // tools_of logged a fresh failure once; cached and token-less ones stay quiet.
+            Ok(Err(_)) => vec![],
             Err(_) => {
                 eprintln!("[mcp] {}: tools/list timed out", s.id);
                 vec![]
@@ -171,15 +280,31 @@ async fn tools_of(state: &DispatchState, os: &OsState, s: &McpServer, refresh: b
     if s.transport == "builtin" {
         return listing(state, &s.id);
     }
+    // No token: say so without a network call (and without logging it every turn).
+    let token = remote_token(state, s)?;
     let now = os_core::now_secs();
+    let fp = token_fingerprint(token.as_deref());
     if !refresh {
         if let Some((at, tools)) = os.mcp_tools.lock().unwrap().get(&s.id) {
             if now - at < 600 {
                 return Ok(tools.clone());
             }
         }
+        if let Some(e) = failed_get(&s.id, fp, now) {
+            return Err(e);
+        }
     }
-    let res = rpc(state, s, "tools/list", json!({})).await?;
+    let res = match rpc(state, s, "tools/list", json!({})).await {
+        Ok(v) => {
+            failed_set(&s.id, None);
+            v
+        }
+        Err(e) => {
+            eprintln!("[mcp] {}: {e}", s.id);
+            failed_set(&s.id, Some((now, fp, e.clone())));
+            return Err(e);
+        }
+    };
     let tools: Vec<ToolInfo> = res["tools"]
         .as_array()
         .into_iter()
@@ -199,14 +324,18 @@ pub async fn mcp_list_tools(state: State<'_, DispatchState>, os: State<'_, OsSta
     let cfg = os.snapshot();
     let mut out = Vec::new();
     for s in &cfg.mcps {
+        let auth = remote_auth(s).map(|a| AuthInfo { secret: a.secret, env: a.env, label: a.label });
         if !s.enabled {
-            out.push(ServerTools { id: s.id.clone(), name: s.name.clone(), enabled: false, ok: false, error: None, tools: builtin_tools(&s.id) });
+            out.push(ServerTools { id: s.id.clone(), name: s.name.clone(), enabled: false, ok: false, error: None, tools: builtin_tools(&s.id), status: "off", auth });
             continue;
         }
         let r = tools_of(&state, &os, s, refresh.unwrap_or(false)).await;
         out.push(match r {
-            Ok(tools) => ServerTools { id: s.id.clone(), name: s.name.clone(), enabled: true, ok: true, error: None, tools },
-            Err(e) => ServerTools { id: s.id.clone(), name: s.name.clone(), enabled: true, ok: false, error: Some(e), tools: vec![] },
+            Ok(tools) => ServerTools { id: s.id.clone(), name: s.name.clone(), enabled: true, ok: true, error: None, tools, status: "ok", auth },
+            Err(e) => {
+                let status = status_of(&e);
+                ServerTools { id: s.id.clone(), name: s.name.clone(), enabled: true, ok: false, error: Some(e), tools: vec![], status, auth }
+            }
         });
     }
     Ok(out)
@@ -517,10 +646,11 @@ fn kg_search(query: &str) -> Result<String, String> {
     Ok(hits.into_iter().take(10).map(|h| h.1).collect::<Vec<_>>().join("\n"))
 }
 
-/// The keychain entry Settings saves (read fresh each call, so a new key works without a
-/// restart), else `BRAVE_API_KEY` from the environment / repo-root `.env`.
+/// `BRAVE_API_KEY` from the environment / repo-root `.env` first (the direct credential),
+/// else the keychain entry Settings saves. Read fresh each call, so a new key works
+/// without a restart.
 fn brave_key(state: &DispatchState) -> Option<String> {
-    os_core::os_secret("brave").or_else(|| super::envfile::env_or_file(state, "BRAVE_API_KEY"))
+    super::envfile::env_or_file(state, "BRAVE_API_KEY").or_else(|| os_core::os_secret("brave"))
 }
 
 async fn brave(state: &DispatchState, q: &str) -> Result<String, String> {
@@ -741,6 +871,10 @@ fn parse_rpc_body(ct: &str, body: &str, id: u64) -> Result<Value, String> {
 }
 
 async fn http_rpc(state: &DispatchState, s: &McpServer, method: &str, params: Value) -> Result<Value, String> {
+    let token = remote_token(state, s)?;
+    // Only a token we attached can be "rejected"; other servers keep their plain HTTP error.
+    let managed = token.is_some();
+    let rejected = |r: &reqwest::Response| (managed && matches!(r.status().as_u16(), 401 | 403)).then(|| rejected_msg(&s.name, r.status().as_u16()));
     let post = |body: Value, session: Option<String>| {
         let mut rb = state.http.post(&s.url).timeout(Duration::from_secs(30)).header("Accept", "application/json, text/event-stream").header("MCP-Protocol-Version", PROTOCOL).json(&body);
         if let Some(sid) = session {
@@ -750,15 +884,24 @@ async fn http_rpc(state: &DispatchState, s: &McpServer, method: &str, params: Va
             // HTTP servers: "env" entries become request headers (e.g. Authorization).
             rb = rb.header(k.as_str(), v.as_str());
         }
+        if let Some(t) = &token {
+            rb = rb.bearer_auth(t);
+        }
         rb
     };
     let r = post(json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "protocolVersion": PROTOCOL, "capabilities": {}, "clientInfo": { "name": "agentic-os", "version": "1.0" } } }), None).send().await.map_err(short)?;
+    if let Some(e) = rejected(&r) {
+        return Err(e);
+    }
     let sid = r.headers().get("mcp-session-id").and_then(|v| v.to_str().ok()).map(String::from);
     let ct = r.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
     let body = r.error_for_status().map_err(short)?.text().await.map_err(short)?;
     parse_rpc_body(&ct, &body, 1)?;
     let _ = post(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }), sid.clone()).send().await;
     let r = post(json!({ "jsonrpc": "2.0", "id": 2, "method": method, "params": params }), sid).send().await.map_err(short)?;
+    if let Some(e) = rejected(&r) {
+        return Err(e);
+    }
     let ct = r.headers().get("content-type").and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
     let body = r.error_for_status().map_err(short)?.text().await.map_err(short)?;
     parse_rpc_body(&ct, &body, 2)
@@ -876,6 +1019,37 @@ mod tests {
             assert!(!is_mutating_tool(t), "{t}");
         }
         assert!(is_mutating_tool("gmail.create_draft"));
+    }
+
+    #[test]
+    fn remote_tokens_are_bound_to_their_host() {
+        let srv = |url: &str, transport: &str| McpServer { id: "x".into(), name: "X".into(), transport: transport.into(), command: String::new(), args: vec![], env: BTreeMap::new(), url: url.into(), enabled: true, builtin: false, description: String::new(), agents: None };
+        assert_eq!(remote_auth(&srv("https://api.githubcopilot.com/mcp/", "http")).map(|a| a.secret), Some("github-pat"));
+        assert_eq!(remote_auth(&srv("https://API.githubcopilot.com/mcp/", "http")).map(|a| a.env), Some("GITHUB_PAT"));
+        // A look-alike host or a stdio server never gets the GitHub token.
+        assert!(remote_auth(&srv("https://api.githubcopilot.com.evil.example/mcp/", "http")).is_none());
+        assert!(remote_auth(&srv("https://evil.example/?u=api.githubcopilot.com", "http")).is_none());
+        assert!(remote_auth(&srv("https://api.githubcopilot.com/mcp/", "stdio")).is_none());
+        assert!(remote_auth(&srv("https://mcp.context7.com/mcp", "http")).is_none());
+        // Never over plain http or to another port of the same host.
+        assert!(remote_auth(&srv("http://api.githubcopilot.com/mcp/", "http")).is_none());
+        assert!(remote_auth(&srv("https://api.githubcopilot.com:8443/mcp/", "http")).is_none());
+        assert!(remote_auth(&srv("https://api.githubcopilot.com:443/mcp/", "http")).is_some());
+    }
+
+    #[test]
+    fn remote_auth_statuses() {
+        let a = &REMOTE_AUTH[0];
+        assert_eq!(status_of(&needs_token_msg("GitHub", a)), "needs_token");
+        assert_eq!(status_of(&rejected_msg("GitHub", 401)), "auth_failed");
+        assert_eq!(status_of("HTTP 500 Internal Server Error"), "error");
+        assert!(!needs_token_msg("GitHub", a).contains("ghp_"));
+        let fp = token_fingerprint(Some("t1"));
+        failed_set("srv-test", Some((100, fp, "boom".into())));
+        assert_eq!(failed_get("srv-test", fp, 200).as_deref(), Some("boom"));
+        assert_eq!(failed_get("srv-test", token_fingerprint(Some("t2")), 200), None, "a new token retries at once");
+        assert_eq!(failed_get("srv-test", fp, 100 + FAILED_TTL), None, "expires");
+        failed_set("srv-test", None);
     }
 
     #[test]
