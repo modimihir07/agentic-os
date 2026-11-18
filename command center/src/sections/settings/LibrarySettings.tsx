@@ -5,6 +5,7 @@ import { cmd, type AllmSyncReport, type McpServer, type ServerTools, type SkillI
 import { SUB_AGENT_IDS, roleLabel, toggleGrant } from "@/features/dispatcher/roles";
 import { CfgError, SecretRow, useOsCfg } from "./os-ui";
 import { useOnIntegrationsChanged } from "@/features/integrations/changed";
+import { anyStarting, mcpReloadKey, mcpStatusView, parseCwd, parseTimeoutSecs } from "./mcp-status";
 import { useSpotifyAuthRefresh } from "@/features/integrations/spotify-connect";
 
 /** Every id a skill or MCP server's "All" pill stands in for. Skills also
@@ -140,9 +141,18 @@ export function McpRegistryCard() {
       .catch(() => setTools(null))
       .finally(() => setLoading(false));
   };
-  useEffect(() => load(), [cfg?.mcps.map((m) => `${m.id}:${m.enabled}`).join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Re-list when anything that decides how a server starts changes (command, args, URL, cwd, timeout).
+  useEffect(() => load(), [cfg ? mcpReloadKey(cfg.mcps) : ""]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A server still cold-starting: check again shortly (cheap — the backend joins the running start).
+  useEffect(() => {
+    if (loading || !anyStarting(tools)) return;
+    const t = window.setTimeout(() => load(), 5000);
+    return () => window.clearTimeout(t);
+  }, [tools, loading]); // eslint-disable-line react-hooks/exhaustive-deps
   // A key saved, Gmail imported or Spotify (dis)connected changes the builtins' status too.
   useOnIntegrationsChanged(() => load());
+  // Also reloads on the Rust `tools-changed` event (Spotify connect / disconnect / revoked
+  // token, MCP registry saved) and on `spotify-auth` / `spotify-session` / window focus.
   useSpotifyAuthRefresh(reloadOnAuth);
   const syncAllm = () => {
     setSync((s) => ({ ...s, loading: true, err: null }));
@@ -198,6 +208,11 @@ export function McpRegistryCard() {
                   ; skipped: <span className="font-mono text-ink-3">{sync.report!.skipped.join(", ")}</span>
                 </>
               )}
+              {(sync.report!.fixed?.length ?? 0) > 0 && (
+                <>
+                  ; repaired: <span className="font-mono text-ink">{sync.report!.fixed!.join(", ")}</span> (restart AnythingLLM to load them)
+                </>
+              )}
             </>
           )}
         </p>
@@ -234,10 +249,11 @@ export function McpRegistryCard() {
               {m.description && <p className="mt-0.5 text-xs text-ink-3">{m.description}</p>}
               {t?.auth && configuring === m.id && (
                 <div className="well mt-1.5 rounded-[10px] px-2">
-                  <SecretRow name={t.auth.secret} label={t.auth.label} hint={`Sent only to ${m.url ? new URL(m.url).host : "this server"}. ${t.auth.env} in the repo-root .env takes priority over this keychain value.`} onChange={() => load(true)} />
+                  <SecretRow name={t.auth.secret} label={t.auth.label} hint={`Sent only to ${m.url ? new URL(m.url).host : "this server"}. ${t.auth.env} (environment or repo-root .env) takes priority over a key saved here in the keychain.`} onChange={() => load(true)} />
                 </div>
               )}
               {m.transport !== "builtin" && <p className="mt-0.5 truncate font-mono text-[11px] text-ink-3">{m.transport === "http" ? m.url : `${m.command} ${m.args.join(" ")}`}</p>}
+              {m.transport === "stdio" && <StdioOptions m={m} onSave={(next) => setMcps(cfg.mcps.map((x) => (x.id === m.id ? next : x)))} />}
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {AGENTS.filter(([id]) => id !== "claude").map(([id, label]) => {
                   const isTony = id === "tony";
@@ -280,7 +296,7 @@ export function McpRegistryCard() {
           );
         })}
       </ul>
-      <SecretRow name="brave" label="Brave Search API key" hint="Needed by the Brave Search built-in." />
+      <SecretRow name="brave" label="Brave Search API key" hint="Needed by the Brave Search built-in. BRAVE_API_KEY (environment or repo-root .env) takes priority over the keychain." />
       <CfgError error={error} />
       {adding && <AddMcp existing={cfg.mcps.map((m) => m.id)} onCancel={() => setAdding(false)} onAdd={(m) => (setMcps([...cfg.mcps, m]), setAdding(false))} />}
     </Card>
@@ -291,6 +307,8 @@ function AddMcp({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (m: 
   const [m, setM] = useState<McpServer>(BLANK);
   const [args, setArgs] = useState("");
   const [env, setEnv] = useState("");
+  const [timeout, setTimeoutText] = useState("");
+  const [cwd, setCwd] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const submit = () => {
     const id = (m.id || m.name).toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
@@ -298,6 +316,10 @@ function AddMcp({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (m: 
     if (existing.includes(id)) return setErr(`An MCP with id “${id}” already exists.`);
     if (m.transport === "stdio" && !m.command.trim()) return setErr("stdio servers need a command.");
     if (m.transport === "http" && !/^https?:\/\//.test(m.url)) return setErr("HTTP servers need an http(s) URL.");
+    const to = parseTimeoutSecs(m.transport === "stdio" ? timeout : "");
+    if (!to.ok) return setErr(to.error);
+    const dir = parseCwd(m.transport === "stdio" ? cwd : "");
+    if (!dir.ok) return setErr(dir.error);
     const envMap = Object.fromEntries(
       env
         .split("\n")
@@ -305,7 +327,7 @@ function AddMcp({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (m: 
         .filter((l) => l.includes("="))
         .map((l) => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]),
     );
-    onAdd({ ...m, id, name: m.name.trim(), args: args.match(/"[^"]*"|\S+/g)?.map((a) => a.replace(/^"|"$/g, "")) ?? [], env: envMap, builtin: false });
+    onAdd({ ...m, id, name: m.name.trim(), args: args.match(/"[^"]*"|\S+/g)?.map((a) => a.replace(/^"|"$/g, "")) ?? [], env: envMap, builtin: false, timeoutSecs: to.value, cwd: dir.value });
   };
   return (
     <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Add MCP server" onClick={onCancel}>
@@ -333,6 +355,12 @@ function AddMcp({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (m: 
               </Field>
               <Field label="Args">
                 <Input value={args} onChange={(e) => setArgs(e.target.value)} placeholder="-y @playwright/mcp@latest" className="font-mono" />
+              </Field>
+              <Field label="Timeout, s (optional — cold start; above 60 also each tool call)">
+                <Input value={timeout} onChange={(e) => setTimeoutText(e.target.value)} placeholder="default: 120 for npx/uvx, else 45" inputMode="numeric" className="font-mono" />
+              </Field>
+              <Field label="Working folder (optional)">
+                <Input value={cwd} onChange={(e) => setCwd(e.target.value)} placeholder="default: the repo" className="font-mono" />
               </Field>
             </>
           ) : (
@@ -362,13 +390,53 @@ function AddMcp({ existing, onAdd, onCancel }: { existing: string[]; onAdd: (m: 
   );
 }
 
-/** One server's listing state: tool count, a token to add / update (amber, not an error), or a failure. */
+/** One server's listing state: tool count, a muted "Awaiting token" (no call is made until one
+ * is added), "starting…" during a cold start, or a failure (red). */
 function ServerStatus({ t }: { t: ServerTools }) {
-  if (t.ok) return <span className="text-[11px] text-teal">{`${t.tools.length} tool${t.tools.length === 1 ? "" : "s"}`}</span>;
-  const text = t.status === "needs_token" ? "needs a token" : t.status === "auth_failed" ? "token rejected — update it" : (t.error ?? "error").slice(0, 80);
+  const v = mcpStatusView(t);
+  const cls = v.tone === "ok" ? "text-teal" : v.tone === "muted" ? "text-ink-3" : v.tone === "pending" ? "text-amber-light" : "text-alert";
   return (
-    <span className={`text-[11px] ${t.status === "needs_token" ? "text-amber-light" : "text-alert"}`} title={t.error ?? undefined}>
-      {text}
+    <span className={`flex items-center gap-1 text-[11px] ${cls}`} title={v.title}>
+      {v.tone === "pending" && <Loader2 size={10} className="animate-spin" />}
+      {v.text}
     </span>
+  );
+}
+
+/** A stdio server's timeout and working folder (saved on blur / Enter) and its read-only switch (saved at once). */
+function StdioOptions({ m, onSave }: { m: McpServer; onSave: (m: McpServer) => void }) {
+  const [timeout, setTimeoutText] = useState(m.timeoutSecs != null ? String(m.timeoutSecs) : "");
+  const [cwd, setCwd] = useState(m.cwd ?? "");
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    setTimeoutText(m.timeoutSecs != null ? String(m.timeoutSecs) : "");
+    setCwd(m.cwd ?? "");
+  }, [m.timeoutSecs, m.cwd]);
+  const commit = () => {
+    const to = parseTimeoutSecs(timeout);
+    if (!to.ok) return setErr(to.error);
+    const dir = parseCwd(cwd);
+    if (!dir.ok) return setErr(dir.error);
+    setErr(null);
+    if (to.value !== (m.timeoutSecs ?? null) || dir.value !== (m.cwd ?? null)) onSave({ ...m, timeoutSecs: to.value, cwd: dir.value });
+  };
+  const onKey = (e: React.KeyboardEvent<HTMLInputElement>) => e.key === "Enter" && commit();
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-ink-3">
+      <label className="flex items-center gap-1">
+        <span title="How long a cold start may take. A value above 60 s also lets each tool call run that long (it never shortens the 60 s default).">timeout</span>
+        <input value={timeout} onChange={(e) => setTimeoutText(e.target.value)} onBlur={commit} onKeyDown={onKey} placeholder="auto" inputMode="numeric" aria-label={`${m.name} timeout in seconds`} className="field !h-6 !w-14 !px-1.5 font-mono !text-[11px]" />
+        s
+      </label>
+      <label className="flex items-center gap-1" title="Hide and refuse this server's tools that change data (write, create, delete, edit…), for Tony, sub-agents, pipelines and the tester.">
+        <input type="checkbox" checked={!!m.readOnly} onChange={(e) => onSave({ ...m, readOnly: e.target.checked || undefined })} aria-label={`${m.name} read-only`} className="accent-teal" />
+        read-only
+      </label>
+      <label className="flex min-w-0 flex-1 items-center gap-1">
+        folder
+        <input value={cwd} onChange={(e) => setCwd(e.target.value)} onBlur={commit} onKeyDown={onKey} placeholder="the repo" aria-label={`${m.name} working folder`} className="field !h-6 min-w-0 flex-1 !px-1.5 font-mono !text-[11px]" />
+      </label>
+      {err && <span className="text-alert">{err}</span>}
+    </div>
   );
 }

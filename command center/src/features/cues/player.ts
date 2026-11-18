@@ -22,8 +22,36 @@ const buffers = new Map<string, Promise<AudioBuffer>>();
 
 export function audio(): AudioContext {
   ctx ??= new AudioContext();
-  if (ctx.state === "suspended") void ctx.resume();
+  if (ctx.state === "suspended" && !cueHeld) void ctx.resume();
   return ctx;
+}
+
+/** Phase 2 hold: cue audio is paused in place (its own AudioContext suspended — the mic and
+ * Tony's TTS use a different one). While held, nothing (ducking, a new clip) wakes it. */
+let cueHeld = false;
+
+/** Pause every cue clip where it is. True only if something was actually playing (so a
+ * resume only unpauses what the hold paused). */
+export async function pauseCueAudio(): Promise<boolean> {
+  if (cueHeld || !ctx || ctx.state !== "running" || !useCueRun.getState().running) return false;
+  cueHeld = true;
+  try {
+    await ctx.suspend();
+    return true;
+  } catch {
+    cueHeld = false;
+    return false;
+  }
+}
+
+export async function resumeCueAudio(): Promise<void> {
+  if (!cueHeld) return;
+  cueHeld = false;
+  try {
+    await ctx?.resume();
+  } catch {
+    /* best-effort */
+  }
 }
 
 export function loadBuffer(fileId: string): Promise<AudioBuffer> {
@@ -267,6 +295,8 @@ export const registerSpeechCancel = (f: () => void) => {
 /** Stop every cue clip AND Tony's speech (the intro line keeps talking otherwise). */
 export function stopAllAudio() {
   useCueRun.getState().stopAll();
+  // A cue stopped while held must not stay frozen: the next cue starts on a running context.
+  void resumeCueAudio();
   try {
     cancelSpeech();
   } catch {

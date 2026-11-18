@@ -1,12 +1,12 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, ChevronUp, MicOff, X } from "lucide-react";
+import { ChevronDown, ChevronUp, MicOff, Play, X } from "lucide-react";
 import { VoiceOrb } from "./VoiceOrb";
 import { useNav } from "@/stores/nav";
 import { isTauri, onNativeEvent } from "@/lib/platform";
 import { STATE_LABEL, useVoice } from "./voice-store";
 import { Waveform } from "./Waveform";
-import { startListening, stopVoice, toggleListening, voiceCaps } from "./voice-controller";
+import { resumeHold, startListening, stopVoice, toggleListening, voiceCaps } from "./voice-controller";
 import { CommandInput, MicButton, STATE_DOT, Transcript } from "./VoiceParts";
 import { ListenControls } from "./ListenControls";
 import { useOsName } from "@/features/os/os-store";
@@ -67,6 +67,8 @@ export function VoiceHUD() {
 
         <ListenControls />
 
+        <HoldBar />
+
         {(partial || error) && <p className={`px-4 pb-2 text-sm ${error ? "text-alert" : "italic text-ink-2"}`}>{error ?? `“${partial}”`}</p>}
 
         {expanded ? (
@@ -101,9 +103,12 @@ function FloatingOrb() {
   const error = useVoice((s) => s.error);
   const lastAgent = useVoice((s) => s.turns.filter((t) => t.who === "agent").at(-1)?.text);
   const setExpanded = useVoice((s) => s.setExpanded);
+  const held = useVoice((s) => s.held);
   // Sit above the wallpaper reel on the Command board; elsewhere hug the bottom edge.
   const hasDock = useNav((s) => s.section === "command");
-  const caption = error ?? (partial ? `“${partial}”` : state === "speaking" ? lastAgent : state !== "idle" ? STATE_LABEL[state] : null);
+  const caption =
+    error ??
+    (partial ? `“${partial}”` : held?.length ? `Holding · “${held.join(" ")}”` : state === "speaking" ? lastAgent : state !== "idle" ? STATE_LABEL[state] : null);
 
   return (
     <div className={`pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+4.5rem)] z-50 flex flex-col items-center gap-2 ${hasDock ? "md:bottom-[5.25rem]" : "md:bottom-3"}`}>
@@ -133,7 +138,36 @@ function FloatingOrb() {
         >
           <ChevronUp size={14} />
         </button>
+        {held && (
+          <button onClick={resumeHold} aria-label={held.length ? "Send what's held" : "Resume"} title="Resume (or say “keep going”)" className="glass-thin ml-1 flex h-7 items-center gap-1 rounded-full px-2.5 text-xs text-amber-soft hover:text-ink">
+            <Play size={11} /> {held.length ? "Send" : "Resume"}
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Hold mode (Phase 2): what you've said since "take it ease", live, and a Resume button —
+ * the typed/tap equivalent of "keep going" (sends what's held, or resumes Tony if nothing is).
+ */
+function HoldBar() {
+  const held = useVoice((s) => s.held);
+  if (!held) return null;
+  return (
+    <div className="mx-4 mb-2 flex items-start gap-3 rounded-[14px] border border-amber/25 bg-amber/[0.06] px-3 py-2">
+      <div className="min-w-0 flex-1" aria-live="polite">
+        <p className="label-caps text-amber-soft">Holding — say “keep going” or “go ahead”</p>
+        {held.length ? (
+          <p className="mt-1 text-sm text-ink">{held.join(" ")}</p>
+        ) : (
+          <p className="mt-1 text-sm italic text-ink-3">Paused. Add your thought…</p>
+        )}
+      </div>
+      <button onClick={resumeHold} className="pill-glass !h-8 shrink-0 text-xs" aria-label={held.length ? "Send what's held" : "Resume"}>
+        <Play size={12} /> {held.length ? "Send" : "Resume"}
+      </button>
     </div>
   );
 }

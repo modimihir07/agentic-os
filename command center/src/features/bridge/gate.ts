@@ -40,12 +40,21 @@ export function confirmThen<T>(opts: { action: string; summary: string; readBack
  *    card. Approve → re-run with `approved: true` and resolve its result.
  *    Cancel / timeout → resolve `null`; nothing ran.
  * 3. `PERMISSION_DENIED:<scope>` → a toast; resolves `null`.
+ *
+ * `required`: the caller already holds that gate error (a first `call(false)` it made itself, or
+ * a call the Rust tool path held back) — skip step 1 and treat it as that error. `channel`: where
+ * the request came from; "voice" speaks the card's read-back (default "text").
  */
-export function gated<T>(opts: { action: string; summary: string; detail?: Record<string, unknown> }, call: (approved: boolean) => Promise<T>, describe: (r: T) => string): Promise<T | null> {
-  return call(false).catch((err: unknown) => {
+export function gated<T>(
+  opts: { action: string; summary: string; detail?: Record<string, unknown>; required?: string; channel?: "voice" | "text" },
+  call: (approved: boolean) => Promise<T>,
+  describe: (r: T) => string,
+): Promise<T | null> {
+  const first = opts.required ? Promise.reject<T>(opts.required) : call(false);
+  return first.catch((err: unknown) => {
     const msg = String(err);
     if (msg.startsWith("PERMISSION_DENIED:")) {
-      useToasts.getState().push({ title: "Blocked by the Permission Bridge", body: `${opts.summary} needs ${msg.split(":")[1]}, which is set to deny (Settings → Integrations).`, tone: "error" });
+      useToasts.getState().push({ title: "Blocked by the Permission Bridge", body: `${opts.summary} needs ${msg.split(":")[1]}, which is set to deny (Settings → Permissions).`, tone: "error" });
       return null;
     }
     if (!msg.startsWith("PERMISSION_REQUIRED:")) throw err;
@@ -70,7 +79,7 @@ export function gated<T>(opts: { action: string; summary: string; detail?: Recor
         }
       };
       plan.onCancel = () => resolve(null);
-      void requestConfirmation(plan, "text");
+      void requestConfirmation(plan, opts.channel ?? "text");
     });
   });
 }

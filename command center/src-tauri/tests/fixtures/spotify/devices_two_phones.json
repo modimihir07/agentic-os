@@ -1,0 +1,43 @@
+{
+  "devices": [
+    {
+      "id": "ph0000000000000000000000000000000000000b",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Pixel 8",
+      "type": "Smartphone",
+      "volume_percent": 100,
+      "supports_volume": false
+    },
+    {
+      "id": "ip0000000000000000000000000000000000000f",
+      "is_active": true,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Work iPhone",
+      "type": "smartphone",
+      "volume_percent": 80,
+      "supports_volume": false
+    },
+    {
+      "id": "sp0000000000000000000000000000000000000g",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Kitchen Speaker",
+      "type": "Speaker",
+      "volume_percent": 45,
+      "supports_volume": true
+    },
+    {
+      "id": "tv0000000000000000000000000000000000000h",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Bedroom TV",
+      "type": "TV",
+      "supports_volume": true
+    }
+  ]
+}

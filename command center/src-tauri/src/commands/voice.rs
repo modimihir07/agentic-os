@@ -66,6 +66,13 @@ pub async fn stt_transcribe(state: State<'_, DispatchState>, request: Request<'_
     if let Some(lang) = p.language.clone() {
         form = form.text("language", lang);
     }
+    // Vocabulary biasing (Phase 2 §1). whisper.cpp's server reads the `prompt` multipart
+    // field on every inference route (incl. `--inference-path /v1/audio/transcriptions`),
+    // as does the OpenAI-style API; servers that don't know it ignore the extra field.
+    let prompt = effective_stt_prompt(&p);
+    if let Some(pr) = prompt.clone() {
+        form = form.text("prompt", pr);
+    }
 
     let mut rb = state
         .http
@@ -81,7 +88,41 @@ pub async fn stt_transcribe(state: State<'_, DispatchState>, request: Request<'_
     let text = body["text"].as_str().unwrap_or_default().trim().to_string();
     // Whisper emits these on silence (the client-side VAD avoids most of it).
     let junk = ["[BLANK_AUDIO]", "(silence)", "[ Silence ]", "[silence]"];
-    Ok(if junk.iter().any(|j| text.eq_ignore_ascii_case(j)) { String::new() } else { text })
+    if junk.iter().any(|j| text.eq_ignore_ascii_case(j)) {
+        return Ok(String::new());
+    }
+    // base.en sometimes reads its prompt back on a near-silent clip.
+    if prompt.as_deref().is_some_and(|pr| echoes_prompt(&text, pr)) {
+        eprintln!("[stt] dropped a transcript that repeats the vocabulary prompt");
+        return Ok(String::new());
+    }
+    Ok(text)
+}
+
+/// The prompt to send: the provider's own (empty = none), else the built-in default.
+fn effective_stt_prompt(p: &Provider) -> Option<String> {
+    let s = p.stt_prompt.clone().unwrap_or_else(|| super::dispatch::DEFAULT_STT_PROMPT.to_string());
+    Some(s.trim().to_string()).filter(|s| !s.is_empty())
+}
+
+fn prompt_words(s: &str) -> Vec<String> {
+    s.split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .map(|w| w.replace('\'', "").to_lowercase())
+        .filter(|w| !w.is_empty())
+        .collect()
+}
+
+/// Hallucination guard: true when `text` contains a run of 4+ consecutive prompt words in
+/// prompt order (case- and punctuation-insensitive). Short real phrases from the prompt
+/// ("cut it", "take it ease") are 2–3 words and always pass.
+pub(crate) fn echoes_prompt(text: &str, prompt: &str) -> bool {
+    const RUN: usize = 4;
+    let t = prompt_words(text);
+    let p = prompt_words(prompt);
+    if t.len() < RUN || p.len() < RUN {
+        return false;
+    }
+    t.windows(RUN).any(|w| p.windows(RUN).any(|q| q == w))
 }
 
 /// Whisper selector: model variant + language. whisper.cpp loads the new
@@ -398,6 +439,53 @@ async fn synth_local(state: &DispatchState, p: &Provider, text: &str, voice: Opt
     }
     let bytes = rb.send().await.map_err(short)?.error_for_status().map_err(short)?.bytes().await.map_err(short)?;
     Ok(bytes.to_vec())
+}
+
+#[cfg(test)]
+mod stt_prompt_tests {
+    use super::super::dispatch::{Config, DEFAULT_STT_PROMPT};
+    use super::*;
+
+    #[test]
+    fn prompt_echo_is_dropped() {
+        let p = DEFAULT_STT_PROMPT;
+        assert!(echoes_prompt("Tony, Gabagool mode. Take it ease.", p));
+        assert!(echoes_prompt("prompter designer coder booking desk", p));
+        assert!(echoes_prompt("WhatsApp, Gmail, Spotify, Tauri", p));
+        // Case/punctuation-insensitive and found mid-transcript.
+        assert!(echoes_prompt("uh BOOKING-DESK, librarian and ops!", p));
+    }
+
+    #[test]
+    fn short_real_phrases_pass() {
+        let p = DEFAULT_STT_PROMPT;
+        for ok in ["Cut it.", "cut it", "Take it ease.", "take it ease", "Whoa.", "madone", "aspetta", "Tony, cut it", "play Bilmuri on Spotify", "check my Gmail", "tell the Booking Desk to check WhatsApp", "take it easy on the bass"] {
+            assert!(!echoes_prompt(ok, p), "{ok} must pass");
+        }
+        // Prompt words out of prompt order are a real sentence, not an echo.
+        assert!(!echoes_prompt("Spotify Gmail WhatsApp Tauri", p));
+        // An empty/short prompt never drops anything.
+        assert!(!echoes_prompt("take it ease cut it", "cut it"));
+    }
+
+    #[test]
+    fn prompt_field_defaults_and_can_be_disabled() {
+        let cfg = Config::default();
+        let mut whisper = cfg.providers.iter().find(|p| p.kind == Kind::Stt).cloned().expect("default STT provider");
+        assert_eq!(whisper.stt_prompt, None);
+        assert_eq!(effective_stt_prompt(&whisper).as_deref(), Some(DEFAULT_STT_PROMPT));
+        whisper.stt_prompt = Some("   ".into());
+        assert_eq!(effective_stt_prompt(&whisper), None, "empty prompt = no prompt field");
+        whisper.stt_prompt = Some(" Custom words. ".into());
+        assert_eq!(effective_stt_prompt(&whisper).as_deref(), Some("Custom words."));
+        // providers.json round trip: camelCase `sttPrompt`, omitted when unset.
+        let json = serde_json::to_value(&whisper).unwrap();
+        assert_eq!(json["sttPrompt"], " Custom words. ");
+        whisper.stt_prompt = None;
+        assert!(serde_json::to_value(&whisper).unwrap().get("sttPrompt").is_none());
+        let back: Provider = serde_json::from_value(serde_json::json!({"id":"w","label":"W","kind":"stt","baseUrl":"http://x","model":"m","needsKey":false,"sttPrompt":"Hi there."})).unwrap();
+        assert_eq!(back.stt_prompt.as_deref(), Some("Hi there."));
+    }
 }
 
 #[cfg(test)]

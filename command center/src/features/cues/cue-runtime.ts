@@ -4,6 +4,7 @@ import { useNav, SECTIONS, type Section } from "@/stores/nav";
 import { useVoice, THREADS, type ThreadId } from "@/features/voice/voice-store";
 import { useToasts } from "@/features/reminders/notify";
 import { hasOnVerb, type OsIntent } from "@/features/os/os-intent-parse";
+import type { SpotifyIntent } from "@/lib/platform";
 import { DEFAULT_CUES, type CueWidget } from "./types";
 import { norm } from "./gaba";
 import { runCue, stopAllAudio, useCueRun } from "./player";
@@ -40,14 +41,15 @@ export function matchCue(text: string): (CueWidget & { id: string }) | null {
 }
 
 /**
- * The cue a line should fire, given what the OS-intent parser made of it: a Gabagool-on
- * phrase, a line the parser left alone, or a "play …" (without "spotify") that is really a
- * cue's phrase. A cue that is already running only restarts on an ON verb, so "make the
- * gabagool music louder" or "gabagool is great" never replays the intro.
+ * The cue a line should fire, given what the OS-intent parser and Spotify's grammar made of
+ * it: a Gabagool-on phrase, a line both left alone, or a "play …" that didn't name Spotify
+ * (`!spotify.explicit`) and is really a cue's phrase. A cue that is already running only
+ * restarts on an ON verb, so "make the gabagool music louder" or "gabagool is great" never
+ * replays the intro.
  */
-export function cueFor(text: string, intent: OsIntent | null): (CueWidget & { id: string }) | null {
-  const playLine = intent?.kind === "media" && intent.action === "play" && !/\bspotify\b/i.test(text);
-  if (intent && intent.kind !== "gabagool-on" && !playLine) return null;
+export function cueFor(text: string, intent: OsIntent | null, spotify: SpotifyIntent | null = null): (CueWidget & { id: string }) | null {
+  const playLine = spotify?.tool === "spotify.play" && !spotify.explicit;
+  if ((intent && intent.kind !== "gabagool-on") || (spotify && !playLine)) return null;
   const cue = matchCue(text);
   if (!cue || (useCueRun.getState().cueId === cue.id && !hasOnVerb(text))) return null;
   return cue;

@@ -5,6 +5,7 @@ import { ROLE_IDS, roleLabel } from "@/features/dispatcher/roles";
 import { DEFAULT_ROUTING_CONFIG, resolve } from "@/features/dispatcher/router";
 import type { AgentTriggers } from "@/lib/platform";
 import { CfgError, Toggle, useOsCfg } from "./os-ui";
+import { useSettings } from "@/stores/settings";
 
 /** Add-via-input-and-Enter, remove-via-×. */
 function ChipList({ items, onAdd, onRemove, placeholder }: { items: string[]; onAdd: (v: string) => void; onRemove: (v: string) => void; placeholder: string }) {
@@ -71,6 +72,9 @@ export function RoutingSettings() {
   const { cfg, error, save } = useOsCfg();
   const [testPhrase, setTestPhrase] = useState("");
   const routing = cfg?.routing;
+  // Voice-only preference, kept in the app settings (not os.json): see voice-controller `osRun`.
+  const announcerHandoff = useSettings((s) => s.routing.announcerHandoff);
+  const setSettings = useSettings((s) => s.set);
   const result = useMemo(() => (routing && testPhrase.trim() ? resolve(testPhrase, routing) : null), [routing, testPhrase]);
   if (!cfg || !routing) return null;
 
@@ -91,6 +95,12 @@ export function RoutingSettings() {
         onChange={(v) => save({ routing: { autoSwitch: v } })}
         label="Switch the visible tab automatically"
         hint="When a request is routed to a sub-agent while you're on the Agents section, jump to that agent's tab instead of leaving a link behind. Off: stay put, show a “View in …” link."
+      />
+      <Toggle
+        on={announcerHandoff}
+        onChange={(v) => setSettings({ routing: { announcerHandoff: v } })}
+        label="Agents speak their own answers"
+        hint="Voice: Tony says a short intro (“Booking Desk, you're up.”), then the agent answers in its own roster voice and Tony doesn't repeat it. Off: Tony speaks his summary of the agent's answer (the old behaviour)."
       />
 
       <div className="mt-3 space-y-2">

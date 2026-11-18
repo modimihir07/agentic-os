@@ -6,6 +6,7 @@ import { ConfirmCard } from "@/features/orchestrator/ConfirmCard";
 import { useReminderScheduler } from "@/features/reminders/scheduler";
 import { useOsBoot } from "@/features/os/thread-sync";
 import { useCueScheduler } from "@/features/cues/cue-runtime";
+import { installSpotifyReauthNotice } from "@/features/integrations/spotify-connect";
 import { Toasts } from "@/components/Toasts";
 import { TopBar } from "@/shell/TopBar";
 import { MobileTabs, SideRail } from "@/shell/Navigation";
@@ -29,6 +30,8 @@ const SECTION_VIEWS: Record<Section, React.LazyExoticComponent<() => React.JSX.E
   trading: lazy(() => import("@/sections/TradingSection").then((m) => ({ default: m.TradingSection }))),
   vault: lazy(() => import("@/sections/VaultSection").then((m) => ({ default: m.VaultSection }))),
   wallpapers: lazy(() => import("@/sections/WallpapersSection").then((m) => ({ default: m.WallpapersSection }))),
+  // System Map: the only chunk that loads three.js (Part 5's HoloViewport).
+  memorymap: lazy(() => import("@/sections/MemoryMapSection").then((m) => ({ default: m.MemoryMapSection }))),
   settings: lazy(() => import("@/sections/SettingsSection").then((m) => ({ default: m.SettingsSection }))),
 };
 
@@ -68,6 +71,7 @@ function MainApp() {
   useOsBoot();
   useCueScheduler();
   useConfigSnapshot();
+  useEffect(installSpotifyReauthNotice, []); // toast when Rust opens a Spotify consent tab by itself
   return (
     <>
       <WallpaperSlideshow />

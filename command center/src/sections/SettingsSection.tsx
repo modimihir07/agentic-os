@@ -5,7 +5,7 @@ import { VoiceOrb } from "@/features/voice/VoiceOrb";
 import { isTauri } from "@/lib/platform";
 import { Card, Field, Input, Select, SubTabs } from "@/components/ui";
 import { GatewayStatusCard, OrchestratorCard, VerifierCard } from "./settings/ServicesSettings";
-import { AgentVoiceRoster, SttCard, TtsCard } from "./settings/VoiceSettings";
+import { AgentVoiceRoster, ConversationReflexesCard, SttCard, TtsCard } from "./settings/VoiceSettings";
 import { BraveCard, GmailCard, GoogleCard, LocalLlmCard, N8nCard, SpotifyCard } from "./settings/IntegrationSettings";
 import { BridgeCard, PipelinesCard } from "./settings/PipelineSettings";
 import { ComputeCard, DropletCard, MarketDataCard, OsIdentityCard, OsPermissionsCard, OverseerCard, PrivacyShieldCard, WorkspacesCard } from "./settings/OsSettings";
@@ -63,6 +63,7 @@ export function SettingsSection() {
       {tab === "voice" && (
         <>
           <VoiceDetectionCard />
+          <ConversationReflexesCard />
           {desktop ? (
             <>
               <SttCard />

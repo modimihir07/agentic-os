@@ -1,0 +1,16 @@
+{
+  "tracks": {"items": [
+    {"type": "track", "name": "Stand by Me", "uri": "spotify:track:3StandByMeBenEKingAbcd", "duration_ms": 180000,
+     "artists": [{"name": "Ben E. King"}],
+     "album": {"name": "Don't Play That Song", "uri": "spotify:album:0DontPlayThatSongAbcde", "release_date": "1962"}},
+    null
+  ]},
+  "artists": {"items": [
+    null,
+    {"type": "artist", "name": "Ben E. King", "uri": "spotify:artist:0BenEKingArtistAbcdefg"}
+  ]},
+  "albums": {"items": []},
+  "playlists": {"items": [
+    {"type": "playlist", "name": "Oldies", "uri": "spotify:playlist:0OldiesPlaylistAbcdefg"}
+  ]}
+}

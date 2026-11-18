@@ -23,6 +23,9 @@
   --color-alert: #ff5a5f;
   --color-violet: #a855f7;
   --color-volt: #00f0ff;
+  /* System Map (holographic X-ray): electric cyan + warm amber. */
+  --color-holo: #00d2ff;
+  --color-ember: #f59e0b;
 
   /* n8n pipeline / sync status palette */
   --color-pipe-ok: #14b8a6; /* active · healthy · sync verified */

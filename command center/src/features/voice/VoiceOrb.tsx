@@ -3,7 +3,7 @@ import { useSettings } from "@/stores/settings";
 import { usePrefersReducedMotion } from "@/lib/use-media-query";
 import { voiceLevel, type VoiceState } from "./voice-store";
 
-const ANIMATED: VoiceState[] = ["listening", "transcribing", "speaking", "thinking"];
+const ANIMATED: VoiceState[] = ["listening", "transcribing", "speaking", "thinking", "holding"];
 
 /**
  * Transparent floating voice orb (Gemini / Claude style).

@@ -1,0 +1,8 @@
+{
+  "tracks": {"items": [
+    null,
+    {"type": "track", "name": "Tell Me", "uri": "spotify:track:1TellMeGrooveTheoryAbc", "duration_ms": 287000,
+     "artists": [{"name": "Groove Theory", "uri": "spotify:artist:0GrooveTheoryArtistAbc"}],
+     "album": {"name": "Groove Theory", "uri": "spotify:album:2AbCdEfGhIjKlMnOpQrStU", "release_date": "1995-10-24"}}
+  ]}
+}

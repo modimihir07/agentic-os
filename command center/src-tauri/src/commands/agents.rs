@@ -58,20 +58,23 @@ pub(crate) async fn allm(state: &DispatchState, base: &str, key: &str, method: r
     Ok(serde_json::from_str(&text).unwrap_or(Value::Null))
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceInfo {
-    slug: String,
-    name: String,
-    threads: usize,
+    pub slug: String,
+    pub name: String,
+    pub threads: usize,
+    /// The workspace's own chat / agent model; `None` = AnythingLLM's system default.
+    pub chat_provider: Option<String>,
+    pub chat_model: Option<String>,
+    pub agent_provider: Option<String>,
+    pub agent_model: Option<String>,
 }
 
-#[tauri::command]
-pub async fn anythingllm_workspaces(state: State<'_, DispatchState>, os: State<'_, OsState>) -> Result<Vec<WorkspaceInfo>, String> {
-    let cfg = os.snapshot();
-    let key = allm_key(&state, false)?;
-    let v = allm(&state, &cfg.anythingllm.base_url, &key, reqwest::Method::GET, "/v1/workspaces", None, 8).await?;
-    Ok(v["workspaces"]
+/// `/v1/workspaces` JSON -> the fields the app shows (slug, name, thread count, models). Nothing else.
+pub(crate) fn parse_workspaces(v: &Value) -> Vec<WorkspaceInfo> {
+    let s = |w: &Value, k: &str| w[k].as_str().map(str::trim).filter(|x| !x.is_empty()).map(String::from);
+    v["workspaces"]
         .as_array()
         .into_iter()
         .flatten()
@@ -79,8 +82,24 @@ pub async fn anythingllm_workspaces(state: State<'_, DispatchState>, os: State<'
             slug: w["slug"].as_str().unwrap_or("").into(),
             name: w["name"].as_str().unwrap_or("").into(),
             threads: w["threads"].as_array().map(|t| t.len()).unwrap_or(0),
+            chat_provider: s(w, "chatProvider"),
+            chat_model: s(w, "chatModel"),
+            agent_provider: s(w, "agentProvider"),
+            agent_model: s(w, "agentModel"),
         })
-        .collect())
+        .collect()
+}
+
+/// Every AnythingLLM workspace, with models. The API key stays in Rust.
+pub(crate) async fn fetch_workspaces(state: &DispatchState, cfg: &OsConfig, secs: u64) -> Result<Vec<WorkspaceInfo>, String> {
+    let key = allm_key(state, false)?;
+    let v = allm(state, &cfg.anythingllm.base_url, &key, reqwest::Method::GET, "/v1/workspaces", None, secs).await?;
+    Ok(parse_workspaces(&v))
+}
+
+#[tauri::command]
+pub async fn anythingllm_workspaces(state: State<'_, DispatchState>, os: State<'_, OsState>) -> Result<Vec<WorkspaceInfo>, String> {
+    fetch_workspaces(&state, &os.snapshot(), 8).await
 }
 
 pub fn month_tag() -> String {
@@ -234,7 +253,7 @@ pub(crate) async fn workspace_chat_streamed(state: &DispatchState, os: &OsState,
 
 // ── Prompt building ─────────────────────────────────────────────────────────
 
-fn role_label(role: &str) -> String {
+pub(crate) fn role_label(role: &str) -> String {
     match role {
         "librarian" => "Librarian".into(),
         "coder" => "Coder".into(),
@@ -246,8 +265,8 @@ fn role_label(role: &str) -> String {
     }
 }
 
-/// `tools`: names of the tools Tony can use this turn (`mcp::enabled_tools`).
-pub fn system_prompt(cfg: &OsConfig, context: &str, tools: &[String]) -> String {
+/// `tools`: the tools Tony can use this turn (`turn_tools(..).offered`).
+pub fn system_prompt(cfg: &OsConfig, context: &str, tools: &[super::mcp::ToolInfo]) -> String {
     let name = &cfg.os_name;
     let mut s = format!(
         "You are {name}, the user's personal operating system (Agentic OS) running on their own desktop. \
@@ -284,14 +303,29 @@ card — never claim you performed one. You are {name}; never call yourself Jarv
     s
 }
 
-fn tools_section(tools: &[String]) -> String {
-    let list = if tools.is_empty() { "none switched on right now (Settings → Skills & MCP Library)".to_string() } else { tools.join(", ") };
-    format!(
-        "\n\nTOOLS YOU HAVE THIS TURN: {list}.\nRead-only tools run automatically before you answer; their results appear below as LIVE MCP TOOL DATA. \
+fn tools_section(tools: &[super::mcp::ToolInfo]) -> String {
+    let list = if tools.is_empty() { "none switched on right now (Settings → Skills & MCP Library)".to_string() } else { tools.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ") };
+    let mut s = format!(
+        "\n\nTOOLS YOU HAVE THIS TURN: {list}.\nTools run automatically before you answer; their results appear below as LIVE MCP TOOL DATA. \
 Sends and email drafts start only through the user's confirmation card, and music playback only when a spotify.* result appears below as \
 LIVE MCP TOOL DATA. If neither happened this turn, don't claim it's done or queued: say plainly you couldn't start it and give the exact \
 phrasing that works (e.g. \"play <song> on Spotify\", \"draft an email to <address> about ...\"), never that you lack the tool or the skill."
-    )
+    );
+    // The media controls, with their argument names, so the model knows Spotify is live.
+    let spotify: Vec<String> = tools
+        .iter()
+        .filter(|t| t.server == "spotify" && super::mcp::is_spotify_actuator(&t.name))
+        .map(|t| if t.args.is_empty() { t.name.clone() } else { format!("{}({})", t.name, t.args.join(", ")) })
+        .collect();
+    if !spotify.is_empty() {
+        s.push_str(&format!(
+            "\nSPOTIFY IS CONNECTED — controls available: {}. A play/pause/skip/volume change has happened only if a spotify.* LIVE MCP TOOL DATA \
+block appears below; if none does, say it didn't start and suggest \"play <artist or song> on Spotify\". Never say Spotify isn't active or \
+connected unless a TOOL FAILURE below says so.",
+            spotify.join(", ")
+        ));
+    }
+    s
 }
 
 /// "my conversation with Sam … about the shoot" → ("Sam", "the shoot").
@@ -318,9 +352,21 @@ pub(crate) fn comms_recall_intent(text: &str) -> Option<(String, String)> {
 fn wants_tools(text: &str) -> bool {
     static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
     RE.get_or_init(|| {
-        regex::Regex::new(r"(?i)\b(weather|forecast|temperature|rain|snow|wind|what time|the date|tomorrow|fetch|url|https?://|website|web ?page|files?|folders?|readme|repo|git|commit|branch|search|look ?up|google|news|knowledge|remember|who is|e-?mails?|inbox|gmail|mails?|what'?s ?app|whatsapp|messages?|texts?|chats?|what'?s ?up|dms?|skills?|spotify|music|songs?|playlists?|what'?s playing|now playing)\b|[a-z]:[\\/]").unwrap()
+        regex::Regex::new(r"(?i)\b(weather|forecast|temperature|rain|snow|wind|what time|the date|tomorrow|fetch|url|https?://|website|web ?page|files?|folders?|readme|repo|git|commit|branch|search|look ?up|google|news|knowledge|remember|who is|e-?mails?|inbox|gmail|mails?|what'?s ?app|whatsapp|messages?|texts?|chats?|what'?s ?up|dms?|skills?|spotify|music|songs?|tracks?|albums?|playlists?|what'?s playing|now playing|next (?:song|track))\b|[a-z]:[\\/]").unwrap()
     })
     .is_match(text)
+}
+
+/// The line IS a media command once the address is stripped: it starts with play / put on /
+/// pause / skip / volume / turn it up… Bare verbs inside a sentence ("what role does Redis
+/// play", "the previous commit", "trading volume") don't count.
+fn media_command(text: &str, os_name: &str) -> bool {
+    static RE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let core = super::routing::normalize(&super::routing::strip_address(text, os_name));
+    RE.get_or_init(|| {
+        regex::Regex::new(r"^(?:play|put on|throw on|queue up|pause|resume|unpause|skip|next (?:song|track)|next$|previous (?:song|track)|previous$|go back (?:a|1) (?:song|track)|volume|turn (?:it |the music |the volume )?(?:up|down)|mute)\b").unwrap()
+    })
+    .is_match(&core)
 }
 
 /// Gmail / WhatsApp / Spotify tools are only offered to the router when the
@@ -332,7 +378,9 @@ fn router_keyword_ok(server: &str, norm: &str) -> bool {
     match server {
         "gmail" => GMAIL.get_or_init(|| regex::Regex::new(r"\b(gmail|e ?mails?|inbox|mails?)\b").unwrap()).is_match(norm),
         "whatsapp" => WHATSAPP.get_or_init(|| regex::Regex::new(r"\b(whatsapp|messages?|texts?|chats?|dms?)\b").unwrap()).is_match(norm),
-        "spotify" => SPOTIFY.get_or_init(|| regex::Regex::new(r"\b(spotify|music|songs?|tracks?|playing|playlists?|albums?|listen(ed|ing)?)\b").unwrap()).is_match(norm),
+        "spotify" => SPOTIFY
+            .get_or_init(|| regex::Regex::new(r"\b(spotify|music|songs?|tracks?|playing|playlists?|albums?|artist|listen(ed|ing)?)\b").unwrap())
+            .is_match(norm),
         _ => true,
     }
 }
@@ -351,7 +399,7 @@ fn router_tool_line(t: &super::mcp::ToolInfo) -> String {
 // ── Tool pre-executor (Part 2) ──────────────────────────────────────────────
 //
 // Runs BEFORE a sub-agent sees its task (and for Tony's own turns), using
-// only the tools the target agent is actually granted (`mcp::enabled_tools`).
+// only the tools the target agent is actually granted (`mcp::tool_set`).
 // Fixes the root cause the MCP map found: a sub-agent that answers at all —
 // even a refusal — used to skip tool-running entirely, because the old
 // single-tool router only ran when `agent_answer.is_none()`. Now tool data
@@ -461,107 +509,90 @@ fn gmail_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String,
     Some(("gmail.recent".to_string(), json!({ "count": count.clamp(1, 20) })))
 }
 
-/// "play X (on spotify)" → (query, kind). Without "on spotify" only a short
-/// request that starts with "play" counts, so "play devil's advocate on this
-/// plan" stays a normal turn.
-fn spotify_play_request(original: &str) -> Option<(String, &'static str)> {
-    const LEAD_INS: [&str; 12] = ["hey tony", "tony", "hey", "ok", "okay", "yo", "please", "can you", "could you", "would you", "will you", "go ahead and"];
-    let mut s = original.trim().trim_end_matches(['.', '!', '?']).trim().to_string();
-    while let Some(p) = LEAD_INS.iter().find(|p| s.to_ascii_lowercase().starts_with(*p) && s[p.len()..].starts_with([' ', ','])) {
-        s = s[p.len()..].trim_start_matches([' ', ',']).to_string();
+/// "play …" phrases that aren't music ("play a game", "play devil's advocate").
+const NOT_MUSIC: [&str; 12] = ["a game", "games", "devil", "around", "with", "along", "it ", "dumb", "nice", "back", "the role", "hard to get"];
+
+/// Honest reply when a line asks to play something but no plan could tell what.
+const PLAY_HELP: &str = "I couldn't tell what to play — say \"play <artist or song> on Spotify\"";
+
+/// A request to play music that neither the deterministic planner nor the router
+/// turned into a Spotify call. "play …" counts when it is short and not a game /
+/// role ("play devil's advocate"); "put on / throw on / queue up / listen to" only
+/// when the line names music. Feeds a fixed failure note instead of trusting the model.
+fn unparsed_play_request(text: &str, os_name: &str) -> bool {
+    static VERB: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    static MUSIC: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let core = super::routing::normalize(&super::routing::strip_address(text, os_name));
+    let Some(c) = VERB.get_or_init(|| regex::Regex::new(r"^(play|put on|throw on|queue up|listen to)\b(.*)$").unwrap()).captures(&core) else { return false };
+    let rest = c[2].trim();
+    if rest.is_empty() {
+        return false;
     }
-    // "Play Daft Punk on Spotify, Tony." / "... please, Tony"
-    for tail in [" tony", " jarvis", " please", " for me"] {
-        let lower = s.to_ascii_lowercase();
-        // "play something by Tony" credits an artist; only an addressed name is dropped.
-        let credit = matches!(tail, " tony" | " jarvis") && (lower.ends_with(&format!(" by{tail}")) || lower.ends_with(&format!(" from{tail}")));
-        if lower.ends_with(tail) && !credit {
-            s.truncate(s.len() - tail.len());
-            s = s.trim_end_matches([',', ' ']).to_string();
-        }
-    }
-    let on_spotify = ["on spotify", "in spotify", "from spotify"].iter().find(|t| s.to_ascii_lowercase().ends_with(*t)).map(|t| t.len());
-    if let Some(n) = on_spotify {
-        s.truncate(s.len() - n);
-    }
-    let s = s.trim();
-    if !s.to_ascii_lowercase().starts_with("play ") {
-        return None;
-    }
-    let mut rest = s[5..].trim();
-    if rest.to_ascii_lowercase().starts_with("me ") {
-        rest = rest[3..].trim();
-    }
-    let lower = rest.to_ascii_lowercase();
-    const NOT_MUSIC: [&str; 12] = ["a game", "games", "devil", "around", "with", "along", "it ", "dumb", "nice", "back", "the role", "hard to get"];
-    if on_spotify.is_none() && (lower.split_whitespace().count() > 6 || NOT_MUSIC.iter().any(|w| lower.starts_with(w))) {
-        return None;
-    }
-    static KINDS: std::sync::OnceLock<Vec<(regex::Regex, &'static str)>> = std::sync::OnceLock::new();
-    let kinds = KINDS.get_or_init(|| {
-        [
-            (r"(?i)^(?:the\s+)?album\s+(.+)$", "album"),
-            (r"(?i)^(?:the\s+)?(.+?)\s+album$", "album"),
-            (r"(?i)^(?:the\s+|my\s+)?playlist\s+(.+)$", "playlist"),
-            (r"(?i)^(?:the\s+|my\s+)?(.+?)\s+playlist$", "playlist"),
-            (r"(?i)^(?:songs|music|something|anything|stuff|tracks)\s+by\s+(.+)$", "artist"),
-            (r"(?i)^(?:the\s+)?artist\s+(.+)$", "artist"),
-            (r"(?i)^some\s+(.+)$", "playlist"),
-            (r"(?i)^(?:the\s+)?(?:song|track)\s+(.+)$", "track"),
-        ]
-        .into_iter()
-        .map(|(re, k)| (regex::Regex::new(re).unwrap(), k))
-        .collect()
-    });
-    let (query, kind) = kinds.iter().find_map(|(re, k)| re.captures(rest).map(|c| (c[1].trim().to_string(), *k))).unwrap_or_else(|| (rest.replace(" by ", " "), "track"));
-    if query.is_empty() || ["music", "spotify", "something", "anything", "it", "my music", "the music"].contains(&query.to_ascii_lowercase().as_str()) {
-        return None;
-    }
-    Some((query, kind))
+    // The music noun must head the object ("put on some music", "listen to the new album"),
+    // not merely appear later ("listen to me, the band needs a name") or describe something else
+    // ("this album review I wrote"): it ends the line or is followed by by / from / on / please….
+    let musicy = MUSIC
+        .get_or_init(|| regex::Regex::new(r"^(?:(?:some|the|my|a|an|this|that|new|good|more|other|any)\s+){0,3}(?:spotify|music|songs?|tracks?|playlists?|albums?|tunes?)(?:$|\s+(?:by|from|on|of|in|please|now|for|again)\b)").unwrap())
+        .is_match(rest);
+    let short_play = &c[1] == "play" && rest.split_whitespace().count() <= 6 && !NOT_MUSIC.iter().any(|w| rest.starts_with(w));
+    musicy || short_play
 }
 
-/// Spotify by voice, without a model round trip: now playing, play X,
-/// pause / resume / skip / previous, volume N. Needs the `spotify` server
-/// (its router-visible `spotify.now_playing` proves it is on and granted);
-/// playback tools are called directly because the user asked explicitly.
-fn spotify_plan(original: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
+/// Spotify by voice, without a model round trip, through `spotify_intent::parse` (the grammar
+/// the TS fast path uses too). Needs the `spotify` server (its router-visible
+/// `spotify.now_playing` proves it is on and granted); the chosen tool must be offered to this
+/// agent (sub-agents get reads only). Writes still pass `call_tool`'s gates.
+fn spotify_plan(original: &str, tools: &[super::mcp::ToolInfo], os_name: &str) -> Option<(String, Value)> {
     if !tools.iter().any(|t| t.name == "spotify.now_playing") {
         return None;
     }
-    let norm = super::routing::normalize(original);
-    static RULES: std::sync::OnceLock<Vec<(regex::Regex, &'static str)>> = std::sync::OnceLock::new();
-    let rules = RULES.get_or_init(|| {
-        [
-            (r"\b(?:spotify|music) volume (?:to |at )?(\d{1,3})\b|\bset (?:the )?(?:spotify|music)(?: volume)? to (\d{1,3})\b|\bvolume (?:to |at )?(\d{1,3})(?: percent)? on spotify\b", "spotify.volume"),
-            (r"\bwhats playing\b|\bwhat is playing\b|\bwhat (?:song|track) is (?:this|that|playing|on)\b|\bwhats (?:this|that) (?:song|track)\b|\bwhat (?:song|track) am i listening to\b|\bnow playing\b", "spotify.now_playing"),
-            // Anchored: this runs before every Tony turn and acts immediately, so "how do I turn off
-            // spotify autoplay" or "remind me to stop the music at 11" must not pause playback.
-            (r"^(?:(?:hey )?(?:tony|jarvis) )?(?:(?:please|can you|could you|would you|ok|okay) )*(?:pause|stop|(?:(?:pause|stop|quit)(?: playing)? (?:the |my |this )?(?:music|songs?|tracks?|spotify|playback)(?: on spotify)?)|(?:turn|switch) (?:off (?:the )?spotify|(?:the )?spotify off)|pause spotify)(?: (?:please|now|for me))*(?: (?:tony|jarvis))?$", "spotify.pause"),
-            (r"^(?:resume|unpause)$|\b(?:resume|unpause|continue) (?:the )?(?:music|song|track|spotify|playback)\b|\bplay (?:the |my )?(?:music|spotify)$|\bkeep playing\b", "spotify.resume"),
-            (r"^(?:skip|next)$|\b(?:skip|next) (?:this |the )?(?:song|track)\b|\bskip (?:it|this)$|\bnext on spotify\b", "spotify.next"),
-            (r"\b(?:previous|prior) (?:song|track)\b|\bgo back (?:a|1) (?:song|track)\b|\bback (?:a|1) (?:song|track)\b", "spotify.previous"),
-            (r"\brecently played\b|\bwhat (?:have|did) i (?:just )?(?:been )?listen(?:ed|ing)? to\b", "spotify.recent"),
-            (r"\bmy (?:spotify )?playlists\b", "spotify.playlists"),
-        ]
-        .into_iter()
-        .map(|(re, t)| (regex::Regex::new(re).unwrap(), t))
-        .collect()
-    });
-    let core = norm.strip_prefix("hey ").unwrap_or(&norm);
-    let core = core.strip_prefix("tony ").unwrap_or(core).trim();
-    if let Some((re, tool)) = rules.iter().find(|(re, _)| re.is_match(core)) {
-        if *tool == "spotify.volume" {
-            let n: u64 = re.captures(core)?.iter().skip(1).flatten().next()?.as_str().parse().ok()?;
-            return Some((tool.to_string(), json!({ "percent": n.min(100) })));
-        }
-        return Some((tool.to_string(), json!({})));
+    // The one Spotify grammar (D10): it strips the interjection / wake name / politeness itself.
+    let i = super::spotify_intent::parse(original, os_name)?;
+    // "reconnect Spotify": no tool call, a fixed reply (D15).
+    if i.tool == super::spotify_intent::RECONNECT {
+        return Some((i.tool, json!({})));
     }
-    let (query, kind) = spotify_play_request(original)?;
-    Some(("spotify.play".to_string(), json!({ "query": query, "kind": kind })))
+    // Only tools this agent was offered: sub-agents get Spotify reads, never playback.
+    tools.iter().any(|t| t.name == i.tool).then_some((i.tool, i.args))
 }
 
-fn deterministic_plan(text: &str, tools: &[super::mcp::ToolInfo]) -> Option<(String, Value)> {
-    gmail_plan(text, tools).or_else(|| whatsapp_plan(text, tools)).or_else(|| spotify_plan(text, tools)).or_else(|| time_plan(text, tools))
+/// A Spotify write the Rust tool path held back for the approval card (D14).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PendingSpotifyCall {
+    pub name: String,
+    pub args: Value,
+    pub summary: String,
+    pub required: String,
+}
+
+/// Pure (D14): a `PERMISSION_REQUIRED:<x>` refusal of a Spotify write becomes the exact call
+/// the card will run — only when the caller can show cards (`askCards`).
+fn pending_from(err: &str, name: &str, args: &Value, ask_cards: bool) -> Option<PendingSpotifyCall> {
+    let name = super::spotify_intent::canonical(name);
+    if !ask_cards || !super::spotify_intent::is_write_tool(name) || !err.starts_with("PERMISSION_REQUIRED:") {
+        return None;
+    }
+    let args = super::spotify_intent::normalize_args(name, args).unwrap_or_else(|_| args.clone());
+    let required = err.split_whitespace().next().unwrap_or(err).to_string();
+    Some(PendingSpotifyCall { name: name.to_string(), summary: super::spotify_intent::summary_for(name, &args), args, required })
+}
+
+/// Where a prefetched tool call came from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PlanSource {
+    Deterministic,
+    Router,
+}
+
+/// Pure (D26): a Spotify result spoken as-is (no LLM synthesis) — any deterministic-plan result,
+/// and router-chosen writes. Router-chosen reads still go through synthesis.
+fn verbatim_answer(source: PlanSource, is_write: bool, reply: &str) -> Option<String> {
+    (source == PlanSource::Deterministic || is_write).then(|| reply.to_string())
+}
+
+fn deterministic_plan(text: &str, tools: &[super::mcp::ToolInfo], os_name: &str) -> Option<(String, Value)> {
+    gmail_plan(text, tools).or_else(|| whatsapp_plan(text, tools)).or_else(|| spotify_plan(text, tools, os_name)).or_else(|| time_plan(text, tools))
 }
 
 /// Text appended to Tony's (or a delegated agent's) prompt: the live tool data,
@@ -587,12 +618,47 @@ struct Prefetch {
     used: Option<String>,
     /// (tool, error) of the call that failed — reported honestly to the model.
     failure: Option<(String, String)>,
-    /// Names of the tools offered this turn.
-    tools: Vec<String>,
+    /// The tools offered this turn (router-visible; listed in Tony's system prompt).
+    tools: Vec<super::mcp::ToolInfo>,
+    /// The caller can raise approval cards (`OsTurnRequest.askCards`, D14).
+    ask_cards: bool,
+    /// Raw error of the last failed call (the `failure` text is humanized).
+    last_error: Option<String>,
+    /// A Spotify write held back for the approval card (D14): the turn returns it, no LLM call.
+    pending_spotify: Option<PendingSpotifyCall>,
+    /// A Spotify reply that IS the answer (D26): the turn returns it verbatim, no LLM call.
+    verbatim: Option<String>,
+}
+
+impl Prefetch {
+    /// After a `spotify.*` call: pin a write the gate held back, or keep the reply verbatim.
+    fn spotify_outcome(&mut self, name: &str, args: &Value, res: Option<&str>, source: PlanSource) {
+        if !name.starts_with("spotify.") {
+            return;
+        }
+        let write = super::spotify_intent::is_write_tool(name);
+        match res {
+            Some(reply) => self.verbatim = verbatim_answer(source, write, reply),
+            None => {
+                if let Some(p) = self.last_error.as_deref().and_then(|e| pending_from(e, name, args, self.ask_cards)) {
+                    self.pending_spotify = Some(p);
+                    self.failure = None;
+                }
+            }
+        }
+    }
+}
+
+/// A tool error without the server's stderr tail: the step and the System Map keep the
+/// full (scrubbed) text; the model only needs the status.
+fn without_stderr(e: &str) -> &str {
+    e.split(" — stderr: ").next().unwrap_or(e)
 }
 
 fn humanize_tool_error(e: &str) -> String {
-    if let Some(what) = e.strip_prefix("PERMISSION_DENIED:") {
+    if let Some(rest) = e.strip_prefix(super::mcp::READ_ONLY_PREFIX) {
+        rest.split_once(" — ").map_or(rest, |(_, why)| why).to_string()
+    } else if let Some(what) = e.strip_prefix("PERMISSION_DENIED:") {
         format!("the {what} permission is set to Deny in Settings → Permissions")
     } else if let Some(what) = e.strip_prefix("PERMISSION_REQUIRED:") {
         format!("the {what} permission is set to Ask and this turn wasn't approved")
@@ -606,7 +672,10 @@ impl Prefetch {
     /// its data or its failure. Returns the output on success.
     async fn call(&mut self, state: &DispatchState, os: &OsState, bridge: &BridgeState, name: &str, args: &Value, approved: bool, agent: &str, secs: Duration) -> Option<String> {
         let t0 = Instant::now();
-        let res = tokio::time::timeout(secs, super::mcp::call_tool(state, os, bridge, name, args, approved, agent)).await;
+        // A cold-starting MCP server answers "still starting" within CHAT_START_WAIT instead of
+        // holding the turn; its start carries on and the next turn reuses the running server.
+        let wait = Some(super::mcp::CHAT_START_WAIT.min(secs));
+        let res = tokio::time::timeout(secs, super::mcp::call_tool_with(state, os, bridge, name, args, approved, agent, wait)).await;
         let ms = t0.elapsed().as_millis();
         match res {
             Ok(Ok(out)) => {
@@ -617,12 +686,18 @@ impl Prefetch {
                 Some(out)
             }
             Ok(Err(e)) => {
-                let label = if e.starts_with("PERMISSION_") { "blocked" } else { "failed" };
+                let starting = super::mcp::is_starting_error(&e);
+                let label = if e.starts_with("PERMISSION_") { "blocked" } else if starting { "starting" } else { "failed" };
                 self.steps.push(step("tool", "os", name, format!("{label}: {e}"), false, ms));
-                self.failure = Some((name.to_string(), humanize_tool_error(&e)));
+                let why = if starting { format!("{} is still starting up (cold start) — ask again in a few seconds", super::mcp::server_of_tool(name)) } else { humanize_tool_error(without_stderr(&e)) };
+                self.failure = Some((name.to_string(), why));
+                self.last_error = Some(e);
                 None
             }
             Err(_) => {
+                super::trace::emit(super::trace::Hop::Tool, name, false, ms, Some("timed out"));
+                // The dropped call_tool future never reached its own record_call.
+                super::mcp::record_call(super::mcp::server_of_tool(name), ms as u64, Some("timed out"), super::os_core::now_secs());
                 self.steps.push(step("tool", "os", name, format!("{name} timed out"), false, ms));
                 self.failure = Some((name.to_string(), "timed out".into()));
                 None
@@ -643,22 +718,17 @@ async fn run_tool_router(
     text: &str,
     approved: bool,
     agent: &str,
+    os_name: &str,
     deadline: Instant,
     out: &mut Prefetch,
 ) {
-    let norm = super::routing::normalize(text);
-    let offered: Vec<&super::mcp::ToolInfo> = tools.iter().filter(|t| router_keyword_ok(&t.server, &norm)).collect();
+    let offered = router_offer(tools, text, os_name);
     if offered.is_empty() {
         return;
     }
-    let list = offered.iter().map(|t| router_tool_line(t)).collect::<Vec<_>>().join("\n");
     let mut extra = String::new();
     for _ in 0..2 {
-        let router = format!(
-            "You route a request to at most ONE tool. Tools:\n{list}\n\nLIVE DASHBOARD:\n{}{extra}\n\nReply ONLY with JSON: {{\"tool\": \"<tool name>\" or null, \"args\": {{…}}}}. \
-Use null if the dashboard/previous tool result already answers it or no tool helps.",
-            context.chars().take(1500).collect::<String>()
-        );
+        let router = router_prompt(&offered, context, &extra);
         let mut msgs = vec![ChatMessage::new("system", router), ChatMessage::new("user", text.to_string())];
         let mut replied = false;
         let mut parsed = None;
@@ -699,39 +769,131 @@ Use null if the dashboard/previous tool result already answers it or no tool hel
             out.steps.push(step("tool", "os", &name, format!("{name} skipped — out of time"), false, 0));
             break;
         }
-        match out.call(state, os, bridge, &name, &args, approved, agent, call_secs).await {
+        // Goes through `mcp::call_tool`: MCP permission gate, kill switch, logging.
+        let res = out.call(state, os, bridge, &name, &args, approved, agent, call_secs).await;
+        out.spotify_outcome(&name, &args, res.as_deref(), PlanSource::Router);
+        match res {
+            // One media action per turn: never let a second router pass play/skip again.
+            Some(_) if super::mcp::is_spotify_actuator(&name) => break,
             Some(res) => extra = format!("\n\nTool {name} already returned:\n{}", res.chars().take(500).collect::<String>()),
             None => break,
         }
     }
 }
 
+/// The tools the JSON router is offered for `text`: Gmail / WhatsApp / Spotify
+/// only when the request names their subject (`router_keyword_ok`); Spotify's
+/// playback controls also for a line that is itself a media command ("skip", "turn it up").
+/// Spotify library edits (playlists, Liked Songs) only when the line names the library (D25).
+fn router_offer<'a>(tools: &'a [super::mcp::ToolInfo], text: &str, os_name: &str) -> Vec<&'a super::mcp::ToolInfo> {
+    static LIBRARY: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let norm = super::routing::normalize(text);
+    let command = media_command(text, os_name);
+    let library = LIBRARY.get_or_init(|| regex::Regex::new(r"\b(playlists?|liked songs|library|favou?rites|like|unlike|save|unsave|heart)\b").unwrap()).is_match(&norm);
+    tools
+        .iter()
+        .filter(|t| {
+            if t.server == "spotify" && super::spotify_intent::is_library_write(&t.name) {
+                return library;
+            }
+            router_keyword_ok(&t.server, &norm) || (command && super::mcp::is_spotify_actuator(&t.name))
+        })
+        .collect()
+}
+
+/// The router's system prompt: one line per offered tool (args + example call).
+fn router_prompt(offered: &[&super::mcp::ToolInfo], context: &str, extra: &str) -> String {
+    let list = offered.iter().map(|t| router_tool_line(t)).collect::<Vec<_>>().join("\n");
+    format!(
+        "You route a request to at most ONE tool. Tools:\n{list}\n\nLIVE DASHBOARD:\n{}{extra}\n\nReply ONLY with JSON: {{\"tool\": \"<tool name>\" or null, \"args\": {{…}}}}. \
+Use null if the dashboard/previous tool result already answers it or no tool helps. Spotify controls (spotify.play, spotify.pause, \
+spotify.next, spotify.volume, …) only when the user plainly asks to play, pause, skip or change the music. \
+Spotify tools control Spotify only — never use them for YouTube, videos or local sounds. Use library tools only when the user \
+explicitly asks to change a playlist or Liked Songs.",
+        context.chars().take(1500).collect::<String>()
+    )
+}
+
+/// The tools a turn of `agent` can use — the ONE builder `prefetch_tools` and
+/// `tony_tools_preview` share. A Deny MCP tier means none.
+async fn turn_tools(state: &DispatchState, os: &OsState, cfg: &OsConfig, agent: &str) -> super::mcp::ToolSet {
+    if cfg.permissions.mcp == super::bridge::Tier::Deny {
+        return super::mcp::ToolSet { all: vec![], offered: vec![] };
+    }
+    super::mcp::tool_set(state, os, agent).await
+}
+
+#[derive(Serialize, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TonyToolsPreview {
+    /// Every tool of the servers Tony's turn can use (incl. ones the router never sees).
+    all: Vec<String>,
+    /// The subset offered to Tony's LLM router (and listed in his system prompt).
+    router_offered: Vec<String>,
+    /// The Spotify server is on, connected, not blocked by the kill switch and not
+    /// denied by the MCP permission tier.
+    spotify_ready: bool,
+}
+
+fn tools_preview(set: &super::mcp::ToolSet, spotify_ready: bool) -> TonyToolsPreview {
+    TonyToolsPreview { all: set.all.iter().map(|t| t.name.clone()).collect(), router_offered: set.offered.iter().map(|t| t.name.clone()).collect(), spotify_ready }
+}
+
+/// Diagnostics: the tool names Tony's next turn would see. Names only — no
+/// arguments, results or secrets.
+#[tauri::command]
+pub async fn tony_tools_preview(state: State<'_, DispatchState>, os: State<'_, OsState>) -> Result<TonyToolsPreview, String> {
+    let cfg = os.snapshot();
+    let set = turn_tools(&state, &os, &cfg, "general").await;
+    let spotify_ready = spotify_ready(&cfg, || super::spotify::readiness(&state).is_ok());
+    Ok(tools_preview(&set, spotify_ready))
+}
+
+/// Same rule as `spotify::may_read`: kill switch off, MCP tier not Deny, server on, connected.
+fn spotify_ready(cfg: &OsConfig, connected: impl FnOnce() -> bool) -> bool {
+    !cfg.privacy.kill_switch && cfg.permissions.mcp != super::bridge::Tier::Deny && cfg.mcps.iter().any(|m| m.id == "spotify" && m.enabled) && connected()
+}
+
 /// Fetch live tool data for `agent`'s upcoming turn (its own granted tools;
-/// Tony's own turns pass `"general"`, which `enabled_tools` always gives
+/// Tony's own turns pass `"general"`, which `mcp::tool_set` always gives
 /// every enabled server). Tries a deterministic plan first (instant, no LLM
 /// call), then — if the text still plausibly wants a tool — the JSON router,
 /// restricted to that agent's tools. Mutating tools are never offered
-/// (`mcp::is_mutating_tool`, enforced inside `mcp::enabled_tools`). The whole
+/// (`mcp::offered_to_router`, enforced inside `mcp::tool_set`; Tony's Spotify media controls are the one allowlisted exception). The whole
 /// thing is capped at ~20s so one dead server can't stall the turn.
-async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeState, cfg: &OsConfig, agent: &str, text: &str, context: &str, approved: bool) -> Prefetch {
-    let mut out = Prefetch::default();
+#[allow(clippy::too_many_arguments)]
+async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeState, cfg: &OsConfig, agent: &str, text: &str, context: &str, approved: bool, ask_cards: bool, cue_playing: bool) -> Prefetch {
+    let mut out = Prefetch { ask_cards, ..Prefetch::default() };
     if cfg.permissions.mcp == super::bridge::Tier::Deny {
         return out;
     }
-    let tools = super::mcp::enabled_tools(state, os, agent).await;
-    out.tools = tools.iter().map(|t| t.name.clone()).collect();
+    let mut tools = turn_tools(state, os, cfg, agent).await.offered;
+    // Cue precedence (G20): "volume 30" while Gabagool plays is the cue's — neither the grammar
+    // nor the router may turn it into a Spotify volume change.
+    if super::spotify_intent::cue_owns_volume(text, &cfg.os_name, cue_playing) {
+        tools.retain(|t| t.name != "spotify.volume");
+    }
+    out.tools = tools.clone();
     let deadline = Instant::now() + Duration::from_secs(20);
-    if let Some((name, args)) = deterministic_plan(text, &tools) {
+    if let Some((name, args)) = deterministic_plan(text, &tools, &cfg.os_name) {
+        // "reconnect Spotify" on the Rust path: a fixed reply, no tool, no browser (D15).
+        if name == super::spotify_intent::RECONNECT {
+            out.steps.push(step("tool", "os", &name, "fixed reply (sign-in happens in Settings → Integrations)", true, 0));
+            out.verbatim = Some(super::spotify::RUST_RECONNECT.into());
+            return out;
+        }
         let secs = deadline.saturating_duration_since(Instant::now()).min(Duration::from_secs(18));
-        out.call(state, os, bridge, &name, &args, approved, agent, secs).await;
+        let res = out.call(state, os, bridge, &name, &args, approved, agent, secs).await;
+        out.spotify_outcome(&name, &args, res.as_deref(), PlanSource::Deterministic);
         return out;
     }
     // Asked for email / Spotify but that server can't serve it (off / no
     // backend / not connected): say why instead of letting the model invent a refusal.
-    let planners: [(&str, fn(&str, &[super::mcp::ToolInfo]) -> Option<(String, Value)>); 2] = [("gmail", gmail_plan), ("spotify", spotify_plan)];
+    type Planner = fn(&str, &[super::mcp::ToolInfo], &str) -> Option<(String, Value)>;
+    let planners: [(&str, Planner); 2] = [("gmail", |t, tools, _| gmail_plan(t, tools)), ("spotify", spotify_plan)];
     for (id, plan) in planners {
         let granted = cfg.mcps.iter().any(|m| m.id == id && (agent == "general" || m.grants(agent)));
-        if granted && !tools.iter().any(|t| t.server == id) && plan(text, &super::mcp::builtin_tools(id)).is_some() {
+        if granted && !tools.iter().any(|t| t.server == id) && plan(text, &super::mcp::builtin_tools(id), &cfg.os_name).is_some() {
             if let Some(reason) = super::mcp::unavailable_reason(state, cfg, id) {
                 out.steps.push(step("tool", "os", id, format!("failed: {reason}"), false, 0));
                 out.failure = Some((id.into(), reason));
@@ -739,8 +901,14 @@ async fn prefetch_tools(state: &DispatchState, os: &OsState, bridge: &BridgeStat
             }
         }
     }
-    if !tools.is_empty() && wants_tools(text) {
-        run_tool_router(state, os, bridge, &tools, context, text, approved, agent, deadline, &mut out).await;
+    if !tools.is_empty() && (wants_tools(text) || media_command(text, &cfg.os_name)) {
+        run_tool_router(state, os, bridge, &tools, context, text, approved, agent, &cfg.os_name, deadline, &mut out).await;
+    }
+    // A "play …" line nothing could act on: a fixed, honest reply instead of letting the
+    // local model claim Spotify is off (or guess what was meant).
+    if out.used.is_none() && out.failure.is_none() && out.pending_spotify.is_none() && tools.iter().any(|t| t.server == "spotify") && unparsed_play_request(text, &cfg.os_name) {
+        out.steps.push(step("tool", "os", "spotify.play", format!("failed: {PLAY_HELP}"), false, 0));
+        out.failure = Some(("spotify.play".into(), PLAY_HELP.into()));
     }
     out
 }
@@ -773,6 +941,18 @@ pub struct OsTurnRequest {
     /// Stream Tony's answer as `tony-token` events under this id.
     #[serde(default)]
     pub(crate) stream_id: Option<String>,
+    /// System Map trace this turn's `os-trace` steps join (the webview's own hops use it
+    /// too). Missing or malformed = a fresh id.
+    #[serde(default)]
+    pub(crate) trace_id: Option<String>,
+    /// The caller can show approval cards (TS `osRun`): a Spotify write held by the Ask tier
+    /// returns `pendingSpotify` instead of a failure note (D14). Phone / inbox leave it false.
+    #[serde(default)]
+    pub(crate) ask_cards: bool,
+    /// A Gabagool cue is playing (TS `cuePlayingNow()`): a bare volume line ("volume 30") is
+    /// the cue's, so Spotify volume is not offered this turn (`spotify_intent::cue_owns_volume`).
+    #[serde(default)]
+    pub(crate) cue_playing: bool,
 }
 
 #[derive(Serialize, Clone)]
@@ -806,6 +986,9 @@ pub struct OsTurnResult {
     pub(crate) route_reason: String,
     /// "Named" | "Domain" | "Tab" | "Llm" | "Default".
     pub(crate) route_kind: String,
+    /// The Spotify write the card must run (D14); `answer` is "" then.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) pending_spotify: Option<PendingSpotifyCall>,
 }
 
 pub(crate) fn step(kind: &str, from: &str, to: &str, text: impl Into<String>, ok: bool, ms: u128) -> OsStep {
@@ -814,10 +997,103 @@ pub(crate) fn step(kind: &str, from: &str, to: &str, text: impl Into<String>, ok
 
 #[tauri::command]
 pub async fn os_turn(app: tauri::AppHandle, state: State<'_, DispatchState>, os: State<'_, OsState>, bridge: State<'_, BridgeState>, req: OsTurnRequest) -> Result<OsTurnResult, String> {
-    run_os_turn(&state, &os, &bridge, req, Some(&app)).await
+    let Some(sid) = req.stream_id.clone().filter(|s| !s.is_empty()) else {
+        return run_os_turn(&state, &os, &bridge, req, Some(&app)).await;
+    };
+    // Phase 2 "cut it": `os_turn_cancel {streamId}` drops this whole future — every in-flight
+    // reqwest stream (LLM SSE, AnythingLLM stream-chat) and the compute slot go with it, and a
+    // dropped connection stops the server generating.
+    let cancel = TURN_CANCELS.register(&sid);
+    let turn = std::pin::pin!(run_os_turn(&state, &os, &bridge, req, Some(&app)));
+    let cancelled = std::pin::pin!(cancel.notified());
+    let out = match futures_util::future::select(turn, cancelled).await {
+        futures_util::future::Either::Left((r, _)) => r,
+        futures_util::future::Either::Right(_) => Err(TURN_CANCELLED.into()),
+    };
+    TURN_CANCELS.finish(&sid);
+    out
+}
+
+/// Error text of a turn stopped by `os_turn_cancel` (the webview stays silent on it).
+pub(crate) const TURN_CANCELLED: &str = "turn cancelled";
+
+/// streamId → cancel signal. A cancel that arrives before its turn registers leaves a stored
+/// permit (`Notify::notify_one`), so the turn ends as soon as it starts.
+pub(crate) struct TurnCancels(std::sync::Mutex<std::collections::HashMap<String, std::sync::Arc<tokio::sync::Notify>>>);
+
+impl TurnCancels {
+    fn slot(&self, id: &str) -> std::sync::Arc<tokio::sync::Notify> {
+        let mut m = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        // Pre-cancels for turns that never ran would otherwise accumulate.
+        if m.len() > 64 {
+            m.retain(|_, n| std::sync::Arc::strong_count(n) > 1);
+        }
+        m.entry(id.to_string()).or_insert_with(|| std::sync::Arc::new(tokio::sync::Notify::new())).clone()
+    }
+    pub(crate) fn register(&self, id: &str) -> std::sync::Arc<tokio::sync::Notify> {
+        self.slot(id)
+    }
+    pub(crate) fn cancel(&self, id: &str) {
+        self.slot(id).notify_one();
+    }
+    pub(crate) fn finish(&self, id: &str) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+    }
+}
+
+pub(crate) static TURN_CANCELS: std::sync::LazyLock<TurnCancels> = std::sync::LazyLock::new(|| TurnCancels(Default::default()));
+
+/// Stop an in-flight `os_turn` by its `streamId` (Phase 2 "cut it"). Unknown ids are harmless.
+#[tauri::command]
+pub fn os_turn_cancel(stream_id: String) {
+    if !stream_id.is_empty() && stream_id.len() <= 128 {
+        TURN_CANCELS.cancel(&stream_id);
+    }
+}
+
+#[cfg(test)]
+mod turn_cancel_tests {
+    use super::*;
+    use futures_util::FutureExt;
+
+    #[test]
+    fn cancel_wakes_a_registered_turn() {
+        let c = TurnCancels(Default::default());
+        let n = c.register("a");
+        assert!(n.notified().now_or_never().is_none(), "not cancelled yet");
+        c.cancel("a");
+        assert!(n.notified().now_or_never().is_some());
+        c.finish("a");
+        assert!(c.0.lock().unwrap().is_empty());
+    }
+
+    #[test]
+    fn cancel_before_register_is_kept() {
+        let c = TurnCancels(Default::default());
+        c.cancel("b");
+        let n = c.register("b");
+        assert!(n.notified().now_or_never().is_some(), "an early cut still stops the turn");
+        // Another stream id is unaffected.
+        assert!(c.register("other").notified().now_or_never().is_none());
+    }
 }
 
 pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeState, req: OsTurnRequest, app: Option<&tauri::AppHandle>) -> Result<OsTurnResult, String> {
+    let id = req.trace_id.clone().filter(|t| super::trace::valid_id(t)).unwrap_or_else(super::trace::new_id);
+    super::trace::scoped(id, os_turn_traced(state, os, bridge, req, app)).await
+}
+
+/// System Map label for a model call: `provider · model`.
+fn model_label(state: &DispatchState, provider_id: &str) -> String {
+    match state.snapshot().providers.iter().find(|p| p.id == provider_id).map(|p| p.model.clone()).filter(|m| !m.is_empty()) {
+        Some(model) => format!("{provider_id} · {model}"),
+        None => provider_id.to_string(),
+    }
+}
+
+/// `run_os_turn`'s body, inside its trace scope: emits router / rules / memory / model steps.
+async fn os_turn_traced(state: &DispatchState, os: &OsState, bridge: &BridgeState, req: OsTurnRequest, app: Option<&tauri::AppHandle>) -> Result<OsTurnResult, String> {
+    use super::trace::{emit, emit_with, Hop};
     let (state, os, bridge) = (state, os, bridge);
     let started = Instant::now();
     let cfg = os.snapshot();
@@ -845,6 +1121,9 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
             }
         }
     }
+    // Route kind + target only (the reason can quote the request).
+    let who = if role == "general" { cfg.os_name.clone() } else { role_label(&role) };
+    emit(Hop::Router, &format!("{route_kind} → {who}"), true, started.elapsed().as_millis(), None);
 
     let mut steps: Vec<OsStep> = Vec::new();
     let mut delegated_to = None;
@@ -865,6 +1144,9 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
             Ok(_) => steps.push(step("reply", "librarian", "os", format!("No messages with {who} match that."), false, t0.elapsed().as_millis())),
             Err(e) => steps.push(step("error", "librarian", "os", format!("Comms history unavailable: {e}"), false, t0.elapsed().as_millis())),
         }
+        // Outcome only: the contact and topic are the request's own words.
+        let (ok, failed) = steps.last().map(|s| (s.ok, s.kind == "error")).unwrap_or((false, false));
+        emit(Hop::Memory, "comms history search", ok, t0.elapsed().as_millis(), failed.then_some("comms history unavailable"));
     }
     let keep = cfg.scheduler.history_turns.max(2) as usize;
     let history: Vec<ChatMessage> = req.history.into_iter().rev().take(keep).collect::<Vec<_>>().into_iter().rev().collect();
@@ -873,21 +1155,65 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     // target agent's own granted tools, and regardless of whether a
     // sub-agent later answers (that gate used to skip tools entirely). ──
     let prefetch_agent = if role == "general" { "general" } else { role.as_str() };
-    let pre = if comms_thread.is_none() { prefetch_tools(state, os, bridge, &cfg, prefetch_agent, &text, &req.context, req.approved).await } else { Prefetch::default() };
+    // The delegation gate runs BEFORE any tool: a PERMISSION_REQUIRED here makes the UI
+    // re-run the whole turn with approved=true, so a prefetched action (a Spotify skip)
+    // would otherwise run once now and again on the retry — or run although the user said no.
+    let slug = cfg.anythingllm.workspaces.get(&role).filter(|s| !s.is_empty()).cloned();
+    if role != "general" && comms_thread.is_none() {
+        if let Some(slug) = &slug {
+            os_core::gate(bridge, cfg.permissions.delegation, "delegation", req.approved, json!({ "workspace": slug }))?;
+        }
+    }
+    let pre = if comms_thread.is_none() { prefetch_tools(state, os, bridge, &cfg, prefetch_agent, &text, &req.context, req.approved, req.ask_cards, req.cue_playing).await } else { Prefetch::default() };
     steps.extend(pre.steps);
     let tool_note = tool_note(&cfg.os_name, &pre.block, pre.failure.as_ref());
     let tool_used = pre.used;
 
-    // ── 2. Delegation ──
-    let slug = cfg.anythingllm.workspaces.get(&role).filter(|s| !s.is_empty()).cloned();
+    // ── Spotify on Tony's tool path ── a write held by the Ask tier (D14) or a reply that is the
+    // answer (D26) ends the turn here, before any model call.
+    if role == "general" {
+        let spotify_turn = |answer: String, tool: Option<String>, reason: &str, pending: Option<PendingSpotifyCall>, steps: Vec<OsStep>| OsTurnResult {
+            answer,
+            steps,
+            provider_id: "spotify".into(),
+            delegated_to: None,
+            tool,
+            latency_ms: started.elapsed().as_millis(),
+            reason: reason.into(),
+            redacted: false,
+            comms_thread: None,
+            routed_role: role.clone(),
+            route_reason: route_reason.clone(),
+            route_kind: route_kind.clone(),
+            pending_spotify: pending,
+        };
+        if let Some(p) = pre.pending_spotify {
+            let res = spotify_turn(String::new(), Some(p.name.clone()), "spotify approval card", Some(p), steps);
+            log_turn(bridge, &role, &text, &res);
+            return Ok(res);
+        }
+        if let Some(reply) = pre.verbatim {
+            // Spoken like a streamed answer: one `tony-token` chunk under the turn's stream id.
+            if let (Some(app), Some(sid)) = (app, req.stream_id.as_deref()) {
+                use tauri::Emitter;
+                let _ = app.emit("tony-token", json!({ "streamId": sid, "delta": reply }));
+            }
+            let res = spotify_turn(reply, tool_used.clone(), "spotify reply (verbatim)", None, steps);
+            log_turn(bridge, &role, &text, &res);
+            return Ok(res);
+        }
+    }
+
+    // ── 2. Delegation ── (gated above, before the tool pre-executor)
     if role != "general" && comms_thread.is_none() {
         if let Some(slug) = slug {
-            os_core::gate(bridge, cfg.permissions.delegation, "delegation", req.approved, json!({ "workspace": slug }))?;
             let label = role_label(&role);
             let skills = super::mcp::skill_digest(&cfg, &role);
             // Designer / Prompter also get the user's identity file (taste, brand, goals).
             let identity = if matches!(role.as_str(), "designer" | "prompter") {
-                os_core::read_identity(&cfg).map(|i| format!("\n\nABOUT THE USER (MASTER_IDENTITY.md):\n{}", i.chars().take(2000).collect::<String>())).unwrap_or_default()
+                let r = os_core::read_identity(&cfg);
+                emit(Hop::Rules, &format!("MASTER_IDENTITY.md → {label}"), r.is_ok(), 0, r.as_ref().err().map(|_| "identity file not readable"));
+                r.map(|i| format!("\n\nABOUT THE USER (MASTER_IDENTITY.md):\n{}", i.chars().take(2000).collect::<String>())).unwrap_or_default()
             } else {
                 String::new()
             };
@@ -914,10 +1240,24 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
                 (true, Some(sid), Some(app)) => workspace_chat_streamed(state, os, &slug, &task, app, sid, &role).await,
                 _ => workspace_chat(state, os, &slug, &task).await,
             };
+            // A Librarian read is a memory hop (cargo); any other sub-agent is a model call (engine).
+            let hop = if role == "librarian" { Hop::Memory } else { Hop::Model };
+            let hop_label = format!("{label} · anythingllm/{slug}");
+            match &chat_result {
+                Ok(_) => emit(hop, &hop_label, true, t0.elapsed().as_millis(), None),
+                Err(e) => emit_with(hop, &hop_label, false, t0.elapsed().as_millis(), Some(e), None, &super::devqueue::known_secrets(state, os)),
+            }
             match chat_result {
                 Ok((answer, sources)) => {
                     let src = if sources.is_empty() { String::new() } else { format!("\n\nSources: {}", sources.join(", ")) };
                     steps.push(step("reply", &role, "os", format!("{answer}{src}"), true, t0.elapsed().as_millis()));
+                    // Phase 2 §4 announcer handoff: a delegated agent's answer goes to the webview
+                    // the moment it lands, so it can speak in its own voice while Tony's synthesis
+                    // (shown, not spoken in that mode) is still generating.
+                    if let (false, Some(sid), Some(app)) = (req.explicit, req.stream_id.as_deref(), app) {
+                        use tauri::Emitter;
+                        let _ = app.emit("os-agent-reply", json!({ "streamId": sid, "agent": role, "text": answer }));
+                    }
                     delegated_to = Some(slug.clone());
                     agent_answer = Some(answer);
                 }
@@ -944,6 +1284,7 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
             routed_role: role.clone(),
             route_reason: route_reason.clone(),
             route_kind: route_kind.clone(),
+            pending_spotify: None,
         };
         log_turn(bridge, &role, &text, &res);
         return Ok(res);
@@ -953,7 +1294,13 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     // The tool data for a delegated (non-general) turn already rode along in
     // the task above; Tony's own turns (role == "general") get it here, in
     // his own system prompt, since there was no delegated task to carry it.
+    let t_rules = Instant::now();
     let sys = system_prompt(&cfg, &req.context, &pre.tools);
+    if sys.contains("ABOUT THE USER (MASTER_IDENTITY.md)") {
+        emit(Hop::Rules, "system prompt + MASTER_IDENTITY.md", true, t_rules.elapsed().as_millis(), None);
+    } else {
+        emit(Hop::Rules, "system prompt (no identity)", false, t_rules.elapsed().as_millis(), Some("MASTER_IDENTITY.md not readable — check the identity path in Settings"));
+    }
     let sys_tool_note = if role == "general" { tool_note.clone() } else { String::new() };
 
     let mut user_msg = text.clone();
@@ -967,16 +1314,26 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
     msgs.extend(history);
     msgs.push(ChatMessage::new("user", user_msg));
 
+    let t_model = Instant::now();
     let answer = match (app, req.stream_id.as_deref()) {
         (Some(app), Some(sid)) => super::dispatch::run_chat_streamed(state, os, msgs.clone(), Some(90), app, sid).await,
         _ => run_chat(state, os, msgs.clone(), Priority::Interactive, None, Some(90)).await,
     };
+    match &answer {
+        Ok(r) => emit_with(Hop::Model, &model_label(state, &r.provider_id), true, t_model.elapsed().as_millis(), None, r.tps, &[]),
+        Err(e) => emit_with(Hop::Model, &format!("{} chat chain", cfg.os_name), false, t_model.elapsed().as_millis(), Some(e), None, &super::devqueue::known_secrets(state, os)),
+    }
     let res = match answer {
         Ok(r) => r,
         Err(e) if cfg.overseer.auto_escalate => {
             steps.push(step("error", "os", "user", format!("local chain failed: {e}"), false, 0));
             let t0 = Instant::now();
-            let (answer, engine, redacted) = overseer_call(state, os, &cfg, &msgs).await?;
+            let escalated = overseer_call(state, os, &cfg, &msgs).await;
+            match &escalated {
+                Ok((_, engine, _)) => emit(Hop::Model, &format!("overseer · {engine}"), true, t0.elapsed().as_millis(), None),
+                Err(e) => emit_with(Hop::Model, "overseer", false, t0.elapsed().as_millis(), Some(e), None, &super::devqueue::known_secrets(state, os)),
+            }
+            let (answer, engine, redacted) = escalated?;
             steps.push(step("overseer", &engine, "os", "auto-escalated", true, t0.elapsed().as_millis()));
             let out = OsTurnResult {
                 answer,
@@ -991,6 +1348,7 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
                 routed_role: role.clone(),
                 route_reason: route_reason.clone(),
                 route_kind: route_kind.clone(),
+                pending_spotify: None,
             };
             log_turn(bridge, &role, &text, &out);
             return Ok(out);
@@ -1011,6 +1369,7 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
                     routed_role: role.clone(),
                     route_reason: route_reason.clone(),
                     route_kind: route_kind.clone(),
+                    pending_spotify: None,
                 };
                 log_turn(bridge, &role, &text, &out);
                 return Ok(out);
@@ -1035,6 +1394,7 @@ pub async fn run_os_turn(state: &DispatchState, os: &OsState, bridge: &BridgeSta
         routed_role: role.clone(),
         route_reason,
         route_kind,
+        pending_spotify: None,
     };
     log_turn(bridge, &role, &text, &out);
     Ok(out)
@@ -1251,7 +1611,8 @@ async fn cli(programs: &[&'static str], args: &[&'static str], input: String, se
 
 /// Anthropic Messages API (raw HTTP — there is no official Rust SDK).
 async fn claude_api(state: &DispatchState, cfg: &OsConfig, msgs: &[ChatMessage], secs: u64) -> Result<String, String> {
-    let key = os_core::os_secret("anthropic").ok_or("add an Anthropic API key in Settings → Integrations → Overseer")?;
+    // env / repo .env / keychain. Safe for an unscoped env key: the host below is hard-coded.
+    let key = super::envfile::os_key(state, "anthropic").ok_or("add an Anthropic API key in Settings → Integrations → Overseer, or set ANTHROPIC_API_KEY in the repo-root .env")?;
     let system: Vec<&str> = msgs.iter().filter(|m| m.role == "system").map(|m| m.content.as_str()).collect();
     // Alternate user/assistant, merging consecutive same-role turns; must start with user.
     let mut turns: Vec<(String, String)> = Vec::new();
@@ -1304,7 +1665,8 @@ async fn claude_api(state: &DispatchState, cfg: &OsConfig, msgs: &[ChatMessage],
 }
 
 async fn gemini_api(state: &DispatchState, cfg: &OsConfig, msgs: &[ChatMessage], secs: u64) -> Result<String, String> {
-    let key = os_core::os_secret("gemini").ok_or("add a Gemini API key in Settings → Integrations → Overseer")?;
+    // env / repo .env / keychain. Safe for an unscoped env key: the host below is hard-coded.
+    let key = super::envfile::os_key(state, "gemini").ok_or("add a Gemini API key in Settings → Integrations → Overseer, or set GEMINI_API_KEY in the repo-root .env")?;
     let system: Vec<&str> = msgs.iter().filter(|m| m.role == "system").map(|m| m.content.as_str()).collect();
     let contents: Vec<Value> = msgs
         .iter()
@@ -1406,9 +1768,9 @@ mod tests {
         // Email beats WhatsApp in the combined plan.
         let mut all = gmail_tools();
         all.extend(whatsapp_tool());
-        assert_eq!(deterministic_plan("read my last email", &all).unwrap().0, "gmail.recent");
-        assert_eq!(deterministic_plan("check my whatsapp", &all).unwrap().0, "whatsapp.list_messages");
-        assert_eq!(deterministic_plan("any unread messages in my WhatsApp inbox?", &all).unwrap().0, "whatsapp.list_messages");
+        assert_eq!(deterministic_plan("read my last email", &all, "Tony").unwrap().0, "gmail.recent");
+        assert_eq!(deterministic_plan("check my whatsapp", &all, "Tony").unwrap().0, "whatsapp.list_messages");
+        assert_eq!(deterministic_plan("any unread messages in my WhatsApp inbox?", &all, "Tony").unwrap().0, "whatsapp.list_messages");
         assert_eq!(gmail_plan("any unread emails, not texts", &gmail_tools()).unwrap().0, "gmail.recent");
     }
 
@@ -1441,15 +1803,143 @@ mod tests {
         assert!(ok.contains("You have live tool access through Tony") && !ok.contains("TOOL FAILURE"));
         assert_eq!(tool_note("Tony", "", None), "");
         assert_eq!(humanize_tool_error("PERMISSION_REQUIRED:mcp"), "the mcp permission is set to Ask and this turn wasn't approved");
+        assert_eq!(humanize_tool_error("PERMISSION_READ_ONLY:sqlite — SQLite is set to read-only, so sqlite.write_query is blocked"), "SQLite is set to read-only, so sqlite.write_query is blocked");
     }
 
     #[test]
     fn tools_section_lists_names_and_never_lacks_skill() {
-        let s = tools_section(&["gmail.recent".into(), "weather.current".into()]);
+        let tools: Vec<_> = gmail_tools().into_iter().filter(|t| t.name == "gmail.recent").chain(super::super::mcp::builtin_tools("weather")).collect();
+        let s = tools_section(&tools);
         assert!(s.contains("TOOLS YOU HAVE THIS TURN: gmail.recent, weather.current."));
         assert!(s.contains("never that you lack the tool or the skill"));
         assert!(s.contains("don't claim it's done or queued"));
+        assert!(!s.contains("SPOTIFY IS CONNECTED"));
         assert!(tools_section(&[]).contains("none switched on"));
+    }
+
+    #[test]
+    fn tools_section_lists_spotify_controls_with_args() {
+        let s = tools_section(&spotify_tools());
+        assert!(s.contains("spotify.play(query?, type?, playlist_name?, device_name?, shuffle?)"), "{s}");
+        assert!(s.contains("spotify.volume(percent)") && s.contains("spotify.pause") && s.contains("spotify.next(count?)") && s.contains("spotify.resume(device_name?)"), "{s}");
+        assert!(s.contains("spotify.add_to_playlist(playlist_name, track_query?, create?)") && s.contains("spotify.transfer_device(device_name)"), "{s}");
+        // Reads aren't listed as controls; no IDs anywhere.
+        assert!(!s.contains("spotify.now_playing(") && !s.contains("uri") && !s.contains("_id"), "{s}");
+        assert!(s.contains("SPOTIFY IS CONNECTED"));
+        // Sub-agents (reads only) get no control line.
+        let reads = super::super::mcp::router_filter(&super::super::mcp::builtin_tools("spotify"), false);
+        assert!(!tools_section(&reads).contains("SPOTIFY IS CONNECTED"));
+    }
+
+    #[test]
+    fn tony_router_prompt_offers_spotify_play_when_ready() {
+        // Spotify ready → its listing is every builtin tool; Tony's filter keeps the allowlist.
+        let mut ready = super::super::mcp::builtin_tools("spotify");
+        ready.extend(gmail_tools());
+        let offered_all = super::super::mcp::router_filter(&ready, true);
+        for line in ["aye tony can you play some bilmuri", "put on something chill", "skip this song", "turn it up", "volume 30"] {
+            assert!(wants_tools(line) || media_command(line, "Tony"), "{line}");
+            let offered = router_offer(&offered_all, line, "Tony");
+            let prompt = router_prompt(&offered, "", "");
+            assert!(prompt.contains("- spotify.play(query?, type?, playlist_name?, device_name?, shuffle?)"), "{line}: {prompt}");
+            assert!(prompt.contains("never use them for YouTube"), "{line}");
+            assert!(!prompt.contains("gmail.create_draft"), "{line}");
+            // No library words: no library edits on offer.
+            assert!(!offered.iter().any(|t| super::super::spotify_intent::is_library_write(&t.name)), "{line}");
+        }
+        // A non-music line doesn't drag Spotify into the router.
+        assert!(router_offer(&offered_all, "what's the weather", "Tony").iter().all(|t| t.server != "spotify"));
+        // Sub-agents' routers never see playback.
+        let sub = super::super::mcp::router_filter(&ready, false);
+        assert!(!router_prompt(&router_offer(&sub, "play some jazz", "Tony"), "", "").contains("spotify.play("));
+    }
+
+    #[test]
+    fn bare_media_verbs_inside_a_sentence_never_unlock_spotify_controls() {
+        let offered_all = super::super::mcp::router_filter(&super::super::mcp::builtin_tools("spotify"), true);
+        for line in ["What role does Redis play in our stack?", "what's NVDA's trading volume", "what was the previous commit", "should I pause the migration"] {
+            assert!(!media_command(line, "Tony"), "{line}");
+            assert!(!router_offer(&offered_all, line, "Tony").iter().any(|t| super::super::mcp::is_spotify_actuator(&t.name)), "{line}");
+        }
+        assert!(!wants_tools("what role does redis play in our stack"));
+        assert!(!wants_tools("what's NVDA's trading volume"));
+        assert!(!wants_tools("should I pause the migration"));
+        // Anchored commands and music lines still reach the router.
+        assert!(media_command("Hey Tony, pause", "Tony") && media_command("next song", "Tony") && media_command("turn it down", "Tony"));
+        assert!(router_offer(&offered_all, "is this song any good", "Tony").iter().any(|t| t.name == "spotify.now_playing"));
+    }
+
+    #[test]
+    fn spotify_ready_respects_the_mcp_tier() {
+        let mut cfg = OsConfig::default();
+        let mut s = super::super::os_core::McpServer::default();
+        s.id = "spotify".into();
+        s.enabled = true;
+        cfg.mcps = vec![s];
+        cfg.permissions.mcp = super::super::bridge::Tier::Allow;
+        assert!(spotify_ready(&cfg, || true));
+        assert!(!spotify_ready(&cfg, || false));
+        cfg.permissions.mcp = super::super::bridge::Tier::Deny;
+        assert!(!spotify_ready(&cfg, || true), "Deny: Tony can't call Spotify, so it isn't ready");
+        cfg.permissions.mcp = super::super::bridge::Tier::Allow;
+        cfg.privacy.kill_switch = true;
+        assert!(!spotify_ready(&cfg, || true));
+    }
+
+    #[test]
+    fn tool_failure_for_the_model_drops_the_stderr_tail() {
+        assert_eq!(without_stderr("SQLite: exited before replying to tools/call (exit code 1) — stderr: --api-key abc"), "SQLite: exited before replying to tools/call (exit code 1)");
+        assert_eq!(without_stderr("plain error"), "plain error");
+    }
+
+    #[test]
+    fn tools_preview_reports_names_only() {
+        let all = {
+            let mut v = gmail_tools();
+            v.extend(super::super::mcp::builtin_tools("spotify"));
+            v
+        };
+        let set = super::super::mcp::ToolSet { offered: super::super::mcp::router_filter(&all, true), all };
+        let p = tools_preview(&set, true);
+        assert!(p.all.contains(&"gmail.create_draft".to_string()));
+        assert!(!p.router_offered.contains(&"gmail.create_draft".to_string()));
+        assert!(p.router_offered.contains(&"spotify.play".to_string()));
+        let json = serde_json::to_value(&p).unwrap();
+        assert_eq!(json["spotifyReady"], true);
+        assert!(json["routerOffered"].is_array() && json["all"].is_array());
+    }
+
+    #[test]
+    fn unparsed_play_lines_fail_honestly() {
+        assert!(unparsed_play_request("play something", "Tony"));
+        assert!(unparsed_play_request("aye tony play it", "Tony"));
+        assert!(unparsed_play_request("put on some songs from the new bilmuri album please", "Tony"));
+        assert!(!unparsed_play_request("play devil's advocate on my business plan", "Tony"));
+        assert!(!unparsed_play_request("I want to play a game with you tonight after dinner", "Tony"));
+        assert!(!unparsed_play_request("listen to me carefully", "Tony"));
+        assert!(!unparsed_play_request("tell me a joke", "Tony"));
+        assert!(!unparsed_play_request("play", "Tony"));
+        // A music noun later in the line doesn't make it a playback request.
+        assert!(!unparsed_play_request("Listen to me, the band needs a new name", "Tony"));
+        assert!(!unparsed_play_request("listen to this album review I wrote and tell me if it's fair", "Tony"));
+        assert!(unparsed_play_request("listen to the new album", "Tony"));
+        assert!(unparsed_play_request("put on some music", "Tony"));
+    }
+
+    #[test]
+    fn spotify_prompt_never_promises_playback() {
+        let s = tools_section(&spotify_tools());
+        assert!(!s.contains("run when the user asks"), "{s}");
+        assert!(s.contains("has happened only if a spotify.* LIVE MCP TOOL DATA"), "{s}");
+    }
+
+    #[test]
+    fn sub_agents_never_get_playback_from_the_deterministic_plan() {
+        let reads = super::super::mcp::router_filter(&super::super::mcp::builtin_tools("spotify"), false);
+        assert!(spotify_plan("skip this song and check the build", &reads, "Tony").is_none());
+        assert!(spotify_plan("pause the music", &reads, "Tony").is_none());
+        assert!(spotify_plan("play jazz on spotify", &reads, "Tony").is_none());
+        assert_eq!(spotify_plan("what's playing", &reads, "Tony").map(|p| p.0).as_deref(), Some("spotify.now_playing"));
     }
 
     #[test]
@@ -1514,13 +2004,34 @@ mod tests {
     }
 
     fn spotify_tools() -> Vec<super::super::mcp::ToolInfo> {
-        // What `enabled_tools` hands the planner: only the router-visible Spotify tools.
-        super::super::mcp::builtin_tools("spotify").into_iter().filter(|t| ["spotify.now_playing", "spotify.recent", "spotify.playlists"].contains(&t.name.as_str())).collect()
+        // What `turn_tools` hands Tony's planner: the router-visible Spotify tools (reads + media controls).
+        super::super::mcp::router_filter(&super::super::mcp::builtin_tools("spotify"), true)
+    }
+
+    #[test]
+    fn spotify_plan_strips_interjections_and_the_wake_name() {
+        let plan = |t: &str| spotify_plan(t, &spotify_tools(), "Tony");
+        assert_eq!(plan("aye tony can you play some bilmuri"), Some(("spotify.play".into(), json!({ "query": "bilmuri", "prefer_playlist": true }))));
+        assert_eq!(plan("Aye, Tony, play Bilmuri on Spotify."), Some(("spotify.play".into(), json!({ "query": "Bilmuri" }))));
+        assert_eq!(plan("ayy tony pause the music").map(|p| p.0).as_deref(), Some("spotify.pause"));
+        assert_eq!(plan("yo jarvis what's playing").map(|p| p.0).as_deref(), Some("spotify.now_playing"));
+        // A renamed OS is stripped too.
+        assert_eq!(spotify_plan("hey friday, play some jazz", &spotify_tools(), "Friday").unwrap().1, json!({ "query": "jazz", "prefer_playlist": true }));
+        // Negatives: the name as an artist, a credit, non-music, an anchored pause.
+        assert_eq!(plan("play tony bennett").unwrap().1, json!({ "query": "tony bennett" }));
+        assert_eq!(plan("play something by tony").unwrap().1, json!({ "query": "tony", "type": "artist" }));
+        assert!(plan("aye that's a play I'd make").is_none());
+        assert!(plan("how do I turn off spotify autoplay").is_none());
+        // A renamed OS addressed at the END is dropped too; a credit stays.
+        let friday = |t: &str| spotify_plan(t, &spotify_tools(), "Friday");
+        assert_eq!(friday("Play Bilmuri on Spotify, Friday.").unwrap().1, json!({ "query": "Bilmuri" }));
+        assert_eq!(friday("play something by friday").unwrap().1, json!({ "query": "friday", "type": "artist" }));
+        assert_eq!(friday("pause, Friday").map(|p| p.0).as_deref(), Some("spotify.pause"));
     }
 
     #[test]
     fn spotify_plan_controls_and_reads() {
-        let plan = |t: &str| spotify_plan(t, &spotify_tools());
+        let plan = |t: &str| spotify_plan(t, &spotify_tools(), "Tony");
         let tool = |t: &str| plan(t).map(|p| p.0);
         assert_eq!(tool("What's playing?").as_deref(), Some("spotify.now_playing"));
         assert_eq!(tool("hey tony what song is this").as_deref(), Some("spotify.now_playing"));
@@ -1538,24 +2049,38 @@ mod tests {
         assert_eq!(tool("next track please").as_deref(), Some("spotify.next"));
         assert_eq!(tool("go back a track").as_deref(), Some("spotify.previous"));
         assert_eq!(tool("previous song").as_deref(), Some("spotify.previous"));
-        assert_eq!(tool("what have I been listening to").as_deref(), Some("spotify.recent"));
-        assert_eq!(tool("show my playlists").as_deref(), Some("spotify.playlists"));
+        assert_eq!(tool("what have I been listening to").as_deref(), Some("spotify.recently_played"));
+        assert_eq!(tool("show my playlists").as_deref(), Some("spotify.list_playlists"));
         assert_eq!(plan("spotify volume 30"), Some(("spotify.volume".into(), json!({ "percent": 30 }))));
-        assert_eq!(plan("set spotify to 45%"), Some(("spotify.volume".into(), json!({ "percent": 45 }))));
-        assert_eq!(plan("set the music volume to 150").unwrap().1["percent"], 100);
+        assert_eq!(plan("volume 40"), Some(("spotify.volume".into(), json!({ "percent": 40 }))));
+        assert_eq!(plan("set the volume to 150").unwrap().1["percent"], 100);
+        assert_eq!(tool("shuffle on").as_deref(), Some("spotify.shuffle"));
+        assert_eq!(tool("skip to 1:30").as_deref(), Some("spotify.seek"));
+        assert_eq!(tool("what's in the queue").as_deref(), Some("spotify.get_queue"));
+        // Library edits come from the grammar too; the card / gates apply when they run.
+        assert_eq!(plan("add this song to my Late Night playlist"), Some(("spotify.add_to_playlist".into(), json!({ "playlist_name": "Late Night", "track_query": "current", "create": false }))));
+        assert_eq!(tool("like this song").as_deref(), Some("spotify.like_track"));
+        // "reconnect Spotify": a fixed reply on the Rust path, no tool.
+        assert_eq!(plan("reconnect spotify"), Some((super::super::spotify_intent::RECONNECT.into(), json!({}))));
+        // Tony's speech and the mic stay Tony's.
+        for line in ["stop", "repeat that", "unmute", "I like this", "what's next"] {
+            assert!(plan(line).is_none(), "{line}");
+        }
     }
 
     #[test]
     fn spotify_plan_play_requests() {
-        let plan = |t: &str| spotify_plan(t, &spotify_tools());
-        assert_eq!(plan("play Woke Up This Morning on Spotify"), Some(("spotify.play".into(), json!({ "query": "Woke Up This Morning", "kind": "track" }))));
-        assert_eq!(plan("Hey Tony, play One More Time by Daft Punk").unwrap().1, json!({ "query": "One More Time Daft Punk", "kind": "track" }));
-        assert_eq!(plan("can you play some jazz").unwrap().1, json!({ "query": "jazz", "kind": "playlist" }));
-        assert_eq!(plan("play the album Discovery").unwrap().1, json!({ "query": "Discovery", "kind": "album" }));
-        assert_eq!(plan("play my Gym playlist on spotify").unwrap().1, json!({ "query": "Gym", "kind": "playlist" }));
-        assert_eq!(plan("play songs by Frank Sinatra").unwrap().1, json!({ "query": "Frank Sinatra", "kind": "artist" }));
+        let plan = |t: &str| spotify_plan(t, &spotify_tools(), "Tony");
+        assert_eq!(plan("play Woke Up This Morning on Spotify"), Some(("spotify.play".into(), json!({ "query": "Woke Up This Morning" }))));
+        // "X by Y" stays whole: the resolver splits it (and falls back to the whole query).
+        assert_eq!(plan("Hey Tony, play One More Time by Daft Punk").unwrap().1, json!({ "query": "One More Time by Daft Punk" }));
+        assert_eq!(plan("can you play some jazz").unwrap().1, json!({ "query": "jazz", "prefer_playlist": true }));
+        assert_eq!(plan("play the album Discovery").unwrap().1, json!({ "query": "Discovery", "type": "album" }));
+        assert_eq!(plan("play my Gym playlist on spotify").unwrap().1, json!({ "playlist_name": "Gym" }));
+        assert_eq!(plan("play songs by Frank Sinatra").unwrap().1, json!({ "query": "Frank Sinatra", "type": "artist" }));
         assert_eq!(plan("play music").unwrap().0, "spotify.resume");
         assert_eq!(plan("Play Daft Punk on Spotify, Tony.").unwrap().1["query"], "Daft Punk");
+        assert_eq!(plan("play Bilmuri on my phone").unwrap().1, json!({ "query": "Bilmuri", "device_name": "my phone" }));
         // Not music requests.
         assert!(plan("play devil's advocate on my business plan").is_none());
         assert!(plan("can you explain how the playoffs work").is_none());
@@ -1566,15 +2091,77 @@ mod tests {
 
     #[test]
     fn spotify_plan_needs_the_server() {
-        assert!(spotify_plan("pause the music", &[]).is_none());
-        assert!(spotify_plan("play jazz on spotify", &[]).is_none());
+        assert!(spotify_plan("pause the music", &[], "Tony").is_none());
+        assert!(spotify_plan("play jazz on spotify", &[], "Tony").is_none());
         let mut all = gmail_tools();
         all.extend(spotify_tools());
-        assert_eq!(deterministic_plan("read my last email", &all).unwrap().0, "gmail.recent");
-        assert_eq!(deterministic_plan("what's playing", &all).unwrap().0, "spotify.now_playing");
+        assert_eq!(deterministic_plan("read my last email", &all, "Tony").unwrap().0, "gmail.recent");
+        assert_eq!(deterministic_plan("what's playing", &all, "Tony").unwrap().0, "spotify.now_playing");
         assert!(wants_tools("what's playing on spotify"));
         assert!(router_keyword_ok("spotify", &super::super::routing::normalize("put on some music")));
         assert!(!router_keyword_ok("spotify", &super::super::routing::normalize("what's the weather")));
+    }
+
+    #[test]
+    fn router_offers_library_writes_only_with_library_words() {
+        let offered_all = spotify_tools();
+        let names = |line: &str| router_offer(&offered_all, line, "Tony").into_iter().map(|t| t.name.clone()).collect::<Vec<_>>();
+        let lib = names("remove this from my late night playlist");
+        assert!(lib.contains(&"spotify.remove_from_playlist".to_string()) && lib.contains(&"spotify.add_to_playlist".to_string()), "{lib:?}");
+        let liked = names("put this song in my liked songs");
+        assert!(liked.contains(&"spotify.like_track".to_string()), "{liked:?}");
+        let skip = names("skip this");
+        assert!(skip.contains(&"spotify.next".to_string()), "{skip:?}");
+        assert!(!skip.iter().any(|n| super::super::spotify_intent::is_library_write(n)), "{skip:?}");
+        assert!(!names("turn it up").iter().any(|n| super::super::spotify_intent::is_library_write(n)));
+    }
+
+    #[test]
+    fn ask_cards_return_the_pending_call() {
+        let args = json!({ "playlist_name": "Late Night", "track_query": "Tell Me" });
+        assert_eq!(pending_from("PERMISSION_REQUIRED:mcp", "spotify.remove_from_playlist", &args, false), None, "no askCards: today's failure note");
+        let p = pending_from("PERMISSION_REQUIRED:mcp", "spotify.remove_from_playlist", &args, true).expect("pending");
+        assert_eq!(p.name, "spotify.remove_from_playlist");
+        assert_eq!(p.args, json!({ "playlist_name": "Late Night", "track_query": "Tell Me" }));
+        assert_eq!(p.summary, "Remove Tell Me from your Late Night playlist");
+        assert_eq!(p.required, "PERMISSION_REQUIRED:mcp");
+        let d = pending_from("PERMISSION_REQUIRED:destructive", "spotify.unlike_track", &json!({}), true).unwrap();
+        assert_eq!((d.required.as_str(), d.args.clone()), ("PERMISSION_REQUIRED:destructive", json!({ "track_query": "current" })));
+        // Reads never pend, other errors never pend, other servers never pend.
+        assert_eq!(pending_from("PERMISSION_REQUIRED:mcp", "spotify.now_playing", &json!({}), true), None);
+        assert_eq!(pending_from("PERMISSION_DENIED:mcp", "spotify.play", &json!({ "query": "x" }), true), None);
+        assert_eq!(pending_from("PERMISSION_REQUIRED:mcp", "gmail.create_draft", &json!({}), true), None);
+        let json = serde_json::to_value(&p).unwrap();
+        assert!(json.get("required").is_some() && json.get("summary").is_some() && json.get("name").is_some());
+    }
+
+    #[test]
+    fn spotify_write_reply_is_verbatim() {
+        assert_eq!(verbatim_answer(PlanSource::Deterministic, false, "Now playing X."), Some("Now playing X.".into()));
+        assert_eq!(verbatim_answer(PlanSource::Deterministic, true, "Paused Spotify."), Some("Paused Spotify.".into()));
+        assert_eq!(verbatim_answer(PlanSource::Router, true, "Playing Bilmuri on Spotify."), Some("Playing Bilmuri on Spotify.".into()));
+        assert_eq!(verbatim_answer(PlanSource::Router, false, "Now playing X."), None, "router reads are synthesised");
+        // Through Prefetch: a write result pins the answer; a held write pins the card.
+        let mut p = Prefetch { ask_cards: true, ..Prefetch::default() };
+        p.spotify_outcome("spotify.pause", &json!({}), Some("Paused Spotify."), PlanSource::Router);
+        assert_eq!(p.verbatim.as_deref(), Some("Paused Spotify."));
+        let mut p = Prefetch { ask_cards: true, last_error: Some("PERMISSION_REQUIRED:mcp".into()), failure: Some(("spotify.pause".into(), "x".into())), ..Prefetch::default() };
+        p.spotify_outcome("spotify.pause", &json!({}), None, PlanSource::Deterministic);
+        assert_eq!(p.pending_spotify.as_ref().map(|c| c.summary.as_str()), Some("Pause Spotify"));
+        assert!(p.failure.is_none(), "the card replaces the failure note");
+        // Non-Spotify tools are untouched.
+        let mut p = Prefetch::default();
+        p.spotify_outcome("weather.current", &json!({}), Some("5°C"), PlanSource::Deterministic);
+        assert!(p.verbatim.is_none());
+    }
+
+    #[test]
+    fn reconnect_on_the_rust_path_is_a_fixed_reply() {
+        let plan = spotify_plan("hey tony reconnect spotify", &spotify_tools(), "Tony").unwrap();
+        assert_eq!(plan.0, super::super::spotify_intent::RECONNECT);
+        assert!(!super::super::mcp::builtin_tools("spotify").iter().any(|t| t.name == plan.0), "never an MCP tool");
+        let s = super::super::spotify::RUST_RECONNECT;
+        assert_eq!(s, "To sign in to Spotify again, open Settings → Integrations on the PC and press Reconnect.");
     }
 
     #[test]
@@ -1627,6 +2214,36 @@ mod live {
             let t0 = Instant::now();
             let r = run_chat(&state, &os, vec![ChatMessage::new("system", sys), ChatMessage::new("user", "What's the weather like right now?")], Priority::Interactive, None, Some(90)).await;
             println!("CHAT ({}ms): {:?}", t0.elapsed().as_millis(), r.map(|x| format!("[{}] ({}) {}", x.provider_id, x.reason, x.content.chars().take(300).collect::<String>())));
+        });
+    }
+
+    /// What Tony's next turn really gets, from the live os.json + keychain presence.
+    /// Names only; makes no Spotify API call and runs no tool.
+    /// `cargo test --lib live_tony_tools_payload -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn live_tony_tools_payload() {
+        tauri::async_runtime::block_on(async {
+            let dir = std::path::PathBuf::from(std::env::var("APPDATA").unwrap()).join("os.agentic.commandcenter");
+            let state = DispatchState::default();
+            state.load_or_init(&dir);
+            let os = OsState::default();
+            os.load_or_init(&dir, std::path::Path::new(&state.snapshot().gateway.workdir));
+            let cfg = os.snapshot();
+            let set = turn_tools(&state, &os, &cfg, "general").await;
+            let ready = spotify_ready(&cfg, || super::super::spotify::readiness(&state).is_ok());
+            let spotify = |v: &[super::super::mcp::ToolInfo]| v.iter().filter(|t| t.server == "spotify").map(|t| t.name.clone()).collect::<Vec<_>>();
+            println!("SPOTIFY READY: {ready}");
+            println!("ALL ({}), spotify: {:?}", set.all.len(), spotify(&set.all));
+            println!("ROUTER OFFERED ({}), spotify: {:?}", set.offered.len(), spotify(&set.offered));
+            let line = "aye tony can you play some bilmuri";
+            println!("DETERMINISTIC PLAN for {line:?}: {:?}", deterministic_plan(line, &set.offered, &cfg.os_name));
+            let offer = router_offer(&set.offered, line, &cfg.os_name);
+            println!("ROUTER OFFER for {line:?}: {:?}", offer.iter().map(|t| t.name.as_str()).collect::<Vec<_>>());
+            let sys = system_prompt(&cfg, "", &set.offered);
+            println!("SYSTEM PROMPT lists spotify.play: {}", sys.contains("spotify.play"));
+            assert!(ready, "Spotify is not ready (disconnected, off, kill switch or MCP Deny)");
+            assert!(set.offered.iter().any(|t| t.name == "spotify.play"), "spotify.play missing from Tony's router tools");
         });
     }
 }

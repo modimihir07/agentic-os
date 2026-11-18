@@ -31,25 +31,12 @@ fn supports_streaming_latency(model: &str) -> bool {
     !model.to_ascii_lowercase().contains("v4")
 }
 
-#[derive(Clone, Copy, Serialize, PartialEq, Eq, Debug)]
-#[serde(rename_all = "kebab-case")]
-pub enum KeySource {
-    Env,
-    EnvFile,
-    Keychain,
-    Missing,
-}
+pub use super::envfile::KeySource;
 
 /// The key and where it came from. Never exposed beyond this crate.
 pub(crate) fn api_key(state: &DispatchState, p: &Provider) -> (Option<String>, KeySource) {
-    if let Ok(v) = std::env::var(ENV_KEY) {
-        if !v.trim().is_empty() {
-            return (Some(v.trim().to_string()), KeySource::Env);
-        }
-    }
-    let repo = state.snapshot().gateway.workdir;
-    if let Some(v) = super::envfile::from_env_file(&Path::new(&repo).join(".env"), ENV_KEY) {
-        return (Some(v), KeySource::EnvFile);
+    if let Some((v, src)) = super::envfile::env_or_file_src(state, ENV_KEY) {
+        return (Some(v), src);
     }
     if let Some(v) = secrets::get(state, &p.id) {
         return (Some(v), KeySource::Keychain);
@@ -289,7 +276,7 @@ mod tests {
 
     #[test]
     fn base_is_pinned_regardless_of_base_url() {
-        let p = Provider { id: "elevenlabs".into(), label: "x".into(), kind: super::super::dispatch::Kind::Tts, base_url: "https://evil.example.com/v1".into(), model: "-".into(), needs_key: false, voice: None, engine: Some("elevenlabs".into()), language: None, models_dir: None, voices_dir: None, custom: false };
+        let p = Provider { id: "elevenlabs".into(), label: "x".into(), kind: super::super::dispatch::Kind::Tts, base_url: "https://evil.example.com/v1".into(), model: "-".into(), needs_key: false, voice: None, engine: Some("elevenlabs".into()), language: None, models_dir: None, voices_dir: None, stt_prompt: None, custom: false };
         assert_eq!(base(&p), "https://api.elevenlabs.io");
     }
 

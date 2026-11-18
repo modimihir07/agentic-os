@@ -2,13 +2,15 @@
  * Native OS-control intents — the pure half (no runtime imports beyond `gaba.ts`, so
  * it is unit-tested). `os-intents.ts` executes what this returns.
  *
- * These are local, reversible controls (Gabagool on/off/volume, stop audio, Spotify
- * playback, switch tab, swap model, compute mode, kill switch, status). They run
- * in-process before the planner, so a phrase like "turn off gabagool mode" can never
- * become a mutating plan for a gateway agent.
+ * These are local, reversible controls (Gabagool on/off/volume, stop audio, switch tab,
+ * swap model, compute mode, kill switch, status). They run in-process before the planner,
+ * so a phrase like "turn off gabagool mode" can never become a mutating plan for a gateway agent.
  *
- * Precedence for bare music words: a cue that is playing (volume) or active (stop) owns
- * them; otherwise they mean Spotify. Naming Gabagool / the theme, or Spotify, always wins.
+ * Spotify is NOT parsed here: its one grammar lives in Rust (`spotify_intent::parse`, reached
+ * through `spotify_parse` in `spotify-intents.ts`). This file keeps only the cue precedence,
+ * which depends on live cue state: a cue that is playing (volume) or active (stop) owns bare
+ * music words; every other music line returns null here so Rust parses it. Naming Gabagool /
+ * the theme always wins.
  */
 import type { RoleId } from "@/features/dispatcher/roles";
 import { editDistance, norm } from "../cues/gaba.ts";
@@ -16,22 +18,21 @@ import { editDistance, norm } from "../cues/gaba.ts";
 export type ComputeModeId = "local" | "hybrid" | "cloud";
 export type WorkspaceId = "auto" | RoleId;
 
-export type MediaAction = "play" | "pause" | "resume" | "next" | "previous" | "volume" | "now";
-export type MediaKind = "track" | "artist" | "album" | "playlist";
-
 export type OsIntent =
   | { kind: "gabagool-on" }
   /** `explicit` = the user named Gabagool; otherwise a bare "stop" while a cue is active. */
   | { kind: "gabagool-off"; explicit: boolean }
   /** Theme volume in steps of ±25 %. `explicit` = named Gabagool / the theme; otherwise a bare "louder" while a cue plays. */
   | { kind: "cue-volume"; steps: number; explicit: boolean }
-  /** Spotify. `value` = absolute volume %, `delta` = relative volume change; `query`/`searchKind` for play. */
-  | { kind: "media"; action: MediaAction; query?: string; searchKind?: MediaKind; value?: number; delta?: number }
   | { kind: "workspace"; thread: WorkspaceId }
   | { kind: "model"; query: string }
   | { kind: "compute"; mode: ComputeModeId }
   | { kind: "kill-switch"; on: boolean }
-  | { kind: "status" };
+  | { kind: "status" }
+  /** System Map dev task queue: "log a dev note …", "queue a fix for …", "add … to the dev queue". `title` keeps the user's casing. */
+  | { kind: "dev-task"; taskKind: DevNoteKind; title: string };
+
+export type DevNoteKind = "note" | "fix" | "task";
 
 export interface ParseOpts {
   /** The OS name from Settings ("Tony"); stripped as a wake word and accepted as Tony's tab. */
@@ -44,13 +45,18 @@ export interface ParseOpts {
 
 export const CUE_ACTIVE_MS = 10 * 60_000;
 
-const LEAD = /^(?:(?:hey|ok|okay|yo|so|um|uh|alright|all right|right|and|now|then|just|please|can you|could you|would you|will you|go ahead and|i want you to|i need you to|let s)\s+)+/;
+/** Spoken interjections before the wake name, shared by every parser here (commandText and
+ * the dev-queue parser). Explicit words only ("aye", never a bare "a" — Whisper's
+ * mis-hearing of "aye" would eat real words), so "play tony bennett" keeps its artist. */
+const INTERJ = "hey|hi|aye|ay|ayy|ayo|oi|ok|okay|yo";
+/** Leading interjections + politeness. Keep its interjections in step with INTERJ. */
+const LEAD = /^(?:(?:hey|hi|aye|ay|ayy|ayo|oi|yeah|ok|okay|yo|so|um|uh|alright|all right|right|and|now|then|just|please|can you|could you|would you|will you|go ahead and|i want you to|i need you to|let s)\s+)+/;
 const TRAIL = /(?:\s+(?:please|now|for me|thanks|thank you|right now|ok|okay))+$/;
 
 /** Normalised command text with wake word and politeness stripped. */
 export function commandText(text: string, osName = "Tony"): string {
   const name = norm(osName) || "tony";
-  const wake = new RegExp(`^(?:(?:hey|ok|okay|yo)\\s+)?(?:${escape(name)}|tony|jarvis)\\s+`);
+  const wake = new RegExp(`^(?:(?:${INTERJ})\\s+)?(?:${escape(name)}|tony|jarvis)\\s+`);
   // "Turn it up, Tony." — the name addressed at the end (norm() already dropped the comma).
   const tailName = new RegExp(`(?:\\s+(?:${escape(name)}|tony|jarvis))+$`);
   let t = norm(text);
@@ -91,7 +97,7 @@ export function hasOnVerb(text: string): boolean {
 }
 
 /** Stops that name music or say pause/mute are Gabagool's only while its theme is actually
- * playing; otherwise they're Spotify's ("pause the music" after Gabagool ended). */
+ * playing; otherwise they're left to Spotify's grammar ("pause the music" after Gabagool ended). */
 const PAUSE_MUTE = /^(?:pause|mute)\b/;
 
 function gabagool(t: string, cueActive: boolean, cuePlaying: boolean): OsIntent | null {
@@ -107,7 +113,7 @@ function gabagool(t: string, cueActive: boolean, cuePlaying: boolean): OsIntent 
   return null;
 }
 
-// ── Volume (cue theme or Spotify) ───────────────────────────────────────────
+// ── Volume (cue theme only; Spotify volume lines return null for Rust) ──────
 
 /** Words allowed between "turn" and "up"/"down" (never "off", so "turn gabagool off, shut it down" stays a stop). */
 const GAP = "(?:(?:it|that|this|the|my|gabagool|music|theme|song|track|volume|sound|audio|mode|spotify|a|bit|little|lot|tad|notch|way|all) ){0,4}";
@@ -137,8 +143,9 @@ function volume(t: string, opts: ParseOpts): OsIntent | null {
   const bare = t.split(" ").every((w) => VOLUME_WORDS.has(w) || TARGET_WORDS.has(w));
   if (/\bgabagool\b/.test(t) || (bare && /\btheme\b/.test(t))) return { kind: "cue-volume", steps, explicit: true };
   if (!bare) return null;
-  if (/\bspotify\b/.test(t)) return { kind: "media", action: "volume", delta: 15 * steps };
-  return opts.cuePlaying ? { kind: "cue-volume", steps, explicit: false } : { kind: "media", action: "volume", delta: 15 * steps };
+  // Naming Spotify, or no cue playing: Spotify's line (Rust grammar), not ours.
+  if (/\bspotify\b/.test(t)) return null;
+  return opts.cuePlaying ? { kind: "cue-volume", steps, explicit: false } : null;
 }
 
 // ── Workspace / agent tab ───────────────────────────────────────────────────
@@ -172,94 +179,6 @@ function workspace(t: string, osName: string): OsIntent | null {
   return null;
 }
 
-// ── Spotify ─────────────────────────────────────────────────────────────────
-
-const TENS: Record<string, number> = { ten: 10, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, "a hundred": 100, "one hundred": 100 };
-const NUM = "(\\d{1,3}|ten|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|a hundred|one hundred|hundred)";
-const VOLUME_TO = [
-  new RegExp(`^(?:(?:set|turn|put|change)(?: the)? )?(?:spotify s |spotify |music )?volume (?:on spotify )?(?:up |down )?(?:to |at )?${NUM}(?: percent)?(?: on spotify)?$`),
-  new RegExp(`^(?:set|turn|put)(?: the)? spotify(?: volume)? (?:to|at) ${NUM}(?: percent)?$`),
-];
-
-const NOW = [
-  /^what(?: s| is)? playing(?: on spotify)?(?: right now| now)?$/,
-  /^what s on spotify$/,
-  /^what (?:song|track|music)(?: is| s)? (?:this|that|playing|on)(?: on spotify)?(?: right now| now)?$/,
-  /^what s this (?:song|track)$/,
-  /^what am i listening to(?: right now| now)?$/,
-  /^who (?:sings|is singing|s singing) (?:this|that)(?: song)?$/,
-  /^(?:spotify )?now playing$/,
-];
-const PAUSE = [
-  /^(?:pause|stop|mute)(?: the)? spotify(?: music)?$/,
-  /^(?:pause|stop)(?: the)? (?:music|song|track) on spotify$/,
-  /^pause(?: it| that| this)?$/,
-  /^(?:turn|switch|shut) (?:off(?: the)? spotify|(?:the )?spotify off)$/,
-  /^(?:stop|quit) playing(?: the| my)? (?:music|songs?|spotify)$/,
-];
-const RESUME = [
-  /^(?:resume|unpause)(?: the)?(?: music| song| track| spotify| playback)?(?: on spotify)?$/,
-  /^(?:continue|keep) (?:playing|the music|the song)$/,
-  /^(?:start|turn)(?: the)? (?:music|spotify)(?: back)?(?: on)?$/,
-];
-const NEXT = [
-  /^skip(?: (?:it|this|that|the))?(?: (?:song|track|one|tune))?(?: on spotify)?$/,
-  /^next (?:song|track|tune)(?: on spotify)?$/,
-  /^(?:play|go to|skip to|jump to)(?: the)? next (?:song|track|one|tune)(?: on spotify)?$/,
-];
-const PREVIOUS = [
-  /^(?:previous|last|prior) (?:song|track|tune)(?: on spotify)?$/,
-  /^(?:play|go to|skip to|go back to)(?: the)? (?:previous|last) (?:song|track|one|tune)(?: on spotify)?$/,
-  /^(?:go |skip |jump )?back (?:a|one) (?:song|track)$/,
-];
-/** "play …" that isn't music: "play devil's advocate", "play a game", "play it again". */
-const NOT_MUSIC = /^(?:it|that|this|along|back|again|a game|games?|the game|chess|cards|pretend|nice|dead|dumb|catch|fair|ball|tag|hard to get|(?:the )?devil s advocate|(?:a |the )?role|with|around|by ear|a trick|tricks)\b|\b(?:youtube|netflix|video|movie|film|twitch|game)\b/;
-const PLAY_ON_SPOTIFY = /^(?:play|put on) (.+?) (?:on|from|in|with|using|via) spotify$|^spotify play (.+)$/;
-
-/** Spotify search target for a spoken "play …" ("some jazz" → playlist, "songs by X" → artist). */
-export function playTarget(q: string): { query: string; searchKind: MediaKind } {
-  const clean = (s: string) => s.replace(/ by /g, " ").trim();
-  let m: RegExpExecArray | null;
-  if ((m = /^(?:some )?(?:songs|music|something|stuff|tracks|anything) (?:by|from) (.+)$/.exec(q))) return { query: m[1], searchKind: "artist" };
-  if ((m = /^(?:the )?album (?:called |named )?(.+)$/.exec(q) ?? /^(?:the )?(.+) album$/.exec(q))) return { query: clean(m[1]), searchKind: "album" };
-  if ((m = /^(?:the |my )?playlist (?:called |named )?(.+)$/.exec(q) ?? /^(?:the |my )?(.+) playlist$/.exec(q))) return { query: m[1], searchKind: "playlist" };
-  if ((m = /^some (.+)$/.exec(q))) return { query: m[1], searchKind: "playlist" };
-  m = /^(?:the )?(?:song|track) (?:called |named )?(.+)$/.exec(q);
-  return { query: clean(m ? m[1] : q), searchKind: "track" };
-}
-
-/** "play X on spotify", or a short "play X" that isn't a game, a role or a video. */
-function play(t: string): OsIntent | null {
-  let q: string;
-  const named = PLAY_ON_SPOTIFY.exec(t);
-  if (named) q = named[1] ?? named[2];
-  else {
-    const m = /^play (.+)$/.exec(t);
-    if (!m || t.split(" ").length > 8 || NOT_MUSIC.test(m[1])) return null;
-    q = m[1];
-  }
-  if (/^(?:the |some |my )?(?:music|spotify|songs?|tunes?)(?: again| back)?$/.test(q)) return { kind: "media", action: "resume" };
-  return { kind: "media", action: "play", ...playTarget(q) };
-}
-
-function media(t: string, opts: ParseOpts): OsIntent | null {
-  if (/\bgabagool\b/.test(t)) return null;
-  for (const re of VOLUME_TO) {
-    const m = re.exec(t);
-    if (!m) continue;
-    // A bare "volume 30" belongs to a playing cue, which has no absolute volume: leave it to Tony.
-    if (opts.cuePlaying && !/\b(?:spotify|music)\b/.test(t)) return null;
-    return { kind: "media", action: "volume", value: Math.min(100, TENS[m[1]] ?? Number(m[1])) };
-  }
-  if (NOW.some((re) => re.test(t))) return { kind: "media", action: "now" };
-  const s = t.replace(STOP_LEAD, "");
-  if (PAUSE.some((re) => re.test(s)) || MUSIC_STOP.test(s)) return { kind: "media", action: "pause" };
-  if (RESUME.some((re) => re.test(t))) return { kind: "media", action: "resume" };
-  if (NEXT.some((re) => re.test(t))) return { kind: "media", action: "next" };
-  if (PREVIOUS.some((re) => re.test(t))) return { kind: "media", action: "previous" };
-  return play(t);
-}
-
 // ── Model / compute / kill switch / status ──────────────────────────────────
 
 const MODEL = [
@@ -287,12 +206,77 @@ const STATUS = [
   /^how are (?:the |my |all )?(?:the )?systems(?: doing| looking)?$/,
 ];
 
+// ── Dev task queue (System Map) ─────────────────────────────────────────────
+//
+// Anchored at the start of the line (after the wake word and politeness), so a request
+// that merely mentions a fix or a note ("tell the coder to queue a fix for…", "what's in
+// the dev queue") never becomes one. Matched on the raw text so the title keeps its
+// casing and punctuation; dictated notes may be long, so this runs before the 12-word gate.
+
+// Whisper ends a paused phrase with a period ("Log a dev note. The mic…"), so sentence
+// punctuation separates as well as ':' or a dash.
+const DEV_PUNCT = String.raw`[:,;.\-–—…]`;
+const DEV_SEP = String.raw`(?:\s*${DEV_PUNCT}+\s*|\s+(?:that|saying|about|re)\s+)`;
+const DEV_WORD = String.raw`dev(?:eloper)?(?:\s+|-)?note`;
+// Note-taking verbs also take a bare space ("log a dev note the HUD flickers"); verbs that
+// usually mean building something ("write/add/make/create a dev note section…") need an
+// explicit separator, so ordinary requests that mention a dev note aren't swallowed.
+const DEV_NOTE_LOOSE = new RegExp(String.raw`^(?:log|take|save|jot(?: down)?|record|leave)\s+(?:a\s+|an\s+|another\s+)?${DEV_WORD}(?:${DEV_SEP}|(?<bare>\s+))(?<body>.+)$`, "is");
+const DEV_NOTE_STRICT = new RegExp(String.raw`^(?:add|make|write(?: down)?|create)\s+(?:a\s+|an\s+|another\s+)?${DEV_WORD}${DEV_SEP}(?<body>.+)$`, "is");
+const DEV_NOTE_BARE = new RegExp(String.raw`^${DEV_WORD}\s*${DEV_PUNCT}+\s*(?<body>.+)$`, "is");
+const DEV_FIX = new RegExp(String.raw`^queue\s+(?:up\s+)?(?:a\s+)?fix(?:\s+(?:for|to|on)\s+|\s*${DEV_PUNCT}+\s*)(?<body>.+)$`, "is");
+const DEV_ADD_TO = new RegExp(String.raw`^add\s+(?:this\s+|that\s+)?to\s+the\s+dev(?:eloper)?\s+queue(?:${DEV_SEP}|\s+)(?<body>.+)$`, "is");
+const DEV_ADD_X_TO = /^add\s+(?<body>.+?)\s+to\s+the\s+dev(?:eloper)?\s+queue[.!]?$/is;
+const DEV_PATTERNS: [RegExp, DevNoteKind][] = [
+  [DEV_NOTE_LOOSE, "note"],
+  [DEV_NOTE_STRICT, "note"],
+  [DEV_NOTE_BARE, "note"],
+  [DEV_FIX, "fix"],
+  [DEV_ADD_TO, "task"],
+  [DEV_ADD_X_TO, "task"],
+];
+/** After a bare space, these mean "a note-shaped thing", not a note ("…dev note in the README", "…dev note template"). */
+const DEV_STRUCTURAL = /^(?:(?:in|into|on|to|for|from|inside)\s+(?:the|my|our|a|an|this|that)\b|(?:template|section|app|file|page|docs?|field|button|feature|system|format|thing)\b)/i;
+/** A body that is only a pointer at something said earlier: there's nothing to log. */
+const DEV_PRONOUN = /^(?:this|that|it|these|those|this one|that one|the above|what i (?:just )?said)$/i;
+/** A second request riding along ("…and email it to Sam") belongs to Tony, not the queue. */
+const DEV_SECOND_REQUEST = /\b(?:and|then)\s+(?:also\s+|then\s+)?(?:e-?mail|send|text|message|tell|post|share|forward)\s+(?:it|this|that|him|her|them|me|to)\b/i;
+const DEV_LEAD = /^(?:(?:hey|hi|aye|ay|ayy|ayo|oi|yeah|ok|okay|yo|so|um|uh|alright|all right|and|now|then|just|please|can you|could you|would you|will you|go ahead and|i want you to|i need you to|let'?s)[\s,.]+)+/i;
+const DEV_TRAIL = /(?:[\s,]+(?:please|thanks|thank you|for me))+[.!]?$/i;
+
+/** The dev-queue phrasing, or null. `title` is what follows, trimmed, first letter capitalised. */
+export function parseDevTask(text: string, osName = "Tony"): { taskKind: DevNoteKind; title: string } | null {
+  const name = escape(osName.trim() || "Tony");
+  const wake = new RegExp(String.raw`^(?:(?:${INTERJ})[\s,]+)?(?:${name}|tony|jarvis)[\s,.:!]+`, "i");
+  let t = text.trim();
+  for (let i = 0; i < 3; i++) {
+    const before = t;
+    t = t.replace(DEV_LEAD, "").replace(wake, "").trim();
+    if (t === before) break;
+  }
+  for (const [re, taskKind] of DEV_PATTERNS) {
+    const m = re.exec(t);
+    if (!m?.groups) continue;
+    const raw = m.groups.body;
+    if (m.groups.bare !== undefined && DEV_STRUCTURAL.test(raw)) return null;
+    if (DEV_SECOND_REQUEST.test(raw)) return null;
+    const body = raw.replace(DEV_TRAIL, "").replace(/^["'“‘]+|["'”’]+$/g, "").replace(/\s+/g, " ").trim().replace(/[.!]+$/, "");
+    // "log a dev note" with nothing after it, or only filler, is not a note.
+    if (body.replace(/[^\p{L}\p{N}]+/gu, "").length < 2) return null;
+    if (DEV_PRONOUN.test(body)) return null;
+    return { taskKind, title: body.charAt(0).toUpperCase() + body.slice(1) };
+  }
+  return null;
+}
+
 /**
  * Parse an OS-control command. Returns null for anything else (it then goes on to
  * idea capture, local intents and the planner).
  */
 export function parseOsIntent(text: string, opts: ParseOpts = {}): OsIntent | null {
   const osName = opts.osName || "Tony";
+  const dev = parseDevTask(text, osName);
+  if (dev) return { kind: "dev-task", ...dev };
   const t = commandText(text, osName);
   if (!t) return null;
   // Long rambles only count as volume ("I want to hear the gabagool music a little louder").
@@ -321,13 +305,13 @@ export function parseOsIntent(text: string, opts: ParseOpts = {}): OsIntent | nu
   }
   if (STATUS.some((re) => re.test(t))) return { kind: "status" };
 
-  return volume(t, opts) ?? gabagool(t, !!opts.cueActive, !!opts.cuePlaying) ?? workspace(t, osName) ?? media(t, opts);
+  return volume(t, opts) ?? gabagool(t, !!opts.cueActive, !!opts.cuePlaying) ?? workspace(t, osName);
 }
 
 /**
  * Never a mutating plan for a gateway agent: true for anything the intent layer owns,
- * including bare stops ("turn off", "stop it") even when no cue is playing, and Spotify
- * controls ("pause the music", "set the volume to 30").
+ * including bare stops ("turn off", "stop it") even when no cue is playing. Spotify lines
+ * are no longer covered here (Rust parses them); plan.ts `isPlayback` keeps them non-mutating.
  */
 export function isOsControlPhrase(text: string, osName?: string): boolean {
   return parseOsIntent(text, { osName, cueActive: true }) !== null;

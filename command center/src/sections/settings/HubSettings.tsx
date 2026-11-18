@@ -5,6 +5,7 @@ import { gateway } from "@/lib/gateway";
 import { cmd, type BenchResult, type CliStatus, type LabModel, type SchedulerConfig } from "@/lib/platform";
 import { gated } from "@/features/bridge/gate";
 import { CfgError, SecretRow, Toggle, useOsCfg } from "./os-ui";
+import { overseerFamilyOn, toggleOverseer, type OverseerFamily } from "./overseer-toggle";
 
 // ── Compute Router: split sliders + hardware presets ─────────────────────────
 
@@ -153,6 +154,11 @@ export function AiProvidersCard() {
   const [probe, setProbe] = useState<Record<string, string>>({});
   if (!cfg) return null;
   const o = cfg.overseer;
+  // Off → the local model; on keeps an existing API/CLI choice (see overseer-toggle.ts).
+  const setOverseer = (family: OverseerFamily, on: boolean) => {
+    const next = toggleOverseer(o.engine, family, on);
+    if (next !== o.engine) save({ overseer: { engine: next } });
+  };
   const test = (engine: string) => {
     setProbe((p) => ({ ...p, [engine]: "…" }));
     void cmd("overseer_ask", { req: { question: "Reply with exactly: connected", transcript: [], context: "", engine } })
@@ -170,7 +176,7 @@ export function AiProvidersCard() {
   );
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="Anthropic Claude" hint="API key mode (keychain) or your Claude subscription through the Claude Code CLI. Used by the Overseer, the verifier (External) and offloaded pipeline steps.">
+      <Card title="Anthropic Claude" hint="API key mode (ANTHROPIC_API_KEY in the environment / repo-root .env, else the key saved here in the keychain) or your Claude subscription through the Claude Code CLI. Used by the Overseer, the verifier (External) and offloaded pipeline steps.">
         <Field label="Model (API mode)">
           <Select value={o.claudeModel} onChange={(e) => save({ overseer: { claudeModel: e.target.value } })}>
             {[...new Set([o.claudeModel, ...CLAUDE_MODELS])].map((m) => (
@@ -181,9 +187,9 @@ export function AiProvidersCard() {
         <SecretRow name="anthropic" label="Anthropic API key" />
         <Row engine="claude-api" label="API key mode" />
         <Row engine="claude-cli" label="CLI subscription (claude)" />
-        <Toggle on={o.engine === "claude-cli" || o.engine === "claude-api"} onChange={(v) => v && save({ overseer: { engine: "claude-cli" } })} label="Use Claude as the Overseer" />
+        <Toggle on={overseerFamilyOn(o.engine, "claude")} onChange={(v) => setOverseer("claude", v)} label="Use Claude as the Overseer" />
       </Card>
-      <Card title="Google Gemini" hint="API key mode (keychain) or your Google account through the Gemini CLI (run `gemini` once to sign in).">
+      <Card title="Google Gemini" hint="API key mode (GEMINI_API_KEY in the environment / repo-root .env, else the key saved here in the keychain) or your Google account through the Gemini CLI (run `gemini` once to sign in).">
         <Field label="Model (API mode)">
           <Select value={o.geminiModel} onChange={(e) => save({ overseer: { geminiModel: e.target.value } })}>
             {[...new Set([o.geminiModel, ...GEMINI_MODELS])].map((m) => (
@@ -194,7 +200,7 @@ export function AiProvidersCard() {
         <SecretRow name="gemini" label="Gemini API key" />
         <Row engine="gemini-api" label="API key mode" />
         <Row engine="gemini-cli" label="CLI subscription (gemini)" />
-        <Toggle on={o.engine === "gemini-cli" || o.engine === "gemini-api"} onChange={(v) => v && save({ overseer: { engine: "gemini-cli" } })} label="Use Gemini as the Overseer" />
+        <Toggle on={overseerFamilyOn(o.engine, "gemini")} onChange={(v) => setOverseer("gemini", v)} label="Use Gemini as the Overseer" />
       </Card>
       <CfgError error={error} />
     </div>

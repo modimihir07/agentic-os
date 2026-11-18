@@ -1,0 +1,12 @@
+{
+  "timestamp": 1763450000000,
+  "progress_ms": 95000,
+  "is_playing": true,
+  "currently_playing_type": "track",
+  "context": {"type": "playlist", "uri": "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M"},
+  "item": {
+    "type": "track", "name": "Tell Me", "uri": "spotify:track:1TellMeGrooveTheoryAbc", "duration_ms": 287000,
+    "artists": [{"name": "Groove Theory", "uri": "spotify:artist:0GrooveTheoryArtistAbc"}, null],
+    "album": {"name": "Groove Theory", "uri": "spotify:album:2AbCdEfGhIjKlMnOpQrStU", "release_date": "1995-10-24"}
+  }
+}

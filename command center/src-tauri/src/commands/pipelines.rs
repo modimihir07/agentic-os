@@ -154,7 +154,7 @@ fn parse_ms(iso: &str) -> Option<i64> {
     Some(days * 86_400_000 + hh * 3_600_000 + mm * 60_000 + (ss * 1000.0) as i64)
 }
 
-async fn poll_instance(state: &DispatchState, p: Provider, pings: &HashMap<String, serde_json::Value>) -> InstanceStatus {
+pub(crate) async fn poll_instance(state: &DispatchState, p: Provider, pings: &HashMap<String, serde_json::Value>) -> InstanceStatus {
     let started = Instant::now();
     let key = secrets::get_slot(state, &p.id, "api");
     let mut out = InstanceStatus {
@@ -498,6 +498,7 @@ pub fn n8n_instance_add(state: State<'_, DispatchState>, label: String, base_url
             language: None,
             models_dir: None,
             voices_dir: None,
+            stt_prompt: None,
             custom: true,
         });
         Ok(())

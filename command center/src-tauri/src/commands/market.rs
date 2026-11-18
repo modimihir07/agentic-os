@@ -144,9 +144,10 @@ pub async fn market_candles(state: State<'_, DispatchState>, symbol: String, int
         Ok(d) if !d.candles.is_empty() => Ok(d),
         first => {
             let why = first.err().unwrap_or_else(|| "no candles".into());
-            match super::os_core::os_secret("twelvedata") {
+            // env / repo .env / keychain; the Twelve Data host is hard-coded in `twelvedata`.
+            match super::envfile::os_key(&state, "twelvedata") {
                 Some(k) => twelvedata(&state, &k, &symbol, &interval).await.map_err(|e| format!("Yahoo: {why}; Twelve Data: {e}")),
-                None => Err(format!("Yahoo: {why} (add a Twelve Data key in Settings → Integrations for a fallback)")),
+                None => Err(format!("Yahoo: {why} (add a Twelve Data key in Settings → Integrations, or set TWELVEDATA_API_KEY in the repo-root .env, for a fallback)")),
             }
         }
     }

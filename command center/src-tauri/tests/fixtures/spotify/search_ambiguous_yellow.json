@@ -1,0 +1,13 @@
+{
+  "tracks": {"items": [
+    {"type": "track", "name": "Yellow", "uri": "spotify:track:3AJwUDP919kvQ9QcozQPxg", "duration_ms": 266000,
+     "artists": [{"name": "Coldplay"}],
+     "album": {"name": "Parachutes", "uri": "spotify:album:6ZG5lRT77aJ3btmArcykra", "release_date": "2000-07-10"}}
+  ]},
+  "artists": {"items": [
+    {"type": "artist", "name": "Yellow", "uri": "spotify:artist:0YellowArtistAbcdefghi"},
+    null
+  ]},
+  "albums": {"items": [null]},
+  "playlists": {"items": [null]}
+}

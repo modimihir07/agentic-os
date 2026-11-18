@@ -37,6 +37,11 @@ pub struct SystemStats {
 
 #[tauri::command]
 pub fn system_stats(state: State<'_, SysState>) -> Result<SystemStats, String> {
+    sample(&state)
+}
+
+/// One CPU / RAM / GPU reading (shared by `system_stats` and `system_introspect`).
+pub(crate) fn sample(state: &SysState) -> Result<SystemStats, String> {
     let (cpu_pct, mem_used_mb, mem_total_mb) = {
         let mut sys = state.0.lock().map_err(|_| "system state poisoned")?;
         sys.refresh_cpu_usage();
@@ -50,6 +55,18 @@ pub fn system_stats(state: State<'_, SysState>) -> Result<SystemStats, String> {
         hostname: System::host_name(),
         gpu: query_gpu(),
     })
+}
+
+/// CPU model name and logical thread count (read once; they don't change while running).
+pub(crate) fn cpu_info() -> (Option<String>, usize) {
+    static INFO: std::sync::OnceLock<(Option<String>, usize)> = std::sync::OnceLock::new();
+    INFO.get_or_init(|| {
+        let mut sys = System::new();
+        sys.refresh_cpu_all();
+        let brand = sys.cpus().first().map(|c| c.brand().trim().to_string()).filter(|b| !b.is_empty());
+        (brand, sys.cpus().len())
+    })
+    .clone()
 }
 
 /// First NVIDIA GPU via nvidia-smi. Returns None on AMD/Intel/no driver.

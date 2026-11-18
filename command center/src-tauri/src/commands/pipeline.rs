@@ -560,7 +560,17 @@ pub async fn inbox_loop(app: AppHandle) {
         let st = app.state::<DispatchState>();
         let os = app.state::<OsState>();
         let cfg = os.snapshot();
-        let Ok(v) = gw(&st, &cfg, reqwest::Method::GET, "/api/os/inbox", None).await else { continue };
+        let v = match gw(&st, &cfg, reqwest::Method::GET, "/api/os/inbox", None).await {
+            Ok(v) => {
+                let n = v["items"].as_array().map_or(0, |a| a.len());
+                super::introspect::loop_ran("inbox", true, &format!("{n} queued item(s)"));
+                v
+            }
+            Err(e) => {
+                super::introspect::loop_ran("inbox", false, &e);
+                continue;
+            }
+        };
         for item in v["items"].as_array().cloned().unwrap_or_default() {
             let id = item["id"].as_str().unwrap_or("").to_string();
             let p = &item["payload"];

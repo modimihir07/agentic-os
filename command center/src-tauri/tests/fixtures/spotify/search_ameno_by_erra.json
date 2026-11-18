@@ -1,0 +1,8 @@
+{
+  "tracks": {"items": [
+    null,
+    {"type": "track", "name": "Ameno", "uri": "spotify:track:0AmenoByEraAbcdefghijk", "duration_ms": 318000,
+     "artists": [{"name": "Era"}],
+     "album": {"name": "Era", "uri": "spotify:album:0EraAlbumAbcdefghijklm", "release_date": "1996"}}
+  ]}
+}

@@ -1,7 +1,9 @@
+mod audio;
 mod commands;
+mod exe_resolve;
 mod proc;
 
-use commands::{agents, bridge, clihub, modellab, dispatch, gmail, market, mcp, memory, n8n, os_core, pipeline, pipelines, secrets, services, spotify, system, telemetry, voice};
+use commands::{agents, bridge, clihub, devqueue, introspect, modellab, dispatch, gmail, market, mcp, memory, n8n, os_core, pipeline, pipelines, secrets, services, spotify, system, telemetry, voice};
 
 /// Event the webview listens for to start/stop a voice session.
 pub const VOICE_TOGGLE_EVENT: &str = "voice-toggle";
@@ -14,8 +16,15 @@ pub fn run() {
         .manage(bridge::BridgeState::default())
         .manage(pipelines::PipelineState::default())
         .manage(os_core::OsState::default())
+        .manage(devqueue::DevQueueState::default())
+        .manage(audio::commands::AudioEngineState::default())
+        .manage(introspect::IntrospectState::default())
         .setup(|app| {
             use tauri::Manager;
+            // System Map: app uptime counts from here.
+            introspect::mark_started();
+            // System Map live routing trace: `os-trace` events from os_turn / mcp::call_tool.
+            commands::trace::install(app.handle());
             // Provider endpoints live in a file the user edits, not in the webview.
             if let Ok(dir) = app.path().app_config_dir() {
                 let state = app.state::<dispatch::DispatchState>();
@@ -29,7 +38,15 @@ pub fn run() {
                     os_core::ensure_gateway_token(&state);
                 }
                 pipelines::load_last_sync(&state, &app.state::<pipelines::PipelineState>());
+                // System Map dev task queue: <config dir>/devqueue.db (works without the gateway).
+                app.state::<devqueue::DevQueueState>().init(&dir);
             }
+            // Spotify: load the saved session / refresh silently so the widget's first status
+            // check is instant. Never opens a browser; no-op when not connected.
+            tauri::async_runtime::spawn(spotify::warm(app.handle().clone()));
+            // MCP: start listing enabled stdio servers ~5 s after launch (into the cache, in
+            // the background). No HTTP / token-gated server is contacted.
+            tauri::async_runtime::spawn(mcp::warm(app.handle().clone()));
             tauri::async_runtime::spawn(pipelines::auto_sync_loop(app.handle().clone()));
             tauri::async_runtime::spawn(memory::auto_monthly_loop(app.handle().clone()));
             // Phone HUD → desktop: Tony turns, pipelines, kill switch / compute mode.
@@ -82,6 +99,12 @@ pub fn run() {
             voice::tts_synthesize,
             voice::tts_voices,
             voice::tts_voice_upload,
+            audio::commands::audio_engine_devices,
+            audio::commands::audio_engine_start,
+            audio::commands::audio_engine_stop,
+            audio::commands::audio_engine_status,
+            audio::commands::audio_engine_barge_in,
+            audio::commands::audio_engine_test_tone,
             n8n::n8n_workflows,
             n8n::n8n_workflows_set,
             n8n::n8n_trigger,
@@ -103,6 +126,7 @@ pub fn run() {
             os_core::os_identity,
             os_core::os_secret_set,
             os_core::os_secret_status,
+            commands::envfile::os_secret_sources,
             os_core::os_secret_delete,
             os_core::privacy_last_payload,
             os_core::privacy_preview,
@@ -111,8 +135,10 @@ pub fn run() {
             os_core::gateway_token_rotate,
             agents::anythingllm_workspaces,
             agents::os_turn,
+            agents::os_turn_cancel,
             agents::overseer_ask,
             mcp::mcp_list_tools,
+            agents::tony_tools_preview,
             mcp::mcp_call,
             mcp::mcp_sync_anythingllm,
             mcp::skills_scan,
@@ -128,6 +154,8 @@ pub fn run() {
             spotify::spotify_play_uri,
             spotify::spotify_recent,
             spotify::spotify_playlists,
+            spotify::spotify_tool,
+            commands::spotify_intent::spotify_parse,
             memory::memory_harvest,
             memory::memory_flush,
             memory::memory_ledger,
@@ -150,6 +178,13 @@ pub fn run() {
             os_core::droplet_link,
             os_core::gpu_slot_view,
             clihub::cli_install,
+            devqueue::dev_task_add,
+            devqueue::dev_task_list,
+            devqueue::dev_task_update,
+            devqueue::dev_task_delete,
+            devqueue::dev_brief_export,
+            introspect::system_introspect,
+            introspect::app_uptime,
         ])
         .build(tauri::generate_context!())
         .expect("error while building Jarvis Command Center")

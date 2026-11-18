@@ -38,4 +38,16 @@ export class FallbackTts implements TtsEngine {
     this.primary.cancel();
     this.backup.cancel();
   }
+  duck(on: boolean) {
+    this.primary.duck?.(on);
+    this.backup.duck?.(on);
+  }
+  pause() {
+    this.primary.pause?.();
+    this.backup.pause?.();
+  }
+  resume() {
+    this.primary.resume?.();
+    this.backup.resume?.();
+  }
 }

@@ -1,0 +1,8 @@
+{
+  "tracks": {"items": [
+    {"type": "track", "name": "Stand!", "uri": "spotify:track:0StandSlyStoneAbcdefgh", "duration_ms": 188000,
+     "artists": [{"name": "Sly & The Family Stone"}],
+     "album": {"name": "Stand!", "uri": "spotify:album:0StandAlbumSlyAbcdefgh", "release_date": "1969-05-03"}},
+    null
+  ]}
+}

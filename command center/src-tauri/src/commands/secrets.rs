@@ -54,12 +54,26 @@ pub(crate) fn get(state: &DispatchState, provider: &str) -> Option<String> {
     entry(&acct).ok()?.get_password().ok()
 }
 
+/// Longest value Settings accepts. Windows Credential Manager holds at most 2560 bytes
+/// of UTF-16 (about 1280 characters); every real key / token / ID is far shorter.
+pub(crate) const MAX_SECRET_CHARS: usize = 1024;
+
+/// A pasted secret (already trimmed) is non-empty and fits the OS keychain. The message
+/// names the limit only, never the value or its length.
+pub(crate) fn check_secret_value(v: &str) -> Result<(), String> {
+    if v.is_empty() {
+        return Err("paste a value first".into());
+    }
+    if v.chars().count() > MAX_SECRET_CHARS || v.encode_utf16().count() * 2 > 2560 {
+        return Err(format!("too long for the OS keychain (max {MAX_SECRET_CHARS} characters) — check you pasted only the key"));
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn secret_set(state: State<'_, DispatchState>, provider: String, value: String, slot: Option<String>) -> Result<(), String> {
     let value = value.trim();
-    if value.is_empty() || value.len() > 4096 {
-        return Err("key must be 1–4096 characters".into());
-    }
+    check_secret_value(value)?;
     entry(&account_slot(&state, &provider, slot.as_deref())?)?.set_password(value).map_err(|e| e.to_string())
 }
 
@@ -79,6 +93,22 @@ pub fn secret_delete(state: State<'_, DispatchState>, provider: String, slot: Op
     match entry(&account_slot(&state, &provider, slot.as_deref())?)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_value_limits() {
+        assert!(check_secret_value("").is_err());
+        assert!(check_secret_value("sk-test-123").is_ok());
+        assert!(check_secret_value(&"a".repeat(MAX_SECRET_CHARS)).is_ok());
+        let e = check_secret_value(&"a".repeat(MAX_SECRET_CHARS + 1)).unwrap_err();
+        assert!(e.contains("1024") && !e.contains("aaaa"));
+        // 700 non-BMP chars = 1400 UTF-16 units = 2800 bytes: over the Credential Manager limit.
+        assert!(check_secret_value(&"\u{1F600}".repeat(700)).is_err());
     }
 }
 

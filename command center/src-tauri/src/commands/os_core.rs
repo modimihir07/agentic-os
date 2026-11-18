@@ -186,7 +186,7 @@ fn default_skills_dir() -> String {
     hub.display().to_string()
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServer {
     pub id: String,
@@ -214,6 +214,19 @@ pub struct McpServer {
     /// every enabled server regardless of this list; see `OsState`/`mcp.rs`.
     #[serde(default)]
     pub agents: Option<Vec<String>>,
+    /// stdio: seconds to wait for the server's `initialize` reply (cold start), 5–600.
+    /// Unset = 120 s for package launchers (npx / uvx / uv / pnpm / pnpx / bunx / pipx /
+    /// serena), else 45 s. Also raises the per-call timeout of its tool calls above the
+    /// 60 s default (a lower value never shortens it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timeout_secs: Option<u32>,
+    /// stdio: the folder the server runs in (absolute). Unset = the repo (gateway workdir).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<String>,
+    /// Never list or run this server's mutating tools (`mcp::is_mutating_tool`) for any
+    /// caller — router, sub-agents, pipelines, the Settings tester.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub read_only: bool,
 }
 
 impl McpServer {
@@ -279,6 +292,7 @@ fn builtin(id: &str, name: &str, enabled: bool, description: &str) -> McpServer 
         builtin: true,
         description: description.into(),
         agents: None,
+        ..Default::default()
     }
 }
 
@@ -305,6 +319,7 @@ pub fn default_mcps() -> Vec<McpServer> {
             builtin: true,
             description: "lharries/whatsapp-mcp — start the Go bridge (whatsapp-bridge) first.".into(),
             agents: None,
+            ..Default::default()
         },
     ];
     for m in &mut v {
@@ -463,7 +478,10 @@ pub struct OsState {
     path: RwLock<Option<PathBuf>>,
     mirror: RwLock<Option<PathBuf>>,
     pub(crate) last_redaction: Mutex<Option<RedactionRecord>>,
-    pub(crate) mcp_tools: Mutex<BTreeMap<String, (u64, Vec<super::mcp::ToolInfo>)>>,
+    /// Last good MCP listing per server id: (unix secs, server fingerprint, tools). The
+    /// fingerprint (`mcp::server_fingerprint`) covers the command line, env, URL and
+    /// token, so editing / reinstalling a server never serves its old listing.
+    pub(crate) mcp_tools: Mutex<BTreeMap<String, (u64, u64, Vec<super::mcp::ToolInfo>)>>,
     /// AnythingLLM workspace slug → this month's Tony thread slug.
     pub(crate) allm_threads: Mutex<BTreeMap<String, String>>,
     /// The local-GPU baton (Tony-first scheduler).
@@ -640,6 +658,16 @@ fn validate(c: &OsConfig) -> Result<(), String> {
             "http" if super::dispatch::valid_url(&m.url) => {}
             _ => return Err(format!("MCP {}: stdio needs a command, http needs a URL", m.name)),
         }
+        if let Some(t) = m.timeout_secs {
+            if !(5..=600).contains(&t) {
+                return Err(format!("MCP {}: startup timeout must be 5–600 seconds", m.name));
+            }
+        }
+        if let Some(dir) = &m.cwd {
+            if dir.len() > 1024 || !std::path::Path::new(dir.trim()).is_absolute() {
+                return Err(format!("MCP {}: working folder must be an absolute path", m.name));
+            }
+        }
         if let Some(agents) = &m.agents {
             if agents.len() > 20 {
                 return Err(format!("MCP {}: at most 20 agent grants", m.name));
@@ -751,21 +779,57 @@ pub fn gate(bridge: &BridgeState, tier: Tier, what: &str, approved: bool, detail
 // to that service. The webview can set / check / delete, never read.
 
 const SERVICE: &str = "agentic-os-command-center";
-pub const OS_SECRETS: [&str; 13] = [
-    "anthropic", "gemini", "brave", "twelvedata", "vault", "gateway-token", "anythingllm-remote", "gmail-script-id", "gmail-script-key", "spotify-refresh",
+pub const OS_SECRETS: [&str; 12] = [
+    "anthropic", "gemini", "brave", "twelvedata", "vault", "gateway-token", "anythingllm-remote", "gmail-script-id", "gmail-script-key",
     // Remote MCP tokens: each is only ever sent to its own host (see `mcp::REMOTE_AUTH`).
     "github-pat", "sentry-token", "agentmail-key",
 ];
 
+/// Secrets only Rust writes (OAuth state). The webview can neither set nor delete them
+/// (`os_secret_set` / `os_secret_delete` refuse); `devqueue::known_secrets` still scrubs them.
+pub const INTERNAL_SECRETS: [&str; 3] = ["spotify-refresh", "spotify-session", "spotify-grant"];
+
 fn os_entry(name: &str) -> Result<keyring::Entry, String> {
-    if !OS_SECRETS.contains(&name) {
+    if !OS_SECRETS.contains(&name) && !INTERNAL_SECRETS.contains(&name) {
         return Err("unknown secret".into());
     }
     keyring::Entry::new(SERVICE, &format!("os:{name}")).map_err(|e| e.to_string())
 }
 
+/// Webview-manageable names only (Settings secret rows).
+fn webview_secret(name: &str) -> Result<(), String> {
+    if OS_SECRETS.contains(&name) {
+        Ok(())
+    } else {
+        Err("unknown secret".into())
+    }
+}
+
 pub(crate) fn os_secret(name: &str) -> Option<String> {
     os_entry(name).ok()?.get_password().ok()
+}
+
+/// Like `os_secret`, but tells "no such entry" (`Ok(None)`) apart from a keychain
+/// failure (`Err`), so a Credential Manager hiccup doesn't read as "logged out".
+/// The error text names the failure kind only, never a value.
+pub(crate) fn os_secret_lookup(name: &str) -> Result<Option<String>, String> {
+    match os_entry(name)?.get_password() {
+        Ok(v) => Ok(Some(v)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("keychain read failed ({})", keyring_error_kind(&e))),
+    }
+}
+
+fn keyring_error_kind(e: &keyring::Error) -> &'static str {
+    match e {
+        keyring::Error::PlatformFailure(_) => "platform failure",
+        keyring::Error::NoStorageAccess(_) => "no storage access",
+        keyring::Error::BadEncoding(_) => "bad encoding",
+        keyring::Error::TooLong(..) => "too long",
+        keyring::Error::Invalid(..) => "invalid",
+        keyring::Error::Ambiguous(_) => "ambiguous",
+        _ => "other",
+    }
 }
 
 /// Rust-side writes (OAuth refresh tokens, imported credentials) — never via the webview.
@@ -783,15 +847,16 @@ pub(crate) fn os_secret_clear(name: &str) -> Result<(), String> {
 #[tauri::command]
 pub fn os_secret_set(name: String, value: String) -> Result<(), String> {
     let v = value.trim();
-    if v.is_empty() || v.len() > 4096 {
-        return Err("value must be 1–4096 characters".into());
-    }
+    super::secrets::check_secret_value(v)?;
     if name == "vault" && v.len() < 10 {
         return Err("vault password must be at least 10 characters".into());
     }
+    webview_secret(&name)?;
     os_secret_store(&name, v)
 }
 
+/// Keychain presence only (the gateway-token chip uses it). Settings key rows use
+/// `envfile::os_secret_sources`, which also knows about the env / repo `.env`.
 #[tauri::command]
 pub fn os_secret_status() -> BTreeMap<String, bool> {
     OS_SECRETS.iter().map(|n| (n.to_string(), os_secret(n).is_some())).collect()
@@ -799,6 +864,7 @@ pub fn os_secret_status() -> BTreeMap<String, bool> {
 
 #[tauri::command]
 pub fn os_secret_delete(name: String) -> Result<(), String> {
+    webview_secret(&name)?;
     os_secret_clear(&name)
 }
 
@@ -832,7 +898,7 @@ fn merge_json(dst: &mut serde_json::Value, src: &serde_json::Value) {
 /// Deep-merge a JSON patch into the config (objects merge at every depth;
 /// arrays and scalars replace wholesale — see `merge_json`).
 #[tauri::command]
-pub fn os_config_update(os: State<'_, OsState>, state: State<'_, DispatchState>, bridge: State<'_, BridgeState>, patch: serde_json::Value) -> Result<OsConfig, String> {
+pub fn os_config_update(app: tauri::AppHandle, os: State<'_, OsState>, state: State<'_, DispatchState>, bridge: State<'_, BridgeState>, patch: serde_json::Value) -> Result<OsConfig, String> {
     let before = os.snapshot();
     let next = os.update(|cfg| {
         let mut cur = serde_json::to_value(&*cfg).map_err(|e| e.to_string())?;
@@ -861,6 +927,11 @@ pub fn os_config_update(os: State<'_, OsState>, state: State<'_, DispatchState>,
     }
     if next.privacy.network_lock && !before.privacy.network_lock {
         ensure_gateway_token(&state);
+    }
+    // The MCP registry (or the MCP permission tier) changed: the tools a turn can use did too.
+    let mcp_view = |c: &OsConfig| serde_json::to_value((&c.mcps, c.permissions.mcp)).ok();
+    if mcp_view(&next) != mcp_view(&before) {
+        super::mcp::emit_tools_changed(&app, "mcp-registry-saved");
     }
     Ok(next)
 }
@@ -1105,6 +1176,7 @@ pub async fn droplet_link_loop(app: tauri::AppHandle) {
             }
         };
         let _ = app.emit("droplet-status", link.clone());
+        super::introspect::loop_ran("droplet", link.state != "offline", &format!("{}: {}", link.state, link.detail));
         os.set_runtime("droplet", serde_json::to_value(&link).unwrap_or_default());
         tokio::time::sleep(Duration::from_secs(15)).await;
     }
@@ -1215,7 +1287,7 @@ mod tests {
     }
 
     fn blank_mcp() -> McpServer {
-        McpServer { id: "x".into(), name: "X".into(), transport: "builtin".into(), command: String::new(), args: vec![], env: BTreeMap::new(), url: String::new(), enabled: true, builtin: true, description: String::new(), agents: None }
+        McpServer { id: "x".into(), name: "X".into(), transport: "builtin".into(), enabled: true, builtin: true, ..Default::default() }
     }
 
     #[test]
@@ -1257,6 +1329,31 @@ mod tests {
         assert!(validate(&c).is_err());
         c.mcps[0].agents = Some(vec!["all".into()]);
         assert!(validate(&c).is_ok());
+    }
+
+    #[test]
+    fn validate_mcp_timeout_and_cwd() {
+        let mut c = OsConfig::default();
+        for (t, ok) in [(4, false), (5, true), (600, true), (601, false)] {
+            c.mcps[0].timeout_secs = Some(t);
+            assert_eq!(validate(&c).is_ok(), ok, "timeout {t}");
+        }
+        c.mcps[0].timeout_secs = None;
+        c.mcps[0].cwd = Some("relative\\dir".into());
+        assert!(validate(&c).is_err());
+        c.mcps[0].cwd = Some(if cfg!(windows) { r"D:\Art Apps\agentic os".into() } else { "/tmp".into() });
+        assert!(validate(&c).is_ok());
+    }
+
+    #[test]
+    fn mcp_server_without_new_fields_still_loads() {
+        let m: McpServer = serde_json::from_str(r#"{"id":"s","name":"S","transport":"stdio","command":"npx","enabled":true}"#).unwrap();
+        assert_eq!((m.timeout_secs, m.cwd.as_deref()), (None, None));
+        // Unset fields are not written back.
+        let out = serde_json::to_string(&m).unwrap();
+        assert!(!out.contains("timeoutSecs") && !out.contains("cwd"), "{out}");
+        let m: McpServer = serde_json::from_str(r#"{"id":"s","name":"S","transport":"stdio","command":"npx","enabled":true,"timeoutSecs":90,"cwd":"C:\\x"}"#).unwrap();
+        assert_eq!((m.timeout_secs, m.cwd.as_deref()), (Some(90), Some("C:\\x")));
     }
 
     #[test]

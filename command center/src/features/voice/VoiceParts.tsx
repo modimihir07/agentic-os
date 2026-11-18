@@ -17,6 +17,7 @@ export const STATE_DOT: Record<VoiceState, string> = {
   thinking: "bg-amber shadow-[0_0_10px_#ff7a2f] animate-pulse",
   confirming: "bg-amber shadow-[0_0_10px_#ff7a2f]",
   speaking: "bg-volt shadow-[0_0_10px_#00f0ff]",
+  holding: "bg-amber-light shadow-[0_0_10px_#ffb37a]",
   error: "bg-alert",
 };
 

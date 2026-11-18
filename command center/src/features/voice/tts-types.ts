@@ -16,6 +16,9 @@ export interface SpeakOpts {
   voice?: string;
   agent?: string;
   previousText?: string;
+  /** Keep this line's audio for the session (Phase 2 §4: Tony's per-agent intro lines), so
+   * repeats cost no synthesis call or wait. Engines without a cache ignore it. */
+  cache?: boolean;
 }
 
 export interface TtsEngine {
@@ -25,4 +28,10 @@ export interface TtsEngine {
   /** Start synthesizing now so a later speak() of the same text plays without a gap. */
   prefetch?(text: string, opts?: SpeakOpts): void;
   cancel(): void;
+  /** Phase 2 barge-in: drop to ~15 % while the user talks over the reply (engines that can't duck pause). */
+  duck?(on: boolean): void;
+  /** Phase 2 hold: stop where we are but keep the reply; a speak() started while paused waits. */
+  pause?(): void;
+  /** Continue from the start of the interrupted sentence. */
+  resume?(): void;
 }

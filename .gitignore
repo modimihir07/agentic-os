@@ -29,3 +29,5 @@ backups/command-center/
 # Synaptic fine-tuning logs (personal automation history)
 training_logs/
 
+# System Map session briefs (dev task queue exports)
+memory/session_handoffs/

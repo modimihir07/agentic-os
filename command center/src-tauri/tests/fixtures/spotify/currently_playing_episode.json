@@ -1,0 +1,12 @@
+{
+  "timestamp": 1763450000000,
+  "progress_ms": 600000,
+  "is_playing": true,
+  "currently_playing_type": "episode",
+  "context": null,
+  "item": {
+    "type": "episode", "name": "Monday Headlines", "uri": "spotify:episode:0MondayHeadlinesAbcdef", "duration_ms": 1800000,
+    "release_date": "2026-11-16",
+    "show": {"name": "The Daily Show Podcast", "uri": "spotify:show:0DailyShowPodcastAbcde"}
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "tracks": {"items": [
+    {"type": "track", "name": "Era", "uri": "spotify:track:0EraTrackKaleidoAbcdef", "duration_ms": 210000,
+     "artists": [{"name": "Kaleidoscope Drift"}],
+     "album": {"name": "Horizons", "uri": "spotify:album:0HorizonsAlbumAbcdefgh", "release_date": "2019-01-01"}},
+    null
+  ]},
+  "artists": {"items": [
+    null,
+    {"type": "artist", "name": "Era", "uri": "spotify:artist:0EraArtistIdAbcdefghij"},
+    {"type": "artist", "name": "Erra", "uri": "spotify:artist:0ErraArtistIdAbcdefghi"}
+  ]},
+  "albums": {"items": [null]},
+  "playlists": {"items": []}
+}

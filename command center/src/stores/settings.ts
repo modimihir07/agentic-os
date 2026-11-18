@@ -6,6 +6,12 @@ export type WeatherMode = "auto" | "clear" | "rain" | "snow" | "autumn" | "midni
 /** Brainstorm Listen Mode dictation profile — how long a pause ends a thought, and the hard cap per utterance. */
 export type ListenProfile = "snappy" | "relaxed" | "continuous";
 
+/** System Map detail level: Streamlined = status colours and plain words; X-Ray adds ports, paths, IPC and per-hop ms. */
+export type SystemMapMode = "streamlined" | "xray";
+
+/** Where Tony's voice comes out (Phase 2): see `features/voice/audio-route.ts`. */
+export type AudioRoute = "auto" | "headset" | "speakers";
+
 export interface SettingsState {
   /** Agentic OS FastAPI backend. On mobile, use the desktop's NetBird IP. */
   gatewayUrl: string;
@@ -47,8 +53,18 @@ export interface SettingsState {
   gatewayToken: string;
   /** Voice detection: 0–100 sensitivity, pause that ends an utterance, hard cap. */
   vad: { sensitivity: number; endSilenceMs: number; maxUtteranceMs: number };
-  /** Conversation: reopen the mic after Tony answers; let you talk over him. */
-  conversation: { followUp: boolean; followUpSecs: number; bargeIn: boolean };
+  /**
+   * Conversation: reopen the mic after Tony answers; let you talk over him.
+   * `bargeEndSilenceMs`: end-of-speech pause for a listen opened over Tony (Phase 2 reflexes).
+   * `audioRoute`: headset vs open speakers ("auto" reads the default output device's name).
+   */
+  conversation: { followUp: boolean; followUpSecs: number; bargeIn: boolean; bargeEndSilenceMs: number; audioRoute: AudioRoute };
+  /** Voice routing: `announcerHandoff` = Tony introduces a delegated agent, which then speaks its own answer in its own voice. */
+  routing: { announcerHandoff: boolean };
+  /** System Map: Streamlined OS (default) or Dev X-Ray. */
+  systemMapMode: SystemMapMode;
+  /** System Map routing flowchart strip: expanded / collapsed; null = expand only on tall screens (≥ 900 px). */
+  systemMapFlowOpen: boolean | null;
   set: (patch: Partial<Omit<SettingsState, "set">>) => void;
 }
 
@@ -75,7 +91,10 @@ const defaults: Omit<SettingsState, "set"> = {
   glassOpacity: 8,
   gatewayToken: "",
   vad: { sensitivity: 60, endSilenceMs: 700, maxUtteranceMs: 15000 },
-  conversation: { followUp: true, followUpSecs: 6, bargeIn: true },
+  conversation: { followUp: true, followUpSecs: 6, bargeIn: true, bargeEndSilenceMs: 500, audioRoute: "auto" },
+  routing: { announcerHandoff: true },
+  systemMapMode: "streamlined",
+  systemMapFlowOpen: null,
   waveColors: ["#00F0FF", "#A855F7", "#FF6B4A"],
   waveThickness: 3,
   wallpaperIntervalSec: 45,

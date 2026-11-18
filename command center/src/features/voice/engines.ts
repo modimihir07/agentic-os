@@ -446,8 +446,21 @@ export class KokoroTts implements TtsEngine {
     return `${opts?.agent ?? ""}|${opts?.voice ?? ""}|${opts?.previousText ?? ""}|${s}`;
   }
 
+  /** Session cache for `cache: true` lines (intro lines). Holds the raw bytes; each play gets a
+   * copy because decodeAudioData detaches the buffer it's given. */
+  private pinned = new Map<string, Promise<ArrayBuffer>>();
+
   private synth(s: string, opts?: SpeakOpts): Promise<ArrayBuffer> {
     const key = this.key(s, opts);
+    if (opts?.cache) {
+      let p = this.pinned.get(key);
+      if (!p) {
+        p = cmd("tts_synthesize", { text: s, voice: opts.voice, agent: opts.agent });
+        this.pinned.set(key, p);
+        p.catch(() => this.pinned.delete(key)); // a failed synth is retried next time
+      }
+      return p.then((b) => b.slice(0));
+    }
     const hit = this.ahead.get(key);
     if (hit) {
       this.ahead.delete(key);
@@ -480,13 +493,64 @@ export class KokoroTts implements TtsEngine {
     }
   }
 
+  // ── Phase 2: duck (barge-in) and pause/resume (hold) ──
+  /** Level while the user talks over the reply. */
+  static readonly DUCK_LEVEL = 0.15;
+  private gain: GainNode | null = null;
+  private ducked = false;
+  private paused = false;
+  /** The source pause() stopped (its onended must replay, not advance — even after a quick resume). */
+  private pausedSrc: AudioBufferSourceNode | null = null;
+  private waiters: (() => void)[] = [];
+
+  duck(on: boolean) {
+    this.ducked = on;
+    const g = this.gain;
+    // One audio frame-ish ramp: fast enough to feel instant, smooth enough not to click.
+    if (g) g.gain.setTargetAtTime(on ? KokoroTts.DUCK_LEVEL : 1, g.context.currentTime, 0.01);
+  }
+
+  /** Keeps the sentence list and index (see speak()); the shared AudioContext keeps running for the mic. */
+  pause() {
+    if (this.paused) return;
+    this.paused = true;
+    this.pausedSrc = this.current;
+    try {
+      this.current?.stop(); // its onended sees `pausedSrc` and replays that sentence on resume
+    } catch {
+      /* not started */
+    }
+  }
+
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    this.flushWaiters();
+  }
+
+  private flushWaiters() {
+    const w = this.waiters;
+    this.waiters = [];
+    w.forEach((f) => f());
+  }
+
+  /** Resolves on resume() or cancel() (the caller re-checks its generation). */
+  private untilResumed(): Promise<void> {
+    return this.paused ? new Promise((r) => this.waiters.push(r)) : Promise.resolve();
+  }
+
   async speak(text: string, opts?: SpeakOpts): Promise<void> {
-    this.cancel();
+    this.stopCurrent();
     const gen = ++this.generation;
     const ac = await audioContext();
     const analyser = ac.createAnalyser();
     analyser.fftSize = 512;
     analyser.connect(ac.destination);
+    // sources → gain (duck) → analyser (meter) → speakers
+    const gain = ac.createGain();
+    gain.gain.value = this.ducked ? KokoroTts.DUCK_LEVEL : 1;
+    gain.connect(analyser);
+    this.gain = gain;
     const buf = new Float32Array(analyser.fftSize);
     const meter = () => {
       analyser.getFloatTimeDomainData(buf);
@@ -501,28 +565,38 @@ export class KokoroTts implements TtsEngine {
     // Fire all synth requests now; play strictly in order as each resolves.
     const pending = this.perSentenceOpts(text, opts).map(({ s, opts: sOpts }) => this.synth(s, sOpts).then((bytes) => ac.decodeAudioData(bytes)));
     try {
-      for (const p of pending) {
-        const audio = await p;
+      for (let i = 0; i < pending.length; ) {
+        const audio = await pending[i];
         if (gen !== this.generation) return;
-        await new Promise<void>((resolve) => {
+        // Held before this sentence started (or a speak() that began during hold): wait.
+        await this.untilResumed();
+        if (gen !== this.generation) return;
+        const finished = await new Promise<boolean>((resolve) => {
           const src = ac.createBufferSource();
           src.buffer = audio;
-          src.connect(analyser);
-          src.onended = () => resolve();
+          src.connect(gain);
+          // Ended on its own → next sentence; stopped by pause() → replay this one on resume.
+          src.onended = () => resolve(this.pausedSrc !== src);
           this.current = src;
           src.start();
         });
+        if (gen !== this.generation) return;
+        if (finished) i++;
+        else this.pausedSrc = null;
       }
     } finally {
       if (gen === this.generation) {
         cancelAnimationFrame(this.raf);
         voiceLevel.current = 0;
         analyser.disconnect();
+        gain.disconnect();
+        if (this.gain === gain) this.gain = null;
       }
     }
   }
 
-  cancel() {
+  /** Stop playback without touching duck/pause state (a new speak() of the same reply). */
+  private stopCurrent() {
     this.generation++;
     cancelAnimationFrame(this.raf);
     try {
@@ -532,6 +606,15 @@ export class KokoroTts implements TtsEngine {
     }
     this.current = null;
     voiceLevel.current = 0;
+    this.flushWaiters(); // a speak() waiting out a hold ends (its generation is stale)
+  }
+
+  /** Hard stop: drops the reply, any paused audio and the duck. */
+  cancel() {
+    this.paused = false;
+    this.ducked = false;
+    this.gain = null;
+    this.stopCurrent();
   }
 }
 
@@ -541,10 +624,43 @@ export class WebSpeechTts implements TtsEngine {
   readonly name = "System voice";
   readonly supported = typeof window !== "undefined" && "speechSynthesis" in window;
   private raf = 0;
+  /** No gain on speechSynthesis: a duck pauses instead, a hold pauses too; either keeps it paused. */
+  private ducked = false;
+  private held = false;
+  private gen = 0;
+  private waiters: (() => void)[] = [];
 
-  speak(text: string): Promise<void> {
-    if (!this.supported || !text) return Promise.resolve();
-    this.cancel();
+  private apply() {
+    if (!this.supported) return;
+    if (this.ducked || this.held) speechSynthesis.pause();
+    else {
+      speechSynthesis.resume();
+      const w = this.waiters;
+      this.waiters = [];
+      w.forEach((f) => f());
+    }
+  }
+  duck(on: boolean) {
+    this.ducked = on;
+    this.apply();
+  }
+  pause() {
+    this.held = true;
+    this.apply();
+  }
+  resume() {
+    this.held = false;
+    this.apply();
+  }
+
+  async speak(text: string): Promise<void> {
+    if (!this.supported || !text) return;
+    cancelAnimationFrame(this.raf);
+    speechSynthesis.cancel();
+    const gen = ++this.gen;
+    // Started during a hold: wait (cancel() also releases this, with a stale generation).
+    if (this.held) await new Promise<void>((r) => this.waiters.push(r));
+    if (gen !== this.gen) return;
     return new Promise((resolve) => {
       const u = new SpeechSynthesisUtterance(stripForSpeech(text).slice(0, 600));
       u.rate = 1.03;
@@ -565,12 +681,22 @@ export class WebSpeechTts implements TtsEngine {
       u.onend = done;
       u.onerror = done;
       speechSynthesis.speak(u);
+      if (this.ducked) speechSynthesis.pause();
     });
   }
 
   cancel() {
     cancelAnimationFrame(this.raf);
-    if (this.supported) speechSynthesis.cancel();
+    this.gen++;
+    this.ducked = false;
+    this.held = false;
+    const w = this.waiters;
+    this.waiters = [];
+    w.forEach((f) => f());
+    if (this.supported) {
+      speechSynthesis.cancel();
+      speechSynthesis.resume(); // a paused synth stays paused for the next utterance otherwise
+    }
   }
 }
 

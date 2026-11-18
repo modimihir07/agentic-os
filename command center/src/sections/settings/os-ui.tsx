@@ -4,6 +4,7 @@ import { Input } from "@/components/ui";
 import { cmd, type OsConfig, type OsSecret, type Tier } from "@/lib/platform";
 import { useOs } from "@/features/os/os-store";
 import { notifyIntegrationsChanged } from "@/features/integrations/changed";
+import { keyBadge, secretInputError, useKeySources, type BadgeTone } from "@/features/integrations/key-sources";
 
 /** OS config + patcher; loads once on first use. */
 export function useOsCfg() {
@@ -68,37 +69,44 @@ export function TierSelect({ value, onChange, label, hint }: { value: Tier; onCh
   );
 }
 
-/** Set / replace / delete an OS-level secret. The value is never read back. */
+const BADGE_TONE: Record<BadgeTone, string> = { ok: "text-teal", warn: "text-amber-light", muted: "text-ink-3" };
+
+/**
+ * Set / replace / delete an OS-level secret, with where runtime actually reads it from
+ * (process env → repo-root .env → keychain). The value is never read back. A pasted key
+ * goes to the OS keychain (persists across restarts); every row for the same key updates.
+ */
 export function SecretRow({ name, label, placeholder, hint, onChange }: { name: OsSecret; label: string; placeholder?: string; hint?: string; onChange?: () => void }) {
-  const [has, setHas] = useState<boolean | null>(null);
+  const { data, error, markKeychain } = useKeySources();
   const [val, setVal] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const refresh = () => void cmd("os_secret_status").then((s) => setHas(!!s[name])).catch(() => setHas(null));
-  useEffect(refresh, [name]); // eslint-disable-line react-hooks/exhaustive-deps
+  const b = keyBadge(data?.keys[name], data, placeholder);
+  const tone = BADGE_TONE[b.tone];
   return (
     <div className="py-1.5">
       <div className="flex flex-wrap items-center gap-2">
-        <KeyRound size={13} className={has ? "text-teal" : "text-ink-3"} />
+        <KeyRound size={13} className={tone} />
         <span className="text-sm text-ink">{label}</span>
-        <span className={`label-caps ${has ? "text-teal" : "text-ink-3"}`}>{has === null ? "…" : has ? "saved in keychain" : "not set"}</span>
+        <span className={`label-caps ${tone}`} title={error ?? undefined}>{b.label}</span>
         <form
           className="ml-auto flex min-w-[240px] flex-1 gap-1.5 sm:flex-none"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!val.trim()) return;
+            const bad = secretInputError(val);
+            if (bad) return void setMsg(bad);
             void cmd("os_secret_set", { name, value: val })
-              .then(() => (setVal(""), setMsg(null), refresh(), onChange?.(), notifyIntegrationsChanged()))
+              .then(() => (setVal(""), setMsg(null), markKeychain(name, true), onChange?.(), notifyIntegrationsChanged()))
               .catch((er) => setMsg(String(er)));
           }}
         >
-          <Input type="password" autoComplete="off" value={val} onChange={(e) => setVal(e.target.value)} placeholder={placeholder ?? (has ? "Replace…" : "Paste key…")} className="!h-9 !py-1 font-mono !text-[12px]" />
+          <Input type="password" autoComplete="off" value={val} onChange={(e) => (setVal(e.target.value), msg && setMsg(null))} placeholder={b.placeholder} aria-label={label} className="!h-9 !py-1 font-mono !text-[12px]" />
           <button className="pill-glass !h-9 text-xs" disabled={!val.trim()}>
             Save
           </button>
-          {has && (
-            <button type="button" aria-label={`Delete ${label}`} onClick={() =>
+          {b.canDelete && (
+            <button type="button" aria-label={`Delete ${label} from the keychain`} title="Delete the keychain copy" onClick={() =>
                 void cmd("os_secret_delete", { name })
-                  .then(() => (refresh(), onChange?.(), notifyIntegrationsChanged()))
+                  .then(() => (markKeychain(name, false), onChange?.(), notifyIntegrationsChanged()))
                   .catch((er) => setMsg(String(er)))
               } className="pill-glass !h-9 !w-9 !p-0 hover:!border-alert/50">
               <Trash2 size={13} />
@@ -106,6 +114,7 @@ export function SecretRow({ name, label, placeholder, hint, onChange }: { name: 
           )}
         </form>
       </div>
+      {b.detail && <p className="mt-1 font-mono text-[11px] text-ink-3">{b.detail}</p>}
       {hint && <p className="mt-1 text-xs text-ink-3">{hint}</p>}
       {msg && <p className="mt-1 text-xs text-alert">{msg}</p>}
     </div>

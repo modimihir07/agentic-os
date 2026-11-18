@@ -6,22 +6,28 @@ import { parseConfirmation, planIntent, stripWake, type ActionPlan } from "@/fea
 import { handleLocalIntent } from "@/features/reminders/intents";
 import { gated } from "@/features/bridge/gate";
 import { liveContext } from "@/features/os/context";
-import { parseOsLine, runOsIntent } from "@/features/os/os-intents";
+import { cuePlayingNow, parseOsLine, runOsIntent } from "@/features/os/os-intents";
 import type { OsIntent } from "@/features/os/os-intent-parse";
+import { cueOwnsVolume, parseSpotifyLine, runPendingSpotify, runSpotifyIntent } from "@/features/os/spotify-intents";
+import type { SpotifyIntent } from "@/lib/platform";
 import { useOs } from "@/features/os/os-store";
 import { runPipeline, usePipelines } from "@/features/os/pipeline-store";
 import { cueFor, fireCue, registerCueIO } from "@/features/cues/cue-runtime";
 import { cueRecentlyActive, registerSpeechCancel, setCueDuck, stopAllAudio } from "@/features/cues/player";
 import { cc } from "@/lib/cc-api";
+import { clientTrace } from "@/features/memmap/client-trace";
 import { cmd, isTauri, onNativeEvent, type ChatMessage, type OsTurnResult, type RoutingConfig } from "@/lib/platform";
 import { useProviders } from "@/sections/settings/use-providers";
 import { useNav } from "@/stores/nav";
 import { useSettings } from "@/stores/settings";
-import { createEngines, type SpeakOpts } from "./engines";
+import { audioContext, createEngines, type SpeakOpts } from "./engines";
 import { nextStreamChunk } from "./tts-text";
 import { useVoice, type Channel, type ThreadId, type VoiceTurn } from "./voice-store";
 import { toggleAction, type TurnOrigin } from "./voice-status";
 import { wakeCommand } from "./wake-word";
+import { parseReflex, type Reflex, type ReflexCtx } from "./reflex-parse";
+import { bargeSensitivityOffset, detectRoute, detectedRoute, effectiveRoute } from "./audio-route";
+import { cutMedia, holdMedia, releaseMedia, type HeldMedia } from "./media-hold";
 
 /**
  * Conversation state machine (voice-first; text uses the same path):
@@ -69,18 +75,27 @@ function releaseTtsDuck() {
  * per-agent answers. A cue's own explicit `voice` (no `agent`) is left exactly as
  * given: cue clips are never routed through the roster (see `registerCueIO` below).
  * Cue audio ducks under the line unless `noDuck` (a cue intro already ducks its own theme). */
-async function say(text: string, opts?: SpeakOpts & { noDuck?: boolean }) {
-  if (!tts.supported || !text || convo.barged) return;
-  const { noDuck, ...speakOpts } = opts ?? {};
+async function say(text: string, opts?: SpeakOpts & { noDuck?: boolean; traceId?: string }) {
+  // (Phase 2: no `convo.barged` gate any more — a barge-in only ducks Tony until the reflex
+  // decision; a superseded turn is silenced by `micGen`, which `sayLive` checks.)
+  if (!tts.supported || !text) return;
+  const { noDuck, traceId, ...speakOpts } = opts ?? {};
   const effective = speakOpts.voice || speakOpts.agent ? speakOpts : { agent: "general" };
   const duck = noDuck ? null : ttsDuck;
   if (duck && duck.depth++ === 0) setCueDuck("tts", true);
+  // System Map TTS hop (synthesis + playback of this line); engine name only, never the text.
+  const t0 = performance.now();
+  let ttsError: string | undefined;
+  sayDepth++;
   try {
     await tts.speak(text, effective);
-  } catch {
+  } catch (e) {
     /* speech is best-effort; the text is on screen */
+    ttsError = e instanceof Error ? e.message : String(e);
   } finally {
+    sayDepth--;
     if (duck && duck === ttsDuck && --duck.depth === 0) setCueDuck("tts", false);
+    clientTrace.tts(traceId, tts.name, performance.now() - t0, !ttsError, ttsError);
   }
 }
 
@@ -99,7 +114,28 @@ function agentAutoSpeak(role: string): boolean {
 // If you start talking, he stops mid-sentence and your words are transcribed.
 // When he finishes, the mic stays open for a few seconds for your follow-up —
 // no wake word, no button.
-const convo = { barged: false, active: false };
+// Phase 2: a barge-in no longer stops him on the spot. Speech onset DUCKS him (one audio
+// frame); once Whisper returns, `parseReflex` decides: cut / hold / a new command.
+// `ducked` = you started talking over this listen and the decision is still pending.
+const convo = { barged: false, active: false, ducked: false };
+/** say() calls in flight (incl. one paused by a hold) — Tony or an agent has audio queued. */
+let sayDepth = 0;
+/** streamIds of `os_turn`s in flight, so "cut it" can stop them server-side (`os_turn_cancel`). */
+const activeStreams = new Set<string>();
+/** Rust `agents::TURN_CANCELLED`: the error a cancelled os_turn returns. */
+const TURN_CANCELLED = "turn cancelled";
+/** Hold mode ("take it ease" / "whoa" / "aspetta") — see the reflex section at the end. */
+const hold = {
+  active: false,
+  /** What you've said since the hold began (shown live in the HUD). */
+  segments: [] as string[],
+  /** What the hold paused (Spotify / the cue theme), so resume only unpauses that. */
+  media: null as Promise<HeldMedia> | null,
+  deadline: 0,
+  timer: undefined as ReturnType<typeof setTimeout> | undefined,
+  /** A hold listen is open. */
+  listening: false,
+};
 
 /** Bumped by every hard stop. A turn captures it at its start and stays silent (no speech,
  * no mic reopen) once it changes, so a cancelled turn's late result never resurfaces. */
@@ -107,6 +143,10 @@ let micGen = 0;
 /** The VAD heard speech during the current listen (the mic button then submits instead of cancelling). */
 let heardSpeech = false;
 let turnOrigin: TurnOrigin = "text";
+/** The current listen is hands-free's silent wake-word re-arm, not something the user opened. */
+let passiveListen = false;
+/** Other mic users (the System Map's note dictation) holding hands-free re-arming off. */
+let wakeHolds = 0;
 
 /** Follow-up listening and barge-in only while hands-free is on, or for a turn the user started by tapping. */
 const conversational = () => useSettings.getState().wakeMode || turnOrigin === "tap";
@@ -115,32 +155,57 @@ function speechHandlers() {
   return {
     onPartial: (t: string) => store().setPartial(t),
     onPhase: (p: string) => {
+      clientTrace.phase(p);
       if (p === "speech") {
         heardSpeech = true;
         setCueDuck("user", true);
       }
       if (p === "speech" && convo.active) {
-        // Barge-in: you talked over Tony.
+        // Barge-in: you talked over Tony (or over a turn still thinking). Duck, don't stop:
+        // the transcript decides (cut / hold / new command) — see onFinal.
         convo.barged = true;
         convo.active = false;
-        tts.cancel();
-        store().setState("listening");
+        convo.ducked = true;
+        tts.duck?.(true);
       }
       if (p === "transcribing") {
         setCueDuck("user", false);
-        store().setState("transcribing");
+        // Over a ducked reply the orb keeps showing him speaking until the decision.
+        if (!convo.ducked) store().setState("transcribing");
       }
     },
     onFinal: (t: string) => {
+      clientTrace.sttFinal(voiceCaps.sttName, !!t);
       setCueDuck("user", false);
+      const overTony = convo.ducked;
       convo.active = false;
+      convo.ducked = false;
       store().setPartial("");
-      if (t) return void handleInput(t, { channel: "voice" });
+      if (t) {
+        // Reflexes first (< 15 ms: a pure parse), before wake-word handling and handleInput.
+        const r = parseReflex(t, reflexCtx());
+        if (r) return applyReflex(r);
+        // A new command said over Tony (or over a turn still thinking): he stops, the old turn's
+        // server stream is dropped and it goes quiet (its bubble stays on screen).
+        if (overTony || sayDepth > 0) {
+          cancelStreams();
+          supersedeTurn();
+        }
+        return void handleInput(t, { channel: "voice" });
+      }
       convo.barged = false;
+      tts.duck?.(false);
+      if (sayDepth > 0 || activeStreams.size > 0) {
+        // Noise (or a long silence) over a reply / a turn still thinking: un-duck, keep the
+        // turn's state, and keep listening for a reflex over the rest of it.
+        store().setState(sayDepth > 0 ? "speaking" : "thinking");
+        return startBargeIn();
+      }
       store().setState(store().pending ? "confirming" : "idle");
       rearmWake();
     },
     onError: (e: string) => {
+      clientTrace.sttError(voiceCaps.sttName, e);
       setCueDuck("user", false);
       convo.active = false;
       store().setError(e);
@@ -151,10 +216,26 @@ function speechHandlers() {
 /** Start listening for a barge-in while a voice reply plays. */
 function startBargeIn() {
   const c = useSettings.getState().conversation;
-  if (!c.bargeIn || !stt || convo.active || store().pending || !conversational()) return;
+  if (!c.bargeIn || !stt || convo.active || hold.active || store().pending || !conversational()) return;
   convo.active = true;
   heardSpeech = false;
-  stt.start(speechHandlers(), { maxSilenceStartMs: 120_000, sensitivityOffset: -25 });
+  passiveListen = false;
+  void detectRoute(); // re-checked each turn; the answer lands for the next decision
+  // Shorter end-of-speech pause (default 500 ms) so "cut it" lands fast. Tradeoff: a long new
+  // command said over Tony may be split — the follow-up listen catches the rest.
+  stt.start(speechHandlers(), {
+    maxSilenceStartMs: 120_000,
+    sensitivityOffset: bargeSensitivityOffset(currentRoute()),
+    endSilenceMs: c.bargeEndSilenceMs > 0 ? c.bargeEndSilenceMs : undefined,
+  });
+}
+
+/** Drop a barge-in listen nobody has spoken into yet (a turn ended without speaking). */
+function endIdleBargeIn() {
+  if (!convo.active || convo.ducked) return;
+  convo.active = false;
+  stt?.abort();
+  setCueDuck("user", false);
 }
 
 /** Reply finished: hand over to a short follow-up window (or back to rest). `gen` is the turn's `micGen`. */
@@ -169,6 +250,7 @@ function afterVoiceReply(gen: number) {
   if (c.followUp && stt && !store().pending && conversational()) {
     store().setState("listening");
     heardSpeech = false;
+    passiveListen = false;
     stt.start(speechHandlers(), { maxSilenceStartMs: c.followUpSecs * 1000 });
   } else store().setState("idle");
 }
@@ -183,8 +265,11 @@ const relistenOpts = () => ({ silent: !store().expanded, origin: turnOrigin });
 function hardStopMic() {
   micGen++;
   heardSpeech = false;
+  passiveListen = false;
   convo.active = false;
   convo.barged = false;
+  if (convo.ducked) tts.duck?.(false);
+  convo.ducked = false;
   stt?.abort(); // abort() never fires onFinal/onError, so release ducking explicitly here.
   setCueDuck("user", false);
   store().setPartial("");
@@ -203,6 +288,7 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
   // hands-free first, and that line still has to pass the wake-word check it was heard under.
   const wakeListen = wake.armed && !opts.forConfirmation;
   heardSpeech = false;
+  passiveListen = !!opts.silent && origin === "wake";
   convo.active = false;
   tts.cancel();
   // `silent`: passive hands-free wake-word rearming, not a real interaction yet — never force
@@ -222,6 +308,7 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
     {
       onPartial: (t) => store().setPartial(t),
       onPhase: (p) => {
+        clientTrace.phase(p);
         if (p === "speech") {
           heardSpeech = true;
           setCueDuck("user", true);
@@ -232,11 +319,23 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
         }
       },
       onFinal: (t) => {
+        clientTrace.sttFinal(voiceCaps.sttName, !!t);
         setCueDuck("user", false);
         store().setPartial("");
+        if (t) {
+          // Phase 2 reflexes, before wake-word handling. A yes/no listen only takes "cut it"
+          // (it cancels the card). A passive hands-free listen hears the room, so there only a
+          // cut (or a hold over a busy turn) acts without the wake word; "Tony, take it ease…"
+          // still locks a thought (checked on the command text below).
+          const r = parseReflex(t, reflexCtx());
+          const bare = wakeListen && useSettings.getState().wakeRequire;
+          if (r && (opts.forConfirmation ? r.kind === "cut" : !bare || r.kind === "cut" || reflexCtx().busy)) return applyReflex(r);
+        }
         if (t && wakeListen) {
           // Hands-free: only lines that start with a wake word ("Hey Tony…") count.
           const cmdText = useSettings.getState().wakeRequire ? afterWakeWord(t) : t;
+          const wr = cmdText ? parseReflex(cmdText, reflexCtx()) : null;
+          if (wr) return applyReflex(wr);
           if (cmdText === null) {
             // People shout "stop" / "turn it down" at a cue without the wake word.
             const intent = cueRecentlyActive() ? parseOsLine(t) : null;
@@ -257,6 +356,7 @@ export function startListening(opts: { forConfirmation?: boolean; silent?: boole
         rearmWake();
       },
       onError: (e) => {
+        clientTrace.sttError(voiceCaps.sttName, e);
         setCueDuck("user", false);
         const p = store().pending;
         store().setError(e);
@@ -274,6 +374,7 @@ export function finishListening() {
 
 /** Esc / close: stop everything. A pending action is cancelled (fail closed). */
 export function stopVoice() {
+  if (hold.active) endHold(); // Esc / mic button while holding: drop the paused reply, unpause music
   hardStopMic();
   tts.cancel();
   releaseTtsDuck();
@@ -324,14 +425,20 @@ export async function handleInput(text: string, opts: { channel: Channel; thread
   const v = store();
   const t = text.trim();
   if (!t) return;
+  if (hold.active) return holdInput(t); // Phase 2: typed lines while holding join the held thought
+  clientTrace.begin(opts.channel);
   const gen = micGen;
   const live = () => gen === micGen;
   if (opts.channel === "text") turnOrigin = "text";
   else if (opts.origin) turnOrigin = opts.origin;
-  // One parse decides stops, cue volume, Spotify, and whether a cue may fire.
+  // One parse decides stops, cue volume and whether a cue may fire; a line it leaves alone asks
+  // Rust's Spotify grammar (`spotify_parse`, the only Spotify grammar).
   const intent = parseOsLine(t);
-  if (v.pending) {
+  let sp: SpotifyIntent | null = intent ? null : await parseSpotifyLine(t);
+  if (sp && cueOwnsVolume(sp, cuePlayingNow(), t)) sp = null; // "volume 30" during Gabagool ⇒ Tony, as before
+  if (store().pending) {
     if (intent && worksWhileConfirming(intent)) return controlWhileConfirming(t, intent, opts.channel);
+    if (sp?.tool === "spotify.pause") return controlWhileConfirming(t, sp, opts.channel);
     return answerConfirmation(t, opts.channel);
   }
 
@@ -356,7 +463,7 @@ export async function handleInput(text: string, opts: { channel: Channel; thread
 
   // Voice & Triggers: "enter gabagool mode" etc. run their cue widget (never a restart
   // of a running cue from a line without an ON verb — see `cueFor`).
-  const cue = cueFor(t, intent);
+  const cue = cueFor(t, intent, sp);
   if (cue) {
     store().setState("idle");
     fireCue(cue);
@@ -367,12 +474,17 @@ export async function handleInput(text: string, opts: { channel: Channel; thread
   // kill switch, status, plus a backstop for Gabagool phrasings the cue phrase list doesn't
   // cover): in-process, no gateway hop, no confirmation card — local, reversible controls,
   // so they never reach the planner as a mutating plan.
-  const osIntent = intent ? await runOsIntent(intent).catch(() => null) : null;
+  const osIntent = intent
+    ? await runOsIntent(intent, opts.channel).catch(() => null)
+    : sp
+      ? await runSpotifyIntent(sp, opts.channel).catch(() => null)
+      : null;
   if (osIntent) {
     if (osIntent.reply) store().pushTurn({ who: "agent", from: "os", text: osIntent.reply, thread, meta: "os-control" });
     if (!live()) return; // hard-stopped meanwhile: the change happened, but stay silent
-    store().setState("idle");
-    if (osIntent.reply && opts.channel === "voice") {
+    // A Spotify approval card may already be up (it speaks its own read-back on voice).
+    store().setState(store().pending ? "confirming" : "idle");
+    if (osIntent.reply && opts.channel === "voice" && !osIntent.card) {
       store().setState("speaking");
       startBargeIn();
       await say(osIntent.reply);
@@ -490,15 +602,16 @@ async function answerConfirmation(reply: string, channel: Channel) {
   }
 }
 
-/** Audio controls that act at once even while a confirmation card waits (otherwise "stop" reads as an unclear yes/no). */
-const worksWhileConfirming = (i: OsIntent) => i.kind === "gabagool-off" || i.kind === "cue-volume" || (i.kind === "media" && i.action === "pause");
+/** Audio controls that act at once even while a confirmation card waits (otherwise "stop" reads as an
+ * unclear yes/no). Spotify's pause (a `spotify.pause` intent) is let through by `handleInput` too. */
+const worksWhileConfirming = (i: OsIntent) => i.kind === "gabagool-off" || i.kind === "cue-volume";
 
 /** Run one of those and keep the card: it is still answered by yes/no or a tap. */
-async function controlWhileConfirming(text: string, intent: OsIntent, channel: Channel) {
+async function controlWhileConfirming(text: string, intent: OsIntent | SpotifyIntent, channel: Channel) {
   const gen = micGen;
   const p = store().pending!;
   store().pushTurn({ who: "user", text, thread: p.plan.thread });
-  const r = await runOsIntent(intent).catch(() => null);
+  const r = await ("tool" in intent ? runSpotifyIntent(intent, channel) : runOsIntent(intent, channel)).catch(() => null);
   if (r?.reply) store().pushTurn({ who: "agent", from: "os", text: r.reply, thread: p.plan.thread, meta: "os-control" });
   if (store().pending?.plan.id !== p.plan.id) return;
   store().setState("confirming");
@@ -527,7 +640,8 @@ export async function approve(via: "voice" | "tap" | "typed") {
   await run(p.plan, p.channel);
 }
 
-export function reject(reason: string) {
+/** `silent`: no spoken "Cancelled." (a "cut it" never makes Tony say a sentence). */
+export function reject(reason: string, opts: { silent?: boolean } = {}) {
   const p = store().pending;
   if (!p) return;
   clearTimeout(confirmTimer);
@@ -536,7 +650,7 @@ export function reject(reason: string) {
   p.plan.onCancel?.();
   store().pushTurn({ who: "system", text: `Cancelled (${reason}) — nothing was sent.`, tone: "warn", thread: p.plan.thread });
   store().setState("idle");
-  if (p.channel === "voice") void say("Cancelled.");
+  if (p.channel === "voice" && !opts.silent) void say("Cancelled.");
 }
 
 async function run(plan: Parameters<typeof execute>[0], channel: Channel) {
@@ -546,13 +660,15 @@ async function run(plan: Parameters<typeof execute>[0], channel: Channel) {
   // Read-only questions go through the OS core (context + sub-agents + tools).
   if (!plan.mutating && plan.target.kind === "agent" && !plan.run && isTauri()) return osRun(plan, channel, thread);
   try {
+    const traceId = clientTrace.id ?? undefined;
     const r = await execute(plan, history(thread).slice(0, -1));
     store().pushTurn({ who: "agent", text: r.text, role: plan.role, meta: r.meta, thread, from: "os" });
+    clientTrace.ui(traceId, "reply shown");
     if (gen !== micGen) return;
     if (channel === "voice") {
       store().setState("speaking");
       startBargeIn();
-      await say(r.text);
+      await say(r.text, { traceId });
       return afterVoiceReply(gen);
     }
     if (store().state === "speaking" || store().state === "thinking") store().setState("idle");
@@ -585,7 +701,9 @@ function fail(e: unknown, thread?: ThreadId) {
   const raw = e instanceof Error ? e.message : String(e);
   const calm = calmMessage(raw);
   store().pushTurn({ who: "system", text: calm, tone: "error", thread, meta: calm === raw ? undefined : raw });
+  if (hold.active) return; // keep HOLDING on screen; the error is in the thread
   store().setError(calm);
+  clientTrace.ui(clientTrace.id, "error shown", false, calm);
 }
 
 // ── Idea-to-Execution (Stage 1) ─────────────────────────────────────────────
@@ -642,8 +760,10 @@ export function runTurnAction(run: string, thread: ThreadId) {
 async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
   const gen = micGen;
   const isLive = () => gen === micGen;
+  // System Map: Rust's os-trace steps for this turn join the webview's own hops.
+  const traceId = clientTrace.id ?? undefined;
   // Queued sentences check again when their turn comes: a hard stop mid-stream drops the rest.
-  const sayLive = (text: string, o: SpeakOpts) => (isLive() ? say(text, o) : undefined);
+  const sayLive = (text: string, o: SpeakOpts) => (isLive() ? say(text, { ...o, traceId }) : undefined);
   const routingCfg = useOs.getState().cfg?.routing ?? DEFAULT_ROUTING_CONFIG;
   const routed = routeFor(plan.utterance, thread, routingCfg);
   const role = routed.role;
@@ -655,6 +775,10 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
   // or from a different agent's tab, used to be silently ignored).
   const explicit = thread !== "auto" && role === thread;
 
+  // Phase 2 §4 announcer handoff (voice, delegated): Tony speaks a short cached intro, then the
+  // agent's own reply plays in its roster voice; his synthesis is shown but not spoken.
+  const handoff = channel === "voice" && !explicit && role !== "general" && useSettings.getState().routing.announcerHandoff;
+
   // Tony-feed relay turn for a delegated (not explicit) Named/Domain route.
   // Spoken (Tony's own voice) only for voice turns — a typed handoff notice
   // stays silent even when the target agent has auto-speak on.
@@ -662,7 +786,7 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     const short = task.length > 60 ? `${task.slice(0, 57)}…` : task || plan.utterance;
     const notice = `Routing ${short} to ${roleLabel(role)}…`;
     store().pushTurn({ who: "relay", from: "os", to: role, text: notice, thread, meta: "routing" });
-    if (channel === "voice" && isLive()) {
+    if (channel === "voice" && isLive() && !handoff) {
       store().setState("speaking");
       startBargeIn();
       // Fire-and-forget: the actual dispatch below doesn't need to wait for this courtesy
@@ -670,7 +794,7 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
       // every delegated turn's real latency). `say()` cancels this mid-sentence on its own
       // if the real answer's first chunk is ready sooner, which reads as the assistant
       // getting straight to the point rather than anything breaking.
-      void say(notice, { agent: "general" });
+      void say(notice, { agent: "general", traceId });
     }
   }
 
@@ -693,13 +817,41 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
   let speakQ: Promise<void> = Promise.resolve();
   let streamAgent = "general";
   let lastSpokenChunk: string | undefined;
+  // Registered for "cut it" (`killTurn` → `os_turn_cancel`); removed when the turn returns.
+  activeStreams.add(streamId);
+  // Announcer handoff: who Tony has introduced, which agent replies were queued to speak.
+  const introduced = new Set<string>();
+  const spokenReplies = new Set<string>();
+  const queueAgentReply = (agent: string, text: string) => {
+    const body = text.trim();
+    if (!body || spokenReplies.has(`${agent}|${body}`) || !isLive()) return;
+    spokenReplies.add(`${agent}|${body}`);
+    if (!introduced.has(agent)) {
+      introduced.add(agent);
+      speakQ = speakQ.then(() => sayLive(introLine([agent]), { agent: "general", cache: true }));
+    }
+    if (store().state !== "speaking") {
+      store().setState("speaking");
+      startBargeIn();
+    }
+    tts.prefetch?.(body, { agent });
+    speakQ = speakQ.then(() => sayLive(body, { agent }));
+  };
+  if (handoff && isLive() && (routed.kind === "Named" || routed.kind === "Domain")) {
+    introduced.add(role);
+    store().setState("speaking");
+    startBargeIn();
+    speakQ = speakQ.then(() => sayLive(introLine([role]), { agent: "general", cache: true }));
+  } else if (channel === "voice" && isLive()) startBargeIn(); // "cut it" / "whoa" work while it thinks
+  const offAgent = handoff ? await onAgentReply((e) => e.streamId === streamId && queueAgentReply(e.agent, e.text)) : () => undefined;
   const off = await onNativeEvent<{ streamId: string; delta: string; agent?: string }>("tony-token", (e) => {
     if (e.streamId !== streamId) return;
     streamAgent = e.agent ?? "general";
     buffered += e.delta;
     if (!live) live = store().pushTurn({ who: "agent", from: finalFromFor(streamAgent), text: buffered, thread, meta: "streaming…" }).id;
     else store().updateTurn(live, { text: buffered });
-    if (channel === "voice" && isLive()) {
+    // Handoff: Tony's synthesis of a delegated answer is shown, never spoken (no re-summary).
+    if (channel === "voice" && isLive() && !(handoff && streamAgent === "general")) {
       const next = nextStreamChunk(buffered, spokenUpTo);
       if (next) {
         const { chunk } = next;
@@ -716,7 +868,9 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
       }
     }
   });
-  const req = { text: task, role, explicit, routeKind: routed.kind, routeReason: routed.reason, history: history(thread).slice(0, -1), context, streamId };
+  // askCards: a Spotify write held by the Ask tier comes back as `pendingSpotify` (card below), not a failure note.
+  // cuePlaying: Rust keeps "volume 30" during a Gabagool cue away from Spotify (same rule as cueOwnsVolume).
+  const req = { text: task, role, explicit, routeKind: routed.kind, routeReason: routed.reason, history: history(thread).slice(0, -1), context, streamId, traceId, askCards: true, cuePlaying: cuePlayingNow() };
   let r: OsTurnResult | null;
   try {
     r = await gated(
@@ -726,13 +880,27 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     );
   } catch (e) {
     off();
+    offAgent();
+    activeStreams.delete(streamId);
+    // "Cut it" dropped this turn server-side: no error, the partial bubble just stays.
+    if (String(e instanceof Error ? e.message : e).includes(TURN_CANCELLED)) {
+      if (live) store().updateTurn(live, { meta: "cut" });
+      return;
+    }
+    endIdleBargeIn();
     return fail(e, thread);
   }
   off();
+  offAgent();
+  activeStreams.delete(streamId);
   if (!r) {
+    endIdleBargeIn();
     store().setState("idle");
     return;
   }
+  // D14: Rust held back a Spotify write for approval. Raise the card for exactly that call
+  // (approve ⇒ `spotify_tool(name, args, approved: true)`, never this turn again).
+  if (r.pendingSpotify) return pendingSpotifyReply(r, r.pendingSpotify, channel, thread, gen);
 
   // The Rust safety net (phone/inbox turns against the full config) may have
   // refined the role; fall back to what we already computed when it didn't.
@@ -767,6 +935,7 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     store().updateTurn(live, { ...final, at: Date.now() });
     useVoice.setState((s) => ({ turns: [...s.turns.filter((t) => t.id !== live), ...s.turns.filter((t) => t.id === live)] }));
   } else store().pushTurn({ who: "agent", thread, ...final });
+  clientTrace.ui(traceId, "reply shown");
 
   // Auto-switch: when this was delegated (not explicit) and the Agents
   // section is already what's on screen, land the user on the exchange
@@ -777,6 +946,20 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
   }
   if (!isLive()) return;
   if (channel === "voice") {
+    if (handoff) {
+      // Replies the event didn't already deliver (e.g. a Librarian comms quote) speak now, in order.
+      for (const s of r.steps) if (s.kind === "reply" && s.ok && s.from !== "os") queueAgentReply(s.from, s.text.replace(/\n\nSources: [\s\S]*$/, ""));
+      if (!spokenReplies.size) {
+        // No agent answered (it failed and Tony stepped in): his answer is the reply — in his
+        // own voice, after the intro, never silently in place of an agent's voice.
+        const answer = r.answer;
+        store().setState("speaking");
+        startBargeIn();
+        speakQ = speakQ.then(() => sayLive(answer, { agent: "general" }));
+      }
+      await speakQ;
+      return afterVoiceReply(gen);
+    }
     if (spokenUpTo > 0) {
       // Already speaking sentence-by-sentence, in whichever voice streamed
       // (`streamAgent` — Tony's or, for an explicit-tab turn, the sub-agent's
@@ -790,7 +973,7 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
     } else {
       store().setState("speaking");
       startBargeIn();
-      await say(r.answer, { agent: voiceAgent });
+      await say(r.answer, { agent: voiceAgent, traceId });
     }
     return afterVoiceReply(gen);
   }
@@ -798,11 +981,28 @@ async function osRun(plan: ActionPlan, channel: Channel, thread: ThreadId) {
   // (Part 3) — a voice turn always speaks (above); a typed one only opts in.
   if (isTauri() && agentAutoSpeak(voiceAgent)) {
     store().setState("speaking");
-    await say(r.answer, { agent: voiceAgent });
+    await say(r.answer, { agent: voiceAgent, traceId });
     if (store().state === "speaking") store().setState("idle");
     return;
   }
   if (store().state === "speaking" || store().state === "thinking") store().setState("idle");
+}
+
+/** osRun's `pendingSpotify` branch: show Rust's answer (normally ""), raise the card, and show /
+ * speak the reply like a fast-path one. On voice the card speaks its own read-back instead. */
+async function pendingSpotifyReply(r: OsTurnResult, p: NonNullable<OsTurnResult["pendingSpotify"]>, channel: Channel, thread: ThreadId, gen: number) {
+  if (r.answer.trim()) store().pushTurn({ who: "agent", from: "os", text: r.answer, thread });
+  endIdleBargeIn(); // the card's yes/no listen takes the mic
+  const out = await runPendingSpotify(p, channel).catch(() => null);
+  if (out?.reply) store().pushTurn({ who: "agent", from: "os", text: out.reply, thread, meta: "os-control" });
+  if (gen !== micGen) return;
+  store().setState(store().pending ? "confirming" : "idle");
+  if (out?.reply && channel === "voice" && !out.card) {
+    store().setState("speaking");
+    startBargeIn();
+    await say(out.reply);
+    return afterVoiceReply(gen);
+  }
 }
 
 /** "Ask Claude Overseer" on any message: second opinion on that exchange. */
@@ -843,12 +1043,41 @@ export function afterWakeWord(text: string): string | null {
 
 function rearmWake() {
   clearTimeout(wake.timer);
-  if (!wake.armed || !stt) return;
+  if (!wake.armed || !stt || wakeHolds > 0) return; // a held re-arm resumes on release
   wake.timer = setTimeout(() => {
+    if (wakeHolds > 0) return;
     const s = store().state;
     if (wake.armed && (s === "idle" || s === "error") && !store().pending) startListening({ silent: true, origin: "wake" });
     else if (wake.armed) rearmWake();
   }, 600);
+}
+
+/** Hands-free is only waiting for a wake word (nothing heard yet): another mic user may take over. */
+export function isPassiveWakeListen(): boolean {
+  return passiveListen && !heardSpeech && !convo.active && store().state === "listening";
+}
+
+/**
+ * Hold hands-free re-arming off while another mic user (the System Map's note dictation)
+ * records, so a wake listen can't reopen Tony's mic mid-note and hear it as a command.
+ * Holding also drops a passive wake listen in progress; hands-free itself stays armed and
+ * re-arms on the last release.
+ */
+export function holdWake(on: boolean) {
+  if (on) {
+    wakeHolds++;
+    clearTimeout(wake.timer);
+    if (isPassiveWakeListen()) {
+      passiveListen = false;
+      stt?.abort(); // fires no handlers
+      setCueDuck("user", false);
+      store().setPartial("");
+      store().setState("idle");
+    }
+    return;
+  }
+  wakeHolds = Math.max(0, wakeHolds - 1);
+  if (wakeHolds === 0 && wake.armed) rearmWake();
 }
 
 /** Turn hands-free listening on/off (Settings → Voice, or the HUD). */
@@ -893,3 +1122,260 @@ if (isTauri()) void useProviders.getState().load();
 void onNativeEvent<{ from: string; to: string; reason: string }>("tts-fallback", (e) => {
   store().pushTurn({ who: "system", text: `Voice fell back to ${e.to} — ${e.from} failed (${e.reason})`, tone: "warn" });
 });
+
+// ── Phase 2 reflexes: cut / hold / resume ─────────────────────────────────────
+//
+// `parseReflex` (pure, tested) decides; these act. The decision itself is a string parse
+// (well under 15 ms once Whisper returns); what you *feel* is the duck on speech onset.
+
+/** Hold-mode listening: long pauses allowed while you think out loud. */
+const HOLD_LISTEN = { endSilenceMs: 4500, maxUtteranceMs: 120_000 };
+const HOLD_TIMEOUT_MS = 90_000;
+
+/** Speakers vs headset, as the reflexes and barge-in should treat it right now. */
+function currentRoute() {
+  return effectiveRoute(useSettings.getState().conversation.audioRoute, detectedRoute());
+}
+
+function reflexCtx(): ReflexCtx {
+  const s = store().state;
+  const busy = sayDepth > 0 || activeStreams.size > 0 || s === "thinking" || s === "speaking";
+  // Through open speakers his own "oh" can reach the mic; a paused (held) reply is silent.
+  const audible = sayDepth > 0 && !hold.active;
+  return { busy, holding: hold.active, ttsAudible: currentRoute() === "speakers" && audible };
+}
+
+function applyReflex(r: NonNullable<Reflex>) {
+  convo.barged = false;
+  clientTrace.phase(`reflex:${r.kind}`);
+  switch (r.kind) {
+    case "cut":
+      return killTurn();
+    case "hold":
+      return enterHold(r.rest);
+    case "resume":
+      return resumeHold();
+    case "submit":
+      return submitHold(r.rest);
+  }
+}
+
+/** A new command said over Tony: he stops and the old turn goes quiet (its bubble stays). */
+function supersedeTurn() {
+  micGen++;
+  tts.cancel();
+  releaseTtsDuck();
+}
+
+/** Stop every os_turn still generating (its LLM / sub-agent streams) server-side. */
+function cancelStreams() {
+  for (const id of activeStreams) void cmd("os_turn_cancel", { streamId: id }).catch(() => undefined);
+  activeStreams.clear();
+}
+
+/**
+ * "Cut it" (Decision 1): everything stops — Tony and any sub-agent voice, the LLM / agent
+ * streams server-side, a pending card (fail closed), the Gabagool theme and Spotify playback
+ * (paused, never disconnected, never auto-resumed). No sentence after it: a soft blip only.
+ */
+export function killTurn() {
+  cancelStreams();
+  if (hold.active) clearHold(); // whatever the hold paused stays stopped
+  tts.cancel();
+  releaseTtsDuck();
+  cutMedia();
+  if (store().pending) reject("cut", { silent: true });
+  hardStopMic(); // micGen++ silences anything still thinking/streaming here; idle; re-arms hands-free
+  void playCutCue();
+}
+
+/** The local acknowledgement for a cut: a 140 ms soft falling blip, never the LLM. */
+async function playCutCue() {
+  try {
+    const ac = await audioContext();
+    const t = ac.currentTime;
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = "sine";
+    o.frequency.setValueAtTime(660, t);
+    o.frequency.exponentialRampToValueAtTime(330, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.05, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+    o.connect(g).connect(ac.destination);
+    o.start(t);
+    o.stop(t + 0.16);
+  } catch {
+    /* silence is an acceptable acknowledgement */
+  }
+}
+
+/** "Take it ease" / "whoa" / "aspetta": pause (not cancel) whoever is speaking and collect your thought. */
+function enterHold(rest: string) {
+  if (!hold.active) {
+    hold.active = true;
+    hold.segments = [];
+    // Pause first, then un-duck: the paused reply resumes at full volume.
+    tts.pause?.();
+    tts.duck?.(false);
+    hold.media = holdMedia();
+    store().setHeld([]); // before setState: the store keeps "holding" while `held` is set
+    store().setState("holding");
+  }
+  if (rest) addSegment(rest);
+  bumpHoldDeadline();
+  holdListen();
+}
+
+function addSegment(t: string) {
+  hold.segments.push(t);
+  store().setHeld([...hold.segments]);
+}
+
+function bumpHoldDeadline() {
+  hold.deadline = Date.now() + HOLD_TIMEOUT_MS;
+  clearTimeout(hold.timer);
+  const check = () => {
+    if (!hold.active) return;
+    // Mid-utterance (you're still talking): wait for it.
+    if ((hold.listening && heardSpeech) || Date.now() < hold.deadline) hold.timer = setTimeout(check, 1000);
+    else holdTimeout();
+  };
+  hold.timer = setTimeout(check, HOLD_TIMEOUT_MS + 250);
+}
+
+function holdListen() {
+  if (!hold.active || !stt || hold.listening) return;
+  const left = hold.deadline - Date.now();
+  if (left <= 0) return holdTimeout();
+  hold.listening = true;
+  heardSpeech = false;
+  passiveListen = false;
+  stt.start(
+    {
+      onPartial: (t) => store().setPartial(t),
+      onPhase: (p) => {
+        clientTrace.phase(p);
+        if (p === "speech") {
+          heardSpeech = true;
+          bumpHoldDeadline();
+        }
+      },
+      onFinal: (t) => {
+        hold.listening = false;
+        store().setPartial("");
+        if (!hold.active) return;
+        clientTrace.sttFinal(voiceCaps.sttName, !!t);
+        if (t) return holdInput(t);
+        if (Date.now() >= hold.deadline) return holdTimeout();
+        holdListen();
+      },
+      onError: (e) => {
+        hold.listening = false;
+        clientTrace.sttError(voiceCaps.sttName, e);
+        if (hold.active) setTimeout(holdListen, 1000); // the 90 s timeout still bounds this
+      },
+    },
+    { ...HOLD_LISTEN, maxSilenceStartMs: left },
+  );
+}
+
+/** A line heard (or typed) while holding: a reflex, else one more held segment. */
+function holdInput(t: string) {
+  const r = parseReflex(t, reflexCtx());
+  if (r) return applyReflex(r);
+  addSegment(t);
+  bumpHoldDeadline();
+  holdListen();
+}
+
+/** Leave hold mode's own state (not the paused reply, the media or the mic). */
+function clearHold() {
+  hold.active = false;
+  hold.segments = [];
+  hold.listening = false;
+  clearTimeout(hold.timer);
+  store().setHeld(null);
+  store().setPartial("");
+}
+
+/** Hold over: unpause only what the hold itself paused. */
+function releaseHeldMedia() {
+  const m = hold.media;
+  hold.media = null;
+  void m?.then(releaseMedia);
+}
+
+/**
+ * Resume ("keep going", the HUD's Resume button). Nothing held → Tony (or the agent) restarts
+ * the interrupted sentence and the music comes back. Something held → sent as one turn.
+ */
+export function resumeHold() {
+  if (!hold.active) return;
+  if (hold.segments.length) return submitHold("");
+  releaseHeldMedia();
+  clearHold();
+  stt?.abort();
+  tts.resume?.();
+  if (sayDepth > 0) {
+    store().setState("speaking");
+    startBargeIn();
+  } else if (activeStreams.size > 0) store().setState("thinking"); // speaks when the answer lands
+  else {
+    store().setState("idle");
+    rearmWake();
+  }
+}
+
+/** "Go ahead" / "that's it": drop the paused reply and send everything held as ONE new turn
+ * (the thread already has the original request). The superseded reply's server stream is
+ * dropped too — it would otherwise hold the model slot ahead of the new turn. */
+function submitHold(rest: string) {
+  if (rest) addSegment(rest);
+  const text = hold.segments.join(" ").trim();
+  cancelStreams();
+  supersedeTurn();
+  releaseHeldMedia();
+  clearHold();
+  stt?.abort();
+  if (!text) {
+    store().setState("idle");
+    return rearmWake();
+  }
+  void handleInput(text, { channel: "voice" });
+}
+
+/** 90 s without speech: drop the paused audio quietly, keep the turns on screen, go idle. */
+function holdTimeout() {
+  if (!hold.active) return;
+  const lost = hold.segments.join(" ").trim();
+  supersedeTurn();
+  releaseHeldMedia();
+  clearHold();
+  stt?.abort();
+  if (lost) store().pushTurn({ who: "system", text: `Hold timed out (not sent): ${lost}`, tone: "warn" });
+  store().setState("idle");
+  rearmWake();
+}
+
+/** Esc / mic button while holding (`stopVoice` does the rest). */
+function endHold() {
+  releaseHeldMedia();
+  clearHold();
+}
+
+/** Announcer handoff intro, Tony's voice: "Booking Desk, you're up." / "Booking Desk, then Librarian." */
+function introLine(roles: string[]): string {
+  const names = roles.map((r) => roleLabel(r as AgentRole));
+  return names.length === 1 ? `${names[0]}, you're up.` : `${names.join(", then ")}.`;
+}
+
+/** `os-agent-reply` (agents.rs): a delegated agent's answer the moment it lands. Listened to
+ * here rather than through `onNativeEvent`'s shared event-name list. */
+async function onAgentReply(h: (e: { streamId: string; agent: string; text: string }) => void): Promise<() => void> {
+  if (!isTauri()) return () => undefined;
+  const { listen } = await import("@tauri-apps/api/event");
+  return listen<{ streamId: string; agent: string; text: string }>("os-agent-reply", (e) => h(e.payload));
+}
+
+if (isTauri()) void detectRoute();

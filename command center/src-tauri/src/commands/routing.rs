@@ -83,6 +83,57 @@ pub fn normalize(text: &str) -> String {
         .join(" ")
 }
 
+/// Leading interjections a spoken request may open with ("aye tony, …", "yo jarvis …").
+/// An explicit list only: guessing "one unknown word before the name" would turn
+/// "play tony bennett" into "bennett". No bare "a" / "i" (Whisper's "aye"): real words.
+const INTERJECTIONS: [&str; 15] = ["hey", "hi", "aye", "ay", "ayy", "ayo", "yo", "oi", "ok", "okay", "alright", "so", "um", "uh", "yeah"];
+const POLITE_LEADS: [&str; 8] = ["please", "can you", "could you", "would you", "will you", "go ahead and", "i want you to", "i need you to"];
+
+/// `s` starts with the word(s) `lead` (case-insensitive) followed by a space,
+/// `, : ; ! .` or the end → the rest, with separators trimmed. (Not `-`: "so-called".)
+fn strip_lead<'a>(s: &'a str, lead: &str) -> Option<&'a str> {
+    let head = s.get(..lead.len())?;
+    if !head.eq_ignore_ascii_case(lead) {
+        return None;
+    }
+    let rest = &s[lead.len()..];
+    if !(rest.is_empty() || rest.starts_with([' ', ',', ':', ';', '!', '.'])) {
+        return None;
+    }
+    Some(rest.trim_start_matches([' ', ',', '.', '!', ':', ';', '-']))
+}
+
+/// "Aye, Tony, can you play some Bilmuri?" → "play some Bilmuri": drops a leading
+/// interjection, the OS's name (`os_name`, "tony", "jarvis") and politeness leads,
+/// keeping the original casing. Only explicit leading words are removed, so
+/// "play tony bennett" stays intact.
+pub(crate) fn strip_address(text: &str, os_name: &str) -> String {
+    const EDGE: [char; 8] = [',', '.', '!', '?', ':', ';', '-', ' '];
+    let name = os_name.trim().to_ascii_lowercase();
+    let mut names: Vec<&str> = vec!["tony", "jarvis"];
+    if !name.is_empty() && !names.contains(&name.as_str()) {
+        names.insert(0, &name);
+    }
+    let mut s = text.trim().trim_matches(EDGE);
+    for _ in 0..4 {
+        let before = s;
+        if let Some(r) = INTERJECTIONS.iter().find_map(|w| strip_lead(s, w)) {
+            s = r;
+        }
+        if let Some(r) = names.iter().find_map(|w| strip_lead(s, w)) {
+            s = r;
+        }
+        if let Some(r) = POLITE_LEADS.iter().find_map(|w| strip_lead(s, w)) {
+            s = r;
+        }
+        s = s.trim_matches(EDGE);
+        if s == before {
+            break;
+        }
+    }
+    s.to_string()
+}
+
 fn tokenize(s: &str) -> Vec<&str> {
     s.split(' ').filter(|w| !w.is_empty()).collect()
 }
@@ -296,6 +347,27 @@ mod tests {
         assert_eq!(normalize("what sapp"), "whatsapp");
         assert_eq!(normalize("last five messages"), "last 5 messages");
         assert_eq!(normalize("B&Co"), "b&co");
+    }
+
+    #[test]
+    fn strip_address_drops_interjection_name_and_politeness() {
+        assert_eq!(strip_address("aye tony can you play some bilmuri", "Tony"), "play some bilmuri");
+        assert_eq!(strip_address("Aye, Tony, play Bilmuri on Spotify.", "Tony"), "play Bilmuri on Spotify");
+        assert_eq!(strip_address("ayy tony pause the music", "Tony"), "pause the music");
+        assert_eq!(strip_address("yo jarvis what's playing?", "Tony"), "what's playing");
+        assert_eq!(strip_address("Hey, Friday, please could you skip this", "Friday"), "skip this");
+        assert_eq!(strip_address("ok so um play jazz", "Tony"), "play jazz");
+        assert_eq!(strip_address("oi Tony: I need you to pause", "Tony"), "pause");
+        // The name as the object / an artist stays.
+        assert_eq!(strip_address("play tony bennett", "Tony"), "play tony bennett");
+        assert_eq!(strip_address("play something by tony", "Tony"), "play something by tony");
+        // Interjections are whole words only.
+        assert_eq!(strip_address("hiking trails near me", "Tony"), "hiking trails near me");
+        assert_eq!(strip_address("sometimes I wonder", "Tony"), "sometimes I wonder");
+        assert_eq!(strip_address("  ", "Tony"), "");
+        assert_eq!(strip_address("Tony?", "Tony"), "");
+        // Non-ASCII text never panics on a char boundary.
+        assert_eq!(strip_address("éé hey", "Tony"), "éé hey");
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandText, hasOnVerb, isOsControlPhrase, parseOsIntent, playTarget, resolveModel, type OsIntent } from "./os-intent-parse";
+import { commandText, hasOnVerb, isOsControlPhrase, parseDevTask, parseOsIntent, resolveModel, type OsIntent } from "./os-intent-parse";
 
 const parse = (t: string, cueActive = true) => parseOsIntent(t, { osName: "Tony", cueActive, cuePlaying: cueActive });
 
@@ -31,10 +31,10 @@ describe("parseOsIntent — gabagool", () => {
   );
 
   it.each(["kill the music", "stop the music", "pause the song", "turn the music off"])(
-    "\"%s\" stops an active cue, otherwise pauses Spotify",
+    "\"%s\" stops an active cue, otherwise is left to Spotify's Rust grammar",
     (text) => {
       expect(parse(text, true)).toEqual({ kind: "gabagool-off", explicit: false });
-      expect(parse(text, false)).toEqual({ kind: "media", action: "pause" });
+      expect(parse(text, false)).toBeNull();
     },
   );
 
@@ -89,9 +89,9 @@ describe("parseOsIntent — cue volume", () => {
     ["turn it down a notch", -1],
     ["bring it down", -1],
     ["softer please", -1],
-  ])("bare %s → the playing cue's theme, else Spotify ±15 per step", (text, steps) => {
+  ])("bare %s → the playing cue's theme, else null (Spotify's, parsed in Rust)", (text, steps) => {
     expect(parseOsIntent(text, opts(true))).toEqual({ kind: "cue-volume", steps, explicit: false });
-    expect(parseOsIntent(text, opts(false))).toEqual({ kind: "media", action: "volume", delta: 15 * steps });
+    expect(parseOsIntent(text, opts(false))).toBeNull();
   });
 
   it.each(["lower the price", "increase my budget", "turn the lights down", "raise a ticket"])("%s is not a volume command", (text) => {
@@ -99,64 +99,59 @@ describe("parseOsIntent — cue volume", () => {
     expect(parseOsIntent(text, opts(false))).toBeNull();
   });
 
-  it("naming Spotify wins over a playing cue", () => {
-    expect(parseOsIntent("turn spotify up", opts(true))).toEqual({ kind: "media", action: "volume", delta: 15 });
+  it("naming Spotify wins over a playing cue (left to Rust, never cue-volume)", () => {
+    expect(parseOsIntent("turn spotify up", opts(true))).toBeNull();
   });
 });
 
-describe("parseOsIntent — Spotify media", () => {
-  const media = (text: string, cuePlaying = false) => parseOsIntent(text, { osName: "Tony", cueActive: cuePlaying, cuePlaying });
+describe("parseOsIntent — Spotify lines are Rust's", () => {
+  const p = (text: string, cueActive = false, cuePlaying = false) => parseOsIntent(text, { osName: "Tony", cueActive, cuePlaying });
 
-  it.each<[string, OsIntent]>([
-    ["play bohemian rhapsody on spotify", { kind: "media", action: "play", query: "bohemian rhapsody", searchKind: "track" }],
-    ["play bohemian rhapsody by queen", { kind: "media", action: "play", query: "bohemian rhapsody queen", searchKind: "track" }],
-    ["can you play some jazz", { kind: "media", action: "play", query: "jazz", searchKind: "playlist" }],
-    ["play songs by Radiohead", { kind: "media", action: "play", query: "radiohead", searchKind: "artist" }],
-    ["play the album OK Computer", { kind: "media", action: "play", query: "ok computer", searchKind: "album" }],
-    ["play my chill playlist", { kind: "media", action: "play", query: "chill", searchKind: "playlist" }],
-    ["play music", { kind: "media", action: "resume" }],
-    ["pause the music", { kind: "media", action: "pause" }],
-    ["pause spotify", { kind: "media", action: "pause" }],
-    ["pause", { kind: "media", action: "pause" }],
-    ["resume", { kind: "media", action: "resume" }],
-    ["resume the music", { kind: "media", action: "resume" }],
-    ["skip this song", { kind: "media", action: "next" }],
-    ["next track", { kind: "media", action: "next" }],
-    ["play the next song", { kind: "media", action: "next" }],
-    ["previous track", { kind: "media", action: "previous" }],
-    ["go back a song", { kind: "media", action: "previous" }],
-    ["what's playing", { kind: "media", action: "now" }],
-    ["what song is this", { kind: "media", action: "now" }],
-    ["spotify volume 40", { kind: "media", action: "volume", value: 40 }],
-    ["set spotify to 30%", { kind: "media", action: "volume", value: 30 }],
-    ["set the volume to fifty", { kind: "media", action: "volume", value: 50 }],
-    ["turn the volume up to 70", { kind: "media", action: "volume", value: 70 }],
-  ])("%s", (text, expected) => {
-    expect(media(text)).toEqual(expected);
+  it.each([
+    "play bilmuri",
+    "play bohemian rhapsody on spotify",
+    "can you play some jazz",
+    "pause the music",
+    "pause spotify",
+    "pause",
+    "resume",
+    "skip this song",
+    "next track",
+    "go back a song",
+    "turn it up",
+    "louder",
+    "what's playing",
+    "what song is this",
+    "spotify volume 40",
+    "set the volume to fifty",
+    "aye tony can you play some bilmuri",
+    "Aye, Tony, play Bilmuri on Spotify.",
+  ])("returns null for Spotify lines so Rust parses them: %s", (text) => {
+    expect(p(text)).toBeNull();
   });
 
-  it.each(["play devil's advocate", "play a game with me", "play it again", "play the latest video on youtube", "play along with this idea for a second", "next", "what's on", "continue"])(
-    "%s is not a Spotify command",
-    (text) => {
-      expect(media(text)).toBeNull();
-    },
-  );
-
-  it("a bare 'play …' over 8 words is left to the planner; 'on spotify' isn't", () => {
-    expect(media("play the song that was on the radio this morning in the car")).toBeNull();
-    expect(media("play the song that goes la la la on spotify")).toMatchObject({ kind: "media", action: "play" });
+  it("keeps cue precedence for bare music words", () => {
+    // A playing cue owns relative volume and stops.
+    expect(p("louder", true, true)).toEqual({ kind: "cue-volume", steps: 1, explicit: false });
+    expect(p("pause", true, true)).toEqual({ kind: "gabagool-off", explicit: false });
+    // A cue fired recently (active) but not playing: a bare "stop" still ends it…
+    expect(p("stop", true, false)).toEqual({ kind: "gabagool-off", explicit: false });
+    // …but music-naming / pause stops are Spotify's.
+    expect(p("pause the music", true, false)).toBeNull();
+    // Naming Spotify always leaves the line to Spotify, cue or not.
+    expect(p("pause spotify", true, true)).toBeNull();
+    expect(p("spotify volume 30", true, true)).toBeNull();
   });
 
-  it("precedence: a playing cue owns bare 'volume 30' and stops; Spotify keeps explicit commands", () => {
-    expect(media("set the volume to 30", true)).toBeNull();
-    expect(media("spotify volume 30", true)).toEqual({ kind: "media", action: "volume", value: 30 });
-    expect(media("pause", true)).toEqual({ kind: "gabagool-off", explicit: false });
-    expect(media("pause spotify", true)).toEqual({ kind: "media", action: "pause" });
+  it("a line naming Gabagool never becomes a Spotify line", () => {
+    expect(p("play gabagool")).toEqual({ kind: "gabagool-on" });
+    expect(p("play the gabagool theme on spotify")).toEqual({ kind: "gabagool-on" });
   });
 
-  it("a line naming Gabagool never becomes a Spotify search", () => {
-    expect(media("play gabagool")).toEqual({ kind: "gabagool-on" });
-    expect(media("play the gabagool theme on spotify")).toEqual({ kind: "gabagool-on" });
+  it("strips 'aye' / 'ayy' / 'yo' + the wake name, and keeps credits", () => {
+    expect(commandText("oi Tony, yeah, play jazz")).toBe("play jazz");
+    expect(commandText("play something by tony")).toBe("play something by tony");
+    expect(commandText("ayesha said hi")).toBe("ayesha said hi");
   });
 });
 
@@ -166,14 +161,6 @@ describe("hasOnVerb", () => {
     expect(hasOnVerb("play gabagool")).toBe(true);
     expect(hasOnVerb("make the gabagool music louder")).toBe(false);
     expect(hasOnVerb("gabagool is great")).toBe(false);
-  });
-});
-
-describe("playTarget", () => {
-  it("drops 'by' from track and album queries", () => {
-    expect(playTarget("yesterday by the beatles")).toEqual({ query: "yesterday the beatles", searchKind: "track" });
-    expect(playTarget("the song called creep")).toEqual({ query: "creep", searchKind: "track" });
-    expect(playTarget("abbey road album")).toEqual({ query: "abbey road", searchKind: "album" });
   });
 });
 
@@ -237,10 +224,11 @@ describe("commandText / isOsControlPhrase", () => {
     expect(isOsControlPhrase("what's the weather", "Tony")).toBe(false);
   });
 
-  it("Spotify controls are OS-control phrases (never a mutating gateway plan)", () => {
-    expect(isOsControlPhrase("set the volume to 30", "Tony")).toBe(true);
-    expect(isOsControlPhrase("pause music", "Tony")).toBe(true);
-    expect(isOsControlPhrase("turn it up", "Tony")).toBe(true);
+  it("Spotify controls are no longer OS-control phrases (plan.ts isPlayback keeps them non-mutating)", () => {
+    expect(isOsControlPhrase("set the volume to 30", "Tony")).toBe(false);
+    expect(isOsControlPhrase("play bilmuri", "Tony")).toBe(false);
+    // Bare stops still are (a cue may own them).
+    expect(isOsControlPhrase("stop it", "Tony")).toBe(true);
   });
 });
 
@@ -260,9 +248,9 @@ describe("resolveModel", () => {
 describe("cue vs Spotify precedence after review", () => {
   const p = (t: string, cueActive: boolean, cuePlaying: boolean) => parseOsIntent(t, { osName: "Tony", cueActive, cuePlaying });
 
-  it("music-naming and pause/mute stops go to Spotify once the theme has stopped", () => {
+  it("music-naming and pause/mute stops go to Spotify (null here) once the theme has stopped", () => {
     for (const t of ["pause the music", "pause music", "pause", "stop the music", "turn off the music"]) {
-      expect(p(t, true, false)).toMatchObject({ kind: "media", action: "pause" });
+      expect(p(t, true, false)).toBeNull();
     }
   });
 
@@ -285,7 +273,7 @@ describe("cue vs Spotify precedence after review", () => {
 
   it("bare targeted volume commands still work", () => {
     expect(p("lower the theme", true, true)).toEqual({ kind: "cue-volume", steps: -1, explicit: true });
-    expect(p("turn the spotify volume up please", false, false)).toEqual({ kind: "media", action: "volume", delta: 15 });
+    expect(p("turn the spotify volume up please", false, false)).toBeNull(); // Spotify's: Rust parses it
     expect(p("I want to hear the gabagool music a little louder right now please Tony ok", true, true)).toMatchObject({ kind: "cue-volume", steps: 1 });
   });
 });
@@ -308,17 +296,16 @@ describe("round-3 phrase fixes", () => {
     expect(p("gabagool music down", true)).toEqual({ kind: "cue-volume", steps: -1, explicit: true });
   });
 
-  it("'my' and 'stop playing' music stops pause Spotify (or stop a playing theme)", () => {
+  it("'my' and 'stop playing' music stops are Spotify's (null here) or stop a playing theme", () => {
     for (const t of ["Pause my music.", "Turn off my music.", "Stop playing music.", "Turn off Spotify."]) {
-      expect(p(t)).toMatchObject({ kind: "media", action: "pause" });
+      expect(p(t)).toBeNull();
     }
     expect(p("Pause my music.", true)).toEqual({ kind: "gabagool-off", explicit: false });
   });
 
   it("a trailing ', Tony.' doesn't defeat a command", () => {
     expect(p("Turn it up, Tony.", true)).toEqual({ kind: "cue-volume", steps: 1, explicit: false });
-    expect(p("Pause the music, Tony.")).toMatchObject({ kind: "media", action: "pause" });
-    expect(p("Play Daft Punk on Spotify, Tony.")).toMatchObject({ kind: "media", action: "play", query: "daft punk" });
+    expect(p("Pause the music, Tony.", true)).toEqual({ kind: "gabagool-off", explicit: false });
   });
 
   it("but 'Tony' as the object of a switch is kept", () => {
@@ -332,9 +319,81 @@ describe("round-4: the name as an object is never stripped", () => {
   it.each(["Show Tony.", "Open up Tony.", "open tony", "take me to tony"])("%s switches to Tony's tab", (t) =>
     expect(p(t)).toMatchObject({ kind: "workspace", thread: "general" }),
   );
-  it("play something by Tony keeps the credit", () => {
-    const r = p("play something by Tony on spotify");
-    expect(r).toMatchObject({ kind: "media", action: "play" });
-    expect(JSON.stringify(r)).toMatch(/tony/);
+  it("play something by Tony keeps the credit (and is Spotify's line, not ours)", () => {
+    expect(commandText("play something by Tony on spotify")).toMatch(/by tony on spotify$/);
+    expect(p("play something by Tony on spotify")).toBeNull();
+  });
+});
+
+describe("parseOsIntent — dev task queue (System Map)", () => {
+  it.each<[string, OsIntent]>([
+    ["log a dev note the router drops Spotify lines", { kind: "dev-task", taskKind: "note", title: "The router drops Spotify lines" }],
+    ["Hey Tony, log a dev note: Whisper takes 2s on short lines.", { kind: "dev-task", taskKind: "note", title: "Whisper takes 2s on short lines" }],
+    ["Tony add a dev note that the bus card is stale", { kind: "dev-task", taskKind: "note", title: "The bus card is stale" }],
+    ["can you make a developer note about the HUD flicker please", { kind: "dev-task", taskKind: "note", title: "The HUD flicker" }],
+    ["Dev note: TTS batching splits mid-word", { kind: "dev-task", taskKind: "note", title: "TTS batching splits mid-word" }],
+    ["queue a fix for the GitHub 401 on every turn", { kind: "dev-task", taskKind: "fix", title: "The GitHub 401 on every turn" }],
+    ["Okay, queue up a fix for Gmail auth", { kind: "dev-task", taskKind: "fix", title: "Gmail auth" }],
+    ["add to the dev queue: wire the blueprint toggle", { kind: "dev-task", taskKind: "task", title: "Wire the blueprint toggle" }],
+    ["add the Spotify reconnect button to the dev queue", { kind: "dev-task", taskKind: "task", title: "The Spotify reconnect button" }],
+    // Whisper's sentence punctuation after a pause.
+    ["Log a dev note. The mic stays open after Gabagool.", { kind: "dev-task", taskKind: "note", title: "The mic stays open after Gabagool" }],
+    ["Hey, Tony. Log a dev note. Whisper is slow.", { kind: "dev-task", taskKind: "note", title: "Whisper is slow" }],
+    ["Queue a fix. The HUD flickers.", { kind: "dev-task", taskKind: "fix", title: "The HUD flickers" }],
+    ["Log a dev note; the HUD flickers", { kind: "dev-task", taskKind: "note", title: "The HUD flickers" }],
+    ["Log a dev note... the HUD flickers", { kind: "dev-task", taskKind: "note", title: "The HUD flickers" }],
+    ["Log a dev-note: the HUD flickers", { kind: "dev-task", taskKind: "note", title: "The HUD flickers" }],
+  ])("%s", (text, expected) => {
+    expect(parse(text)).toEqual(expected);
+  });
+
+  it("keeps the user's casing and a long dictated note (past the 12-word gate)", () => {
+    const long = "log a dev note when I say stop during a Spotify track the cue duck stays on and Kokoro sounds muffled for the next three replies";
+    const r = parse(long);
+    expect(r).toMatchObject({ kind: "dev-task", taskKind: "note" });
+    expect(r && r.kind === "dev-task" && r.title).toMatch(/^When I say stop during a Spotify track/);
+  });
+
+  it.each([
+    "log a dev note",
+    "queue a fix",
+    "add to the dev queue",
+    "tell the coder to queue a fix for the router",
+    "what's in the dev queue",
+    "how many dev notes do I have",
+    "ask the librarian to log a dev note about memory",
+    "add milk to the shopping list",
+    "queue the next song",
+    "log my workout",
+    "note that the meeting moved",
+    "take a note: buy eggs",
+    "log a dev note.",
+    // Requests that mention a dev note but ask for something else.
+    "write a developer note in the README about the setup",
+    "create a dev note template for the coder",
+    "add a dev note section to the docs",
+    "make a dev note app",
+    "record a dev note about this conversation and email it to Sam",
+    // A pronoun alone has nothing to log.
+    "add this to the dev queue",
+    "add that to the dev queue.",
+    "add it to the dev queue",
+  ])("does not hijack \"%s\"", (text) => {
+    expect(parse(text)?.kind === "dev-task").toBe(false);
+  });
+
+  it("is an OS-control phrase, so the planner never treats it as a mutating plan", () => {
+    expect(isOsControlPhrase("queue a fix for the stale bus card")).toBe(true);
+  });
+
+  it("parseDevTask honours a custom OS name", () => {
+    expect(parseDevTask("Jeeves, log a dev note: rename me", "Jeeves")).toEqual({ taskKind: "note", title: "Rename me" });
+  });
+
+  it("parseDevTask accepts every interjection commandText does", () => {
+    expect(parseDevTask("Aye Tony, log a dev note: the HUD flickers")).toEqual({ taskKind: "note", title: "The HUD flickers" });
+    expect(parseDevTask("Hi Tony, queue a fix for the mic")?.taskKind).toBe("fix");
+    for (const lead of ["Ayo", "Oi", "Ayy", "Ay"]) expect(parseDevTask(`${lead} Tony, log a dev note: the HUD flickers`)?.title).toBe("The HUD flickers");
+    expect(parseDevTask("Yeah, log a dev note: the HUD flickers")?.title).toBe("The HUD flickers");
   });
 });

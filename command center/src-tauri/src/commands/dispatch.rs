@@ -76,6 +76,10 @@ pub struct Provider {
     /// TTS: folder for custom voices (mount it into Kokoro / XTTS — see HANDOFF.md).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voices_dir: Option<String>,
+    /// STT: Whisper vocabulary-biasing prompt, sent as the multipart `prompt` field.
+    /// `None` = the built-in default (`DEFAULT_STT_PROMPT`); `Some("")` = send none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stt_prompt: Option<String>,
     /// Added from Settings (removable there). Built-ins are not.
     #[serde(default)]
     pub custom: bool,
@@ -300,6 +304,7 @@ fn p(id: &str, label: &str, kind: Kind, base_url: &str, model: &str, needs_key: 
         language: None,
         models_dir: None,
         voices_dir: None,
+        stt_prompt: None,
         custom: false,
     }
 }
@@ -553,8 +558,12 @@ fn view(state: &DispatchState, cfg: Config) -> ProvidersView {
         providers: cfg
             .providers
             .into_iter()
-            .map(|p| {
+            .map(|mut p| {
                 let has_key = p.needs_key && secrets::get(state, &p.id).is_some();
+                // Settings shows the prompt actually in effect (the default until edited).
+                if p.kind == Kind::Stt && p.stt_prompt.is_none() {
+                    p.stt_prompt = Some(DEFAULT_STT_PROMPT.to_string());
+                }
                 ProviderInfo { provider: p, has_key }
             })
             .collect(),
@@ -580,7 +589,12 @@ pub struct ProviderPatch {
     engine: Option<String>,
     models_dir: Option<String>,
     voices_dir: Option<String>,
+    stt_prompt: Option<String>,
 }
+
+/// Whisper vocabulary bias (Phase 2 §1). Natural speech on purpose, not a comma list:
+/// Whisper treats the prompt as preceding transcript, so it biases spelling best this way.
+pub const DEFAULT_STT_PROMPT: &str = "Tony, Gabagool mode. Take it ease. Cut it. Whoa. Madone, aspetta. Prompter, Designer, Coder, Booking Desk, Librarian and Ops. Bilmuri, Erra. WhatsApp, Gmail, Spotify, Tauri, Kokoro, Serena, checkpoint.";
 
 /// Switch model / voice / URL etc. for one provider (Settings dropdowns).
 #[tauri::command]
@@ -611,6 +625,10 @@ pub fn providers_update(state: State<'_, DispatchState>, patch: ProviderPatch) -
         }
         if let Some(v) = patch.voices_dir {
             p.voices_dir = Some(short(v, 400)).filter(|s| !s.is_empty());
+        }
+        if let Some(v) = patch.stt_prompt {
+            // Kept as Some("") when cleared: an empty prompt means "send none", not "use the default".
+            p.stt_prompt = Some(short(v, 800));
         }
         Ok(())
     })?;
@@ -788,6 +806,9 @@ pub struct DispatchResult {
     pub(crate) latency_ms: u128,
     /// The prompt left this machine through the privacy diffuser.
     pub(crate) redacted: bool,
+    /// Tokens/s of a streamed reply (System Map trace only; never serialized).
+    #[serde(skip)]
+    pub(crate) tps: Option<f64>,
 }
 
 #[tauri::command]
@@ -826,6 +847,7 @@ pub(crate) async fn run_chat(
                 reason: "external engine".into(),
                 latency_ms: started.elapsed().as_millis(),
                 redacted,
+                tps: None,
             });
         }
     }
@@ -897,6 +919,7 @@ pub(crate) async fn run_chat(
                     reason,
                     latency_ms: started.elapsed().as_millis(),
                     redacted: diffuse && !redactor.replacements.is_empty(),
+                    tps: None,
                 });
             }
             Err(e) => errors.push(format!("{}: {e}", p.id)),
@@ -1332,6 +1355,8 @@ pub(crate) async fn run_chat_streamed(state: &DispatchState, os: &OsState, messa
     // to what this function returns — see `ThinkFilter`'s doc comment.
     let mut filter = ThinkFilter::new();
     let mut content = String::new();
+    // Generation rate for the System Map trace: content deltas between the first and last token.
+    let (mut deltas, mut usage_tokens, mut first_at, mut last_at) = (0u32, None::<u64>, None::<Instant>, Instant::now());
     while let Some(chunk) = stream.next().await {
         let Ok(chunk) = chunk else { break };
         buf.push_str(&String::from_utf8_lossy(&chunk));
@@ -1343,7 +1368,13 @@ pub(crate) async fn run_chat_streamed(state: &DispatchState, os: &OsState, messa
                 continue;
             }
             if let Ok(v) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(u) = v["usage"]["completion_tokens"].as_u64() {
+                    usage_tokens = Some(u);
+                }
                 if let Some(d) = v["choices"][0]["delta"]["content"].as_str().filter(|d| !d.is_empty()) {
+                    deltas = deltas.saturating_add(1);
+                    last_at = Instant::now();
+                    first_at.get_or_insert(last_at);
                     let shown = filter.feed(d);
                     if !shown.is_empty() {
                         content.push_str(&shown);
@@ -1358,7 +1389,8 @@ pub(crate) async fn run_chat_streamed(state: &DispatchState, os: &OsState, messa
         drop(_slot);
         return run_chat(state, os, messages, Priority::Interactive, None, max_secs).await;
     }
-    Ok(DispatchResult { provider_id: p.id.clone(), content: content.trim().to_string(), fell_back: false, reason: "chain · streamed".into(), latency_ms: started.elapsed().as_millis(), redacted: false })
+    let tps = first_at.and_then(|f| super::trace::tokens_per_sec(deltas, usage_tokens, last_at.duration_since(f).as_secs_f64() * 1000.0));
+    Ok(DispatchResult { provider_id: p.id.clone(), content: content.trim().to_string(), fell_back: false, reason: "chain · streamed".into(), latency_ms: started.elapsed().as_millis(), redacted: false, tps })
 }
 
 #[cfg(test)]

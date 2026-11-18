@@ -56,6 +56,9 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,svg,png,woff2,jpg,webp}"],
+        // The System Map's three.js chunk (~1 MB) is desktop-only (not in the phone nav, and
+        // the page never loads it below md): don't make every phone precache it.
+        globIgnores: ["**/HoloViewport-*.js"],
         maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
         // Never cache API / gateway traffic.
         navigateFallbackDenylist: [/^\/api\//],

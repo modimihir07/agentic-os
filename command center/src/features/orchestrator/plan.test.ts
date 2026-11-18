@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { heuristicPlan } from "./plan";
+import { heuristicPlan, stripWake } from "./plan";
 
 const desktop = () => vi.stubGlobal("window", { __TAURI_INTERNALS__: {} });
 afterEach(() => vi.unstubAllGlobals());
@@ -47,7 +47,41 @@ describe("heuristicPlan — music controls are never gateway actions", () => {
   it("still treats real actions as mutating", () => {
     expect(heuristicPlan("cancel my dinner with Sam", "booking").mutating).toBe(true);
     expect(heuristicPlan("set a meeting with Jo on Friday", "booking").mutating).toBe(true);
-    expect(heuristicPlan("add this song to my road trip playlist", "general").mutating).toBe(true);
+    expect(heuristicPlan("add a todo to Linear", "general").mutating).toBe(true);
+    expect(heuristicPlan("send this song to Sam", "general").mutating).toBe(true);
+  });
+
+  // Spotify library edits are Tony's: the Rust tool path gates them and raises the card (askCards).
+  it.each(["add this song to my late night playlist", "create a playlist called Road Trip", "like this song on spotify", "queue up some jazz on spotify", "shuffle my liked songs"])(
+    "%s is a Spotify line, not a gateway action",
+    (s) => {
+      const p = heuristicPlan(s, "general");
+      expect(p.mutating).toBe(false);
+      expect(p.target.kind).toBe("agent");
+    },
+  );
+});
+
+describe("stripWake — interjections before the name", () => {
+  it.each([
+    ["aye tony can you play some bilmuri", "can you play some bilmuri"],
+    ["Ayy, Tony, pause the music", "pause the music"],
+    ["ayo jarvis what's playing", "what's playing"],
+    ["hi tony, skip this", "skip this"],
+    ["Hey Tony: check my email", "check my email"],
+  ])("%s → %s", (input, out) => {
+    expect(stripWake(input)).toBe(out);
+  });
+
+  it("keeps the name when it isn't an address, and whole words only", () => {
+    expect(stripWake("play tony bennett")).toBe("play tony bennett");
+    expect(stripWake("ayesha called")).toBe("ayesha called");
+  });
+
+  it("'aye tony, play …' is a music control, never a gateway action", () => {
+    const p = heuristicPlan("aye tony can you play some bilmuri", "general");
+    expect(p.mutating).toBe(false);
+    expect(p.target.kind).toBe("agent");
   });
 });
 

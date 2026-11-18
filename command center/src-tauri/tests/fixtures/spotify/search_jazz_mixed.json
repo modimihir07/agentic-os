@@ -1,0 +1,19 @@
+{
+  "tracks": {"items": [
+    {"type": "track", "name": "Smooth Jazz Vibes", "uri": "spotify:track:0SmoothJazzVibesAbcdef", "duration_ms": 200000,
+     "artists": [{"name": "Late Lounge"}],
+     "album": {"name": "Lounge Hours", "uri": "spotify:album:0LoungeHoursAlbumAbcde", "release_date": "2020"}},
+    null
+  ]},
+  "artists": {"items": [
+    {"type": "artist", "name": "Jazz Spastiks", "uri": "spotify:artist:0JazzSpastiksArtistAbc"}
+  ]},
+  "albums": {"items": [
+    null,
+    {"type": "album", "name": "Kind of Blue", "uri": "spotify:album:1weenld61qoidwYuZ1GESA", "artists": [{"name": "Miles Davis"}]}
+  ]},
+  "playlists": {"items": [
+    null,
+    {"type": "playlist", "name": "Jazz Classics", "uri": "spotify:playlist:4JazzClassicsPlaylistA", "owner": {"id": "spotify"}}
+  ]}
+}

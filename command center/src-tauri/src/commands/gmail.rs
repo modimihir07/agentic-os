@@ -2,7 +2,8 @@
 //! AnythingLLM's Gmail agent uses: `POST https://script.google.com/macros/s/{id}/exec`
 //! with `{key, action, ...args}` → `{status, data}`.
 //!
-//! The deployment ID and key live only in the OS keychain (`gmail-script-id`,
+//! The deployment ID and key come from `GMAIL_SCRIPT_ID` + `GMAIL_SCRIPT_KEY` (environment
+//! or repo-root `.env`, both required), else the OS keychain pair (`gmail-script-id`,
 //! `gmail-script-key`); they never reach the webview, logs or error strings.
 //! A read-only n8n workflow (`gmail-recent` or `gmail-digest`) is the fallback
 //! for `gmail.recent` when no deployment is configured.
@@ -34,11 +35,33 @@ pub(crate) enum Source {
 /// then the keychain pair (Settings, or the AnythingLLM import). `source()` falls back to
 /// an n8n workflow after that. Read on every call, so a change takes effect without a restart.
 fn creds(state: &DispatchState) -> Option<(String, String)> {
+    env_pair(state).or_else(|| Some((os_core::os_secret(SECRET_ID)?, os_core::os_secret(SECRET_KEY)?)))
+}
+
+/// `GMAIL_SCRIPT_ID` + `GMAIL_SCRIPT_KEY` from the environment / repo-root `.env`, only
+/// when BOTH are set (half a pair is never mixed with a keychain half). The Settings badges
+/// (`envfile::os_secret_sources`) apply the same rule.
+pub(crate) fn env_pair(state: &DispatchState) -> Option<(String, String)> {
     let env = |k| super::envfile::env_or_file(state, k);
-    match (env("GMAIL_SCRIPT_ID"), env("GMAIL_SCRIPT_KEY")) {
-        (Some(id), Some(key)) => Some((id, key)),
-        _ => Some((os_core::os_secret(SECRET_ID)?, os_core::os_secret(SECRET_KEY)?)),
+    Some((env("GMAIL_SCRIPT_ID")?, env("GMAIL_SCRIPT_KEY")?))
+}
+
+/// Where the Gmail backend comes from, for the System Map: `"env"` (.env / environment),
+/// `"keychain"`, `"n8n:<workflow>"` or `"none"`. Names only, never the values.
+pub(crate) fn source_label(state: &DispatchState) -> String {
+    if env_pair(state).is_some() {
+        return "env".into();
     }
+    match source(state) {
+        Source::Script => "keychain".into(),
+        Source::N8n(wf) => format!("n8n:{wf}"),
+        Source::None => "none".into(),
+    }
+}
+
+/// AnythingLLM Desktop's SQLite database (`%APPDATA%nythingllm-desktop\storagenythingllm.db`).
+pub(crate) fn anythingllm_db_path() -> Option<PathBuf> {
+    Some(PathBuf::from(std::env::var_os("APPDATA")?).join("anythingllm-desktop").join("storage").join("anythingllm.db"))
 }
 
 pub(crate) fn source(state: &DispatchState) -> Source {
@@ -296,9 +319,14 @@ pub struct ImportResult {
 
 /// Copy AnythingLLM Desktop's Gmail agent deployment straight into the keychain.
 #[tauri::command]
-pub async fn gmail_import_anythingllm() -> Result<ImportResult, String> {
+pub async fn gmail_import_anythingllm(state: State<'_, DispatchState>) -> Result<ImportResult, String> {
     let r = tauri::async_runtime::spawn_blocking(import_from_anythingllm).await.map_err(|e| e.to_string())?;
+    let shadowed = env_pair(&state).is_some();
     Ok(match r {
+        Ok(()) if shadowed => ImportResult {
+            imported: true,
+            detail: "Imported the Gmail Apps Script deployment from AnythingLLM into the keychain — but GMAIL_SCRIPT_ID and GMAIL_SCRIPT_KEY are set in the environment / repo .env, and those are used first.".into(),
+        },
         Ok(()) => ImportResult { imported: true, detail: "Imported the Gmail Apps Script deployment from AnythingLLM.".into() },
         Err(detail) => ImportResult { imported: false, detail },
     })
@@ -306,8 +334,7 @@ pub async fn gmail_import_anythingllm() -> Result<ImportResult, String> {
 
 fn import_from_anythingllm() -> Result<(), String> {
     use rusqlite::{OpenFlags, OptionalExtension};
-    let appdata = std::env::var_os("APPDATA").ok_or("%APPDATA% is not set")?;
-    let path = PathBuf::from(appdata).join("anythingllm-desktop").join("storage").join("anythingllm.db");
+    let path = anythingllm_db_path().ok_or("%APPDATA% is not set")?;
     if !path.is_file() {
         return Err("AnythingLLM Desktop's database wasn't found — is AnythingLLM installed?".into());
     }

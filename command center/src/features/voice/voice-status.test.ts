@@ -15,6 +15,7 @@ describe("toggleAction", () => {
   it("stops speech while speaking", () => {
     expect(toggleAction("speaking", false)).toBe("stop-voice");
     expect(toggleAction("speaking", true)).toBe("stop-voice");
+    expect(toggleAction("holding", true)).toBe("stop-voice");
   });
 
   it("starts listening from rest", () => {
@@ -26,6 +27,8 @@ describe("headerSubtitle", () => {
   it("swaps a trailing ACTIVE for the live status", () => {
     expect(headerSubtitle("TONY ACTIVE", true)).toEqual({ text: "TONY ACTIVE", chip: false });
     expect(headerSubtitle("TONY ACTIVE", false)).toEqual({ text: "TONY STANDBY", chip: false });
+    // Phase 2 hold mode reads HOLDING in the same slot.
+    expect(headerSubtitle("TONY ACTIVE", true, true)).toEqual({ text: "TONY HOLDING", chip: false });
   });
 
   it("matches ACTIVE case-insensitively and ignores trailing spaces", () => {

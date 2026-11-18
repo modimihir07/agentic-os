@@ -75,11 +75,14 @@ const CHAINED = /\b(and|then|also|after that|plus)\b|[,;]/i;
 /** Nouns that are also verbs ("email Sam…") only count in command position. */
 const COMMAND_VERB = /(^|\b(and|then|also)\s+)(e-?mail|text|message|dm|ping|call)\b/i;
 
-/** Playback controls ("change the song", "start my workout playlist") are Spotify's job (intent
- * layer / Tony's spotify_plan), never a gateway agent's — unless they edit the library. */
-const PLAYBACK = /\b(play(ing)?|pause|resume|skip|next|previous|restart|start|change|switch|put on|stop|turn)\b.*\b(spotify|music|songs?|tracks?|playlists?|albums?|tunes?)\b/i;
+/** Playback controls ("change the song", "start my workout playlist", "set the volume to 30") are
+ * Spotify's job (Rust grammar via `spotify_parse` / Tony's spotify_plan), never a gateway agent's.
+ * Spotify library edits ("add this song to my Late Night playlist") are Tony's too: the Rust tool
+ * path gates them (MCP tier + destructive gate) and raises the card itself (`askCards`). Other
+ * library-ish verbs without a Spotify/playlist word ("send this song to Sam") stay mutating. */
+const PLAYBACK = /\b(play(ing)?|pause|resume|skip|next|previous|restart|start|change|switch|put on|stop|turn|set|queue|shuffle|repeat|like|add|save|create|make)\b.*\b(spotify|music|songs?|tracks?|playlists?|albums?|tunes?|volume)\b/i;
 const LIBRARY_EDIT = /\b(add|save|like|remove|delete|create|follow|unfollow|share|send|post|rename)\b/i;
-const isPlayback = (s: string) => PLAYBACK.test(s) && !LIBRARY_EDIT.test(s);
+const isPlayback = (s: string) => PLAYBACK.test(s) && (!LIBRARY_EDIT.test(s) || /\b(spotify|playlists?|liked songs)\b/i.test(s));
 
 function looksMutating(utterance: string): boolean {
   const s = utterance.trim().replace(filler(), "");
@@ -95,11 +98,11 @@ let fillerCache: { key: string; re: RegExp } | null = null;
 /** "hey tony, please …" → "…" (the OS name follows Settings). */
 const filler = () => {
   const key = NAME_ALT();
-  if (fillerCache?.key !== key) fillerCache = { key, re: new RegExp(`^(hey|ok(ay)?|yo)?[\\s,]*(${key})?[\\s,]*(please|can you|could you|would you|i need you to|i want you to|go ahead and)?[\\s,]*`, "i") };
+  if (fillerCache?.key !== key) fillerCache = { key, re: new RegExp(`^((hey|hi|ok(ay)?|yo|aye|ay|ayy|ayo|oi)\\b)?[\\s,]*(${key})?[\\s,]*(please|can you|could you|would you|i need you to|i want you to|go ahead and)?[\\s,]*`, "i") };
   return fillerCache.re;
 };
 /** Drop a leading wake phrase ("Hey Tony,") but keep the request intact. */
-export const stripWake = (s: string) => s.replace(new RegExp(`^(hey|ok(ay)?|yo)?[\\s,]*(${NAME_ALT()})\\b[\\s,:.!-]*`, "i"), "").trim() || s;
+export const stripWake = (s: string) => s.replace(new RegExp(`^((hey|hi|ok(ay)?|yo|aye|ay|ayy|ayo|oi)\\b)?[\\s,]*(${NAME_ALT()})\\b[\\s,:.!-]*`, "i"), "").trim() || s;
 
 /** "cancel my dinner with Sam" → "cancel your dinner with Sam" (for the read-back). */
 export function toSecondPerson(s: string): string {

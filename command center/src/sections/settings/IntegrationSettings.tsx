@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Container, Copy, Download, FlaskConical, Loader2, Mail, Music2, Plus, Radar, ShieldCheck, Trash2, Unplug } from "lucide-react";
 import { Card, Field, Input, Select } from "@/components/ui";
-import { cmd, isTauri, type N8nDiscovery, type NativeCommands, type SpotifyStatus, type WorkflowInfo } from "@/lib/platform";
+import { cmd, isTauri, onNativeEvent, type N8nDiscovery, type NativeCommands, type SpotifyReauthEvent, type SpotifyStatus, type WorkflowInfo } from "@/lib/platform";
 import { cc, type CcConfig } from "@/lib/cc-api";
 import { syncCalendar } from "@/features/reminders/scheduler";
 import { setMcpEnabled } from "@/features/integrations/mcp-enable";
 import { useSpotifyAuthRefresh, useSpotifyConnect } from "@/features/integrations/spotify-connect";
+import { cardButton, expiryHint, missingScopesLine, spotifyFix, spotifyFixText } from "@/widgets/spotify/spotify-ui";
 import { notifyIntegrationsChanged } from "@/features/integrations/changed";
 import { useProviders } from "./use-providers";
 import { SecretRow, Toggle, useOsCfg } from "./os-ui";
@@ -207,8 +208,8 @@ const GMAIL_SOURCE: Record<GmailStatus["source"], string> = {
 
 /**
  * Gmail through the same Google Apps Script deployment AnythingLLM's Gmail agent
- * uses. The deployment ID and key live in the OS keychain; they never come back
- * to the webview (the import copies them inside Rust).
+ * uses. The deployment ID and key come from GMAIL_SCRIPT_ID/KEY (env or repo .env) or the
+ * OS keychain pair; they never come back to the webview (the import copies them inside Rust).
  */
 export function GmailCard() {
   const { cfg } = useOsCfg();
@@ -265,7 +266,7 @@ export function GmailCard() {
       <div key={rev}>
         <SecretRow name="gmail-script-id" label="Apps Script deployment ID" placeholder="AKfycb…" onChange={refresh} />
         <SecretRow name="gmail-script-key" label="Apps Script API key" onChange={refresh} />
-        <p className="mt-1 text-xs text-ink-3">GMAIL_SCRIPT_ID and GMAIL_SCRIPT_KEY in the repo-root .env take priority; this keychain pair (or Import from AnythingLLM) is the fallback.</p>
+        <p className="mt-1 text-xs text-ink-3">Used as a pair: GMAIL_SCRIPT_ID and GMAIL_SCRIPT_KEY (environment or repo-root .env, both set) take priority; otherwise both keychain entries (pasted here, or Import from AnythingLLM). Half of each is never mixed.</p>
       </div>
       {out && <pre className={`well mt-2 max-h-40 overflow-auto whitespace-pre-wrap rounded-[8px] p-2 text-[11px] ${out.ok ? "text-ink-2" : "text-alert"}`}>{out.text}</pre>}
     </Card>
@@ -293,7 +294,7 @@ export function BraveCard() {
   return (
     <Card title="Brave Search" hint="Web search for Tony and the Coder / Librarian. Get a key at api-dashboard.search.brave.com (the free plan is enough).">
       {server && <Toggle on={server.enabled} onChange={(v) => void setMcpEnabled("brave-search", v)} label="Brave Search tools on" />}
-      <SecretRow name="brave" label="Brave Search API key" hint="BRAVE_API_KEY in the repo-root .env takes priority; this keychain value is the fallback." />
+      <SecretRow name="brave" label="Brave Search API key" hint="BRAVE_API_KEY (environment or repo-root .env) takes priority; a key pasted here is saved in the OS keychain as the fallback." />
       <button onClick={() => void test()} disabled={busy || !server?.enabled} className="pill-glass mt-1 !h-8 text-xs">
         {busy ? <Loader2 size={13} className="animate-spin" /> : <FlaskConical size={13} />} Test search
       </button>
@@ -317,10 +318,39 @@ export function SpotifyCard() {
   useEffect(refresh, [refresh]);
   useSpotifyAuthRefresh(refresh);
   const { state, connect, reset } = useSpotifyConnect(refresh);
+  // A consent page Rust opened by itself (`spotify-reauth`): same waiting / fallback-link UI as a
+  // manual Connect, until a sign-in reports back (`spotify-auth`) or Rust's 30-minute wait ends.
+  const [auto, setAuto] = useState<SpotifyReauthEvent | null>(null);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const offs: (() => void)[] = [];
+    let dead = false;
+    const keep = (u: () => void) => (dead ? u() : offs.push(u));
+    void onNativeEvent<SpotifyReauthEvent>("spotify-reauth", (e) => {
+      setCopied(false);
+      setAuto(e);
+      clearTimeout(timer);
+      timer = setTimeout(() => setAuto(null), 30 * 60_000);
+    }).then(keep);
+    void onNativeEvent("spotify-auth", () => setAuto(null)).then(keep);
+    return () => {
+      dead = true;
+      offs.forEach((u) => u());
+      clearTimeout(timer);
+    };
+  }, []);
   const waiting = state.phase === "waiting";
+  const autoWaiting = !waiting && auto !== null;
+  const signInUrl = waiting ? state.url : (auto?.url ?? null);
+  // Re-authenticate only for a dead sign-in; the owner-needs-Premium and allowlist blocks get a re-check.
+  const button = status ? cardButton(status) : { label: "Connect" as const, recheck: false };
+  const fix = status ? spotifyFix(status) : null;
+  const fixText = spotifyFixText(fix);
+  const scopesLine = status ? missingScopesLine(status) : null;
+  const expiry = status?.connected ? expiryHint(status) : null;
   const disconnect = () =>
     void cmd("spotify_disconnect")
-      .then(() => (reset(), refresh()))
+      .then(() => (reset(), setAuto(null), refresh()))
       .catch((e) => setErr(String(e)));
   const copy = (url: string) =>
     void navigator.clipboard
@@ -335,8 +365,8 @@ export function SpotifyCard() {
         <span className="text-ink-2">
           {!status ? "…" : !status.configured ? "Not configured" : status.connected ? <>Connected{status.account ? <> as <b className="text-ink">{status.account}</b></> : null}</> : "Not connected"}
         </span>
-        <button onClick={() => (setCopied(false), void connect())} disabled={waiting || !status?.configured} className="pill-primary ml-auto !h-8 text-xs">
-          {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {status?.connected ? (status.problem ? "Re-authenticate" : "Reconnect") : "Connect"}
+        <button onClick={() => (button.recheck ? refresh() : (setCopied(false), setAuto(null), void connect()))} disabled={waiting || !status?.configured} className="pill-primary ml-auto !h-8 text-xs">
+          {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {button.label}
         </button>
         {status?.connected && (
           <button onClick={disconnect} className="pill-glass !h-8 text-xs">
@@ -344,15 +374,16 @@ export function SpotifyCard() {
           </button>
         )}
       </div>
-      {waiting && (
+      {(waiting || autoWaiting) && (
         <p className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
-          <Loader2 size={12} className="animate-spin" /> Waiting for Spotify… finish signing in in your browser.
-          {state.url && (
+          <Loader2 size={12} className="animate-spin" />{" "}
+          {autoWaiting && auto?.silent ? "Renewing Spotify sign-in… the tab should close on its own." : "Waiting for Spotify… finish signing in in your browser."}
+          {signInUrl && (
             <>
-              <a href={state.url} target="_blank" rel="noreferrer" className="text-teal underline">
+              <a href={signInUrl} target="_blank" rel="noreferrer" className="text-teal underline">
                 Open the sign-in page
               </a>
-              <button onClick={() => copy(state.url!)} className="flex items-center gap-1 text-ink-3 hover:text-ink">
+              <button onClick={() => copy(signInUrl)} className="flex items-center gap-1 text-ink-3 hover:text-ink">
                 <Copy size={11} /> {copied ? "Copied" : "Copy link"}
               </button>
             </>
@@ -361,7 +392,10 @@ export function SpotifyCard() {
       )}
       {state.phase === "done" && <p className={`text-xs ${state.warning ? "text-amber-light" : "text-teal"}`}>{state.warning ?? `Spotify connected${state.account ? ` as ${state.account}` : ""} — its tools are on.`}</p>}
       {state.phase === "error" && <p className="text-xs text-alert">{state.error}</p>}
-      {status?.problem && state.phase !== "waiting" && <p className="text-xs text-alert">{status.problem}</p>}
+      {status?.problem && state.phase !== "waiting" && <p className={`text-xs ${fix ? "text-alert" : "text-amber-light"}`}>{status.problem}</p>}
+      {fixText && state.phase !== "waiting" && <p className="text-xs text-ink-2">{fixText}</p>}
+      {scopesLine && <p className="text-xs text-amber-light">{scopesLine}</p>}
+      {expiry && <p className="text-xs text-amber-light">{expiry}</p>}
       {err && <p className="text-xs text-alert">{err}</p>}
       <ul className="mt-2 space-y-1 text-xs text-ink-3">
         {status && !status.configured && (

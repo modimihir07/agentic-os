@@ -20,6 +20,7 @@ export type VoiceState =
   | "thinking" // planning, verifying or executing
   | "confirming" // a mutating plan is waiting for yes/no
   | "speaking"
+  | "holding" // Phase 2: "take it ease" — reply paused, collecting your thought
   | "error";
 
 export type Channel = "voice" | "text";
@@ -68,6 +69,9 @@ interface VoiceStore {
   activeThread: ThreadId;
   pending: PendingConfirmation | null;
   error: string | null;
+  /** Hold mode: what you've said since "take it ease" (live in the HUD); null when not holding. */
+  held: string[] | null;
+  setHeld: (h: string[] | null) => void;
   setState: (s: VoiceState) => void;
   setExpanded: (v: boolean) => void;
   setConsoleVisible: (v: boolean) => void;
@@ -110,7 +114,14 @@ export const useVoice = create<VoiceStore>()(
       activeThread: "auto",
       pending: null,
       error: null,
-      setState: (state) => set({ state, ...(state !== "error" ? { error: null } : {}) }),
+      held: null,
+      setHeld: (held) => set({ held }),
+      // While holding, the interrupted turn keeps running quietly; its state changes
+      // ("speaking", "thinking"…) must not knock HOLDING off the orb/HUD/header.
+      setState: (state) => {
+        if (get().held && state !== "holding") return;
+        set({ state, ...(state !== "error" ? { error: null } : {}) });
+      },
       setExpanded: (expanded) => set({ expanded }),
       setConsoleVisible: (consoleVisible) => set({ consoleVisible }),
       setPartial: (partial) => set({ partial }),
@@ -169,5 +180,6 @@ export const STATE_LABEL: Record<VoiceState, string> = {
   thinking: "Dispatching",
   confirming: "Awaiting confirmation",
   speaking: "Speaking",
+  holding: "Holding",
   error: "Fault",
 };

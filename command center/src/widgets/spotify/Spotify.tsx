@@ -5,7 +5,7 @@ import type { WidgetProps } from "@/core/widgets/types";
 import { cmd, isTauri, type SpotifyAction, type SpotifyItem, type SpotifyNowPlaying, type SpotifyStatus } from "@/lib/platform";
 import { spotifyErrorReply } from "@/features/os/media-reply";
 import { useSpotifyAuthRefresh, useSpotifyConnect } from "@/features/integrations/spotify-connect";
-import { POLL_MS, VOLUME_DEBOUNCE_MS, fmtTime, needsReconnect, progressAt, progressFraction, shownVolume, type QuickList } from "./spotify-ui";
+import { POLL_MS, VOLUME_DEBOUNCE_MS, fmtTime, needsReconnect, progressAt, progressFraction, shownVolume, spotifyFix, spotifyFixText, type QuickList } from "./spotify-ui";
 
 type Config = { quick: QuickList };
 
@@ -47,23 +47,25 @@ function SpotifyDesktop(props: WidgetProps<Config>) {
         <Empty>Spotify isn't set up yet — see Settings → Integrations.</Empty>
       </div>
     );
-  if (!status.connected) return <ConnectPanel onDone={refresh} />;
-  // A token Spotify refuses for good (revoked, expired, app owner needs Premium): show why and
-  // how to fix it instead of polling into errors. Transient problems (rate limit, outage,
-  // network) keep the Player, whose polling recovers on its own.
-  if (status.problem && needsReconnect(status.problem)) return <ConnectPanel onDone={refresh} problem={status.problem} />;
+  // `problemKind` (from Rust) decides: a dead sign-in → Re-authenticate; the app owner needs
+  // Premium → Check again; premium / transient problems (rate limit, outage, network) keep the
+  // Player, whose polling recovers on its own.
+  const fix = spotifyFix(status);
+  if (fix === "connect") return <ConnectPanel onDone={refresh} />;
+  // Allowlist / owner-Premium blocks: no sign-in helps, so only "Check again" (never a consent loop).
+  if (fix && status.problem)
+    return <ConnectPanel onDone={refresh} problem={status.problem} hint={spotifyFixText(fix)} recheckOnly={fix === "recheck" || fix === "allowlist"} />;
   return <Player {...props} onDisconnected={refresh} />;
 }
 
-function ConnectPanel({ onDone, problem }: { onDone: () => void; problem?: string }) {
+function ConnectPanel({ onDone, problem, hint, recheckOnly = false }: { onDone: () => void; problem?: string; hint?: string | null; recheckOnly?: boolean }) {
   const { state, connect } = useSpotifyConnect(onDone);
   const waiting = state.phase === "waiting";
-  // The app-owner-needs-Premium block can't be fixed by signing in again: offer a re-check.
-  const recheckOnly = !!problem && /won't help/i.test(problem);
   return (
     <div className="flex h-full flex-col">
       <WidgetHeader title="Spotify" />
-      <p className={`mb-3 text-sm ${problem ? "text-alert" : "text-ink-2"}`}>{problem ?? "Connect your Spotify account to see what's playing and control it from here."}</p>
+      <p className={`${hint ? "mb-1" : "mb-3"} text-sm ${problem ? "text-alert" : "text-ink-2"}`}>{problem ?? "Connect your Spotify account to see what's playing and control it from here."}</p>
+      {hint && <p className="mb-3 text-xs text-ink-2">{hint}</p>}
       <button onClick={() => void (recheckOnly ? onDone() : connect())} disabled={waiting} className="pill-primary !h-9 w-fit text-[13px]">
         {waiting ? <Loader2 size={13} className="animate-spin" /> : <Music2 size={13} />} {recheckOnly ? "Check again" : problem ? "Re-authenticate" : "Connect Spotify"}
       </button>

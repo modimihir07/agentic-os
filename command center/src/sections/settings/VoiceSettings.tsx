@@ -5,6 +5,7 @@ import { cmd, nativeRaw, type AgentVoice, type AgentVoicePatch, type VoicesView 
 import { roleLabel } from "@/features/dispatcher/roles";
 import { useSettings } from "@/stores/settings";
 import { audioContext } from "@/features/voice/engines";
+import { detectRoute, detectedRoute, detectedRouteLabel, effectiveRoute, onRouteChange } from "@/features/voice/audio-route";
 import { modelsFor, useProviders } from "./use-providers";
 import { ModelSelect } from "./ServicesSettings";
 
@@ -102,6 +103,22 @@ export function SttCard() {
           <Input defaultValue={stt.modelsDir ?? ""} placeholder="C:\\whisper\\models" onBlur={(e) => e.target.value !== (stt.modelsDir ?? "") && void patch({ id: stt.id, modelsDir: e.target.value })} className="font-mono !text-[12px]" spellCheck={false} />
         </Field>
       </div>
+      <Field label="Vocabulary prompt" className="mt-2">
+        {/* Keyed on the saved value so a reload from Rust refreshes the box. */}
+        <textarea
+          key={stt.sttPrompt ?? ""}
+          defaultValue={stt.sttPrompt ?? ""}
+          rows={3}
+          maxLength={800}
+          spellCheck={false}
+          placeholder="Empty = no prompt"
+          onBlur={(e) => e.target.value !== (stt.sttPrompt ?? "") && void patch({ id: stt.id, sttPrompt: e.target.value })}
+          className="field resize-y !text-[12px] leading-relaxed"
+        />
+      </Field>
+      <p className="mt-1 text-[11px] text-ink-3">
+        Words Whisper should expect (names, reflex phrases), written as natural speech. A transcript that just repeats 4+ of these words in a row is dropped as a hallucination.
+      </p>
       {note && <p className={`mt-2 text-xs ${/not found|fail|error|unreach/i.test(note) ? "text-alert" : "text-teal"}`}>{note}</p>}
     </Card>
   );
@@ -414,3 +431,60 @@ const KEY_SOURCE: Record<NonNullable<VoicesView["keySource"]>, string> = {
   keychain: "OS keychain",
   missing: "missing — run npx -y @elevenlabs/cli@latest onboard init",
 };
+
+/**
+ * Phase 2 voice reflexes ("cut it", "take it ease", "whoa"): where Tony's voice comes out and
+ * how fast a listen over him ends. Speakers mode ignores one-syllable holds while he's audible
+ * (his own "oh" can reach the mic) and uses a stricter barge-in trigger.
+ */
+export function ConversationReflexesCard() {
+  const conversation = useSettings((s) => s.conversation);
+  const set = useSettings((s) => s.set);
+  const up = (p: Partial<typeof conversation>) => set({ conversation: { ...conversation, ...p } });
+  const [detected, setDetected] = useState(detectedRoute());
+  const [label, setLabel] = useState(detectedRouteLabel());
+  useEffect(() => {
+    const sync = () => {
+      setDetected(detectedRoute());
+      setLabel(detectedRouteLabel());
+    };
+    const off = onRouteChange(sync);
+    void detectRoute().then(sync);
+    return () => void off();
+  }, []);
+  const effective = effectiveRoute(conversation.audioRoute, detected);
+
+  return (
+    <Card
+      title="Voice reflexes"
+      hint="Say “cut it” to stop everything, “take it ease” / “whoa” / “aspetta” to pause and add a thought, then “keep going” or “go ahead”."
+    >
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Field label="Audio route">
+          <Select value={conversation.audioRoute} onChange={(e) => up({ audioRoute: e.target.value as typeof conversation.audioRoute })}>
+            <option value="auto">Auto (from the output device)</option>
+            <option value="headset">Headset</option>
+            <option value="speakers">Open speakers</option>
+          </Select>
+        </Field>
+        <Field label="Pause that ends a line said over Tony">
+          <Select value={String(conversation.bargeEndSilenceMs)} onChange={(e) => up({ bargeEndSilenceMs: Number(e.target.value) })}>
+            {[350, 500, 700, 1000].map((ms) => (
+              <option key={ms} value={ms}>
+                {ms} ms{ms === 500 ? " (default)" : ""}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <p className="mt-2 flex items-center gap-2 text-xs text-ink-2" aria-live="polite">
+        <span className={`size-2 shrink-0 rounded-full ${effective === "headset" ? "bg-teal" : "bg-amber"}`} />
+        In effect: <span className="font-semibold text-ink">{effective === "headset" ? "Headset" : "Speakers"}</span>
+        {conversation.audioRoute === "auto" && <span className="truncate text-ink-3">· {label ? `“${label}”` : "device name not readable yet (speakers is the safe default)"}</span>}
+      </p>
+      <p className="mt-1 text-[11px] text-ink-3">
+        Speakers: “oh / eh / whoa” only count while Tony is silent, and talking over him needs a clearer voice. A short pause means quick reflexes; a long command said over Tony may be split, and the follow-up listen catches the rest.
+      </p>
+    </Card>
+  );
+}

@@ -6,7 +6,7 @@ describe("spotifyErrorReply", () => {
   it.each<[unknown, string]>([
     ["Spotify isn't connected — connect it in Settings → Integrations", "Spotify isn't connected — connect it in Settings → Integrations."],
     ["kill switch is on — Spotify is a cloud service", "The kill switch is on, and Spotify is a cloud service."],
-    ["PERMISSION_DENIED:mcp", "Spotify control is blocked: the MCP permission is set to deny in Settings → Integrations."],
+    ["PERMISSION_DENIED:mcp", "Spotify control is blocked: the MCP permission is set to Deny in Settings → Permissions."],
     ["Open Spotify on this PC or your phone first", "Open Spotify on this PC or your phone first."],
     [new Error("spotify playback control needs Premium"), "Spotify playback control needs Premium."],
     ["", "Spotify didn't answer."],

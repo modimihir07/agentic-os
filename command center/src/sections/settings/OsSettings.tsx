@@ -405,8 +405,8 @@ export function OverseerCard() {
         <Toggle on={o.autoEscalate} onChange={(v) => save({ overseer: { autoEscalate: v } })} label="Auto-escalate when the local chain fails" />
         <Toggle on={o.manualMode} onChange={(v) => save({ overseer: { manualMode: v } })} label="Manual Overseer Mode" hint="Every confirmation card also gets an Overseer review while you decide." />
       </div>
-      <SecretRow name="anthropic" label="Anthropic API key" />
-      <SecretRow name="gemini" label="Gemini API key" />
+      <SecretRow name="anthropic" label="Anthropic API key" hint="ANTHROPIC_API_KEY (environment or repo-root .env) takes priority over the keychain." />
+      <SecretRow name="gemini" label="Gemini API key" hint="GEMINI_API_KEY (environment or repo-root .env) takes priority over the keychain." />
       <CfgError error={error} />
     </Card>
   );
@@ -415,7 +415,7 @@ export function OverseerCard() {
 export function MarketDataCard() {
   return (
     <Card title="Market data" hint="Candles load straight from Yahoo Finance on the desktop (no key). Add a free Twelve Data key as an automatic fallback when Yahoo rate-limits. Research only — no broker connection.">
-      <SecretRow name="twelvedata" label="Twelve Data API key" />
+      <SecretRow name="twelvedata" label="Twelve Data API key" hint="TWELVEDATA_API_KEY (environment or repo-root .env) takes priority over the keychain." />
     </Card>
   );
 }

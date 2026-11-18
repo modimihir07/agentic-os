@@ -40,7 +40,7 @@ fn probe_url(p: &Provider) -> String {
     }
 }
 
-async fn probe(state: &DispatchState, osc: &os_core::OsConfig, p: Provider) -> ServiceHealth {
+async fn probe(state: &DispatchState, osc: &os_core::OsConfig, p: Provider, timeout: Duration) -> ServiceHealth {
     let started = Instant::now();
     let kind = serde_json::to_value(p.kind).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
     let off = if os_core::is_droplet(&p, osc) && !osc.droplet.enabled {
@@ -57,7 +57,7 @@ async fn probe(state: &DispatchState, osc: &os_core::OsConfig, p: Provider) -> S
     }
     let eleven = p.engine.as_deref() == Some("elevenlabs");
     let url = if eleven { format!("{}/models", p.base_url.trim_end_matches('/')) } else { probe_url(&p) };
-    let mut rb = state.http.get(url).timeout(Duration::from_secs(4));
+    let mut rb = state.http.get(url).timeout(timeout);
     if eleven {
         if let (Some(k), _) = super::elevenlabs::api_key(state, &p) {
             rb = rb.header("xi-api-key", k);
@@ -84,12 +84,9 @@ async fn probe(state: &DispatchState, osc: &os_core::OsConfig, p: Provider) -> S
     }
 }
 
-/// Probe every configured service plus the gateway, concurrently.
-#[tauri::command]
-pub async fn services_health(state: State<'_, DispatchState>, os: State<'_, os_core::OsState>) -> Result<Vec<ServiceHealth>, String> {
-    let cfg = state.snapshot();
-    let osc = os.snapshot();
-    let mut targets: Vec<Provider> = cfg.providers.into_iter().filter(|p| p.kind != Kind::Integration).collect();
+/// Every configured service (integrations excluded) with the gateway (server.py) first.
+fn targets(cfg: &super::dispatch::Config) -> Vec<Provider> {
+    let mut targets: Vec<Provider> = cfg.providers.iter().filter(|p| p.kind != Kind::Integration).cloned().collect();
     // The gateway (server.py) as its own node — it is the sync hub for the phone.
     let mut gw = targets.iter().find(|p| p.kind == Kind::AgenticOs).cloned().unwrap_or_else(|| Provider {
         id: String::new(),
@@ -103,19 +100,81 @@ pub async fn services_health(state: State<'_, DispatchState>, os: State<'_, os_c
         language: None,
         models_dir: None,
         voices_dir: None,
+        stt_prompt: None,
         custom: false,
     });
     gw.id = "gateway".into();
     gw.label = "Gateway (server.py)".into();
     gw.base_url = cfg.gateway.url.clone();
     targets.insert(0, gw);
+    targets
+}
 
-    let futs = targets.into_iter().map(|p| probe(&state, &osc, p));
+/// Probe every configured service plus the gateway, concurrently.
+#[tauri::command]
+pub async fn services_health(state: State<'_, DispatchState>, os: State<'_, os_core::OsState>) -> Result<Vec<ServiceHealth>, String> {
+    let cfg = state.snapshot();
+    let osc = os.snapshot();
+    let futs = targets(&cfg).into_iter().map(|p| probe(&state, &osc, p, Duration::from_secs(4)));
     let mut out = Vec::new();
     for f in futs {
         out.push(f);
     }
-    Ok(futures_join(out).await)
+    let res = futures_join(out).await;
+    *LAST_HEALTH.lock().unwrap() = Some((os_core::now_secs(), res.clone()));
+    Ok(res)
+}
+
+/// The most recent `services_health` result, so snapshots (dev task queue, System Map)
+/// can describe the services without probing again. Memory only.
+static LAST_HEALTH: std::sync::Mutex<Option<(u64, Vec<ServiceHealth>)>> = std::sync::Mutex::new(None);
+
+/// `(unix secs of the probe, entries as JSON)` from the last `services_health` call, if any.
+pub(crate) fn cached_health() -> Option<(u64, Vec<serde_json::Value>)> {
+    let g = LAST_HEALTH.lock().unwrap();
+    let (at, list) = g.as_ref()?;
+    Some((*at, list.iter().filter_map(|h| serde_json::to_value(h).ok()).collect()))
+}
+
+/// LM Studio's out-of-the-box port. Probed as its own node when no provider already
+/// points at it, so a second LM Studio server (or a stale default) shows up honestly.
+const LMSTUDIO_DEFAULT_PORT: u16 = 1234;
+
+fn port_of(url: &str) -> Option<u16> {
+    url::Url::parse(url).ok()?.port_or_known_default()
+}
+
+/// The local (loopback) services only, each probed once (`timeout` each, all
+/// concurrently), with its port: the System Map's `services` block. Remote nodes
+/// (droplet, cloud TTS) are left out — they have their own monitors.
+pub(crate) async fn probe_local(state: &DispatchState, osc: &os_core::OsConfig, timeout: Duration) -> Vec<serde_json::Value> {
+    let cfg = state.snapshot();
+    let mut seen = std::collections::HashSet::new();
+    let mut list: Vec<Provider> = targets(&cfg).into_iter().filter(|p| !os_core::is_remote(p) && seen.insert(probe_url(p))).collect();
+    let lm = list.iter().find(|p| p.id == "lmstudio" || p.id == cfg.policy.primary_local).cloned();
+    if let Some(mut extra) = lm {
+        if !list.iter().any(|p| port_of(&p.base_url) == Some(LMSTUDIO_DEFAULT_PORT)) {
+            if let Ok(mut u) = url::Url::parse(&extra.base_url) {
+                if u.set_port(Some(LMSTUDIO_DEFAULT_PORT)).is_ok() {
+                    extra.id = format!("{}-{LMSTUDIO_DEFAULT_PORT}", extra.id);
+                    extra.label = format!("{} (default port :{LMSTUDIO_DEFAULT_PORT})", extra.label);
+                    extra.base_url = u.to_string();
+                    extra.needs_key = false;
+                    list.push(extra);
+                }
+            }
+        }
+    }
+    let ports: Vec<Option<u16>> = list.iter().map(|p| port_of(&p.base_url)).collect();
+    let res = futures_join(list.into_iter().map(|p| probe(state, osc, p, timeout)).collect()).await;
+    res.into_iter()
+        .zip(ports)
+        .filter_map(|(h, port)| {
+            let mut v = serde_json::to_value(h).ok()?;
+            v["port"] = serde_json::json!(port);
+            Some(v)
+        })
+        .collect()
 }
 
 /// Minimal join_all without pulling in the `futures` crate.
@@ -293,12 +352,21 @@ pub async fn local_fit_once(state: &DispatchState) -> Option<String> {
 
 pub async fn local_fit_loop(app: tauri::AppHandle) {
     use tauri::Manager;
+    use super::introspect::loop_ran;
     loop {
-        if let Some(msg) = whisper_ensure(&app.state::<DispatchState>()).await {
-            eprintln!("[whisper] {msg}");
+        match whisper_ensure(&app.state::<DispatchState>()).await {
+            Some(msg) => {
+                eprintln!("[whisper] {msg}");
+                loop_ran("whisper", msg.starts_with("started"), &msg);
+            }
+            None => loop_ran("whisper", true, "nothing to do (already up, or STT isn't a local whisper.cpp)"),
         }
-        if let Some(msg) = local_fit_once(&app.state::<DispatchState>()).await {
-            eprintln!("[fit] {msg}");
+        match local_fit_once(&app.state::<DispatchState>()).await {
+            Some(msg) => {
+                eprintln!("[fit] {msg}");
+                loop_ran("local-fit", true, &msg);
+            }
+            None => loop_ran("local-fit", true, "nothing to do (fits, or the model isn't loaded / LM Studio is down)"),
         }
         tokio_sleep(Duration::from_secs(300)).await;
     }

@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import type { LucideIcon } from "lucide-react";
-import { CandlestickChart, FlaskConical, Gauge, Image, Lightbulb, MessagesSquare, Phone, Receipt, Search, Settings2 } from "lucide-react";
+import { CandlestickChart, Cpu, FlaskConical, Gauge, Image, Lightbulb, MessagesSquare, Phone, Receipt, Search, Settings2 } from "lucide-react";
 
-export type Section = "command" | "agents" | "playplace" | "comms" | "brainstorm" | "finance" | "trading" | "vault" | "wallpapers" | "settings";
+export type Section = "command" | "agents" | "playplace" | "comms" | "brainstorm" | "finance" | "trading" | "vault" | "wallpapers" | "memorymap" | "settings";
 
 export const SECTIONS: { id: Section; label: string; icon: LucideIcon; mobile: boolean }[] = [
   { id: "command", label: "Command", icon: Gauge, mobile: true },
@@ -14,6 +14,7 @@ export const SECTIONS: { id: Section; label: string; icon: LucideIcon; mobile: b
   { id: "trading", label: "Trading", icon: CandlestickChart, mobile: false },
   { id: "vault", label: "Vault", icon: Search, mobile: false },
   { id: "wallpapers", label: "Wallpapers", icon: Image, mobile: false },
+  { id: "memorymap", label: "System Map", icon: Cpu, mobile: false },
   { id: "settings", label: "Settings", icon: Settings2, mobile: false },
 ];
 

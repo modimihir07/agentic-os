@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { cmd, onNativeEvent, type SpotifyAuthEvent } from "@/lib/platform";
+import { cmd, onNativeEvent, type SpotifyAuthEvent, type SpotifyReauthEvent } from "@/lib/platform";
 import { spotifyErrorReply } from "@/features/os/media-reply";
+import { useToasts } from "@/features/reminders/notify";
 import { setMcpEnabled } from "./mcp-enable";
 import { notifyIntegrationsChanged } from "./changed";
 
@@ -79,15 +80,42 @@ export function useSpotifyConnect(onDone?: (r: ConnectOutcome) => void) {
   return { state, connect, reset };
 }
 
+/** Events after which a Spotify status must be re-read: a sign-in finished (`spotify-auth`), a
+ * background refresh found the sign-in dead (`spotify-session` — deliberately not `spotify-auth`,
+ * which would resolve an interactive Connect in flight), Rust opened a consent page on its own
+ * (`spotify-reauth`), or the tool set changed (`tools-changed`: connect / disconnect / revoke /
+ * MCP registry saved). */
+export const SPOTIFY_REFRESH_EVENTS = ["spotify-auth", "spotify-session", "spotify-reauth", "tools-changed"] as const;
+
+/** The toast for a `spotify-reauth` event. Never includes the URL (Settings → Integrations shows the link). */
+export function reauthToast(e: Pick<SpotifyReauthEvent, "reason" | "silent">): { title: string; body: string; tone: "info" } {
+  if (e.silent) return { title: "Renewing Spotify sign-in", body: "A Spotify tab opened to renew access — it should close on its own.", tone: "info" };
+  const body = e.reason === "expired" ? "Your Spotify sign-in expired — approve the tab I opened to renew it." : "Spotify needs new permissions — approve the tab I opened.";
+  return { title: "Spotify needs your OK", body, tone: "info" };
+}
+
+let reauthNotice = false;
+/**
+ * Called once from App.tsx: whenever Rust opens a Spotify consent page by itself (scopes changed,
+ * a 403 for a missing scope, the 6-month sign-in expired or is about to), explain the browser tab
+ * with a toast. Idempotent: a second call is a no-op.
+ */
+export function installSpotifyReauthNotice(): void {
+  if (reauthNotice) return;
+  reauthNotice = true;
+  void onNativeEvent<SpotifyReauthEvent>("spotify-reauth", (e) => void useToasts.getState().push(reauthToast(e)));
+}
+
 /** Re-run `refresh` whenever any Spotify sign-in finishes (including one started by another
- * view or before this one mounted) and whenever the window comes back into focus — the
- * stored token can be revoked or replaced while a view sits open, and a status read once on
- * mount would keep showing "Connected" (with no Connect button) after that. */
+ * view or before this one mounted), the session dies in the background, the tool set changes,
+ * and whenever the window comes back into focus — the stored token can be revoked or replaced
+ * while a view sits open, and a status read once on mount would keep showing "Connected"
+ * (with no Connect button) after that. */
 export function useSpotifyAuthRefresh(refresh: () => void) {
   useEffect(() => {
-    let off: (() => void) | undefined;
+    const offs: (() => void)[] = [];
     let dead = false;
-    void onNativeEvent<SpotifyAuthEvent>("spotify-auth", () => refresh()).then((u) => (dead ? u() : (off = u)));
+    for (const ev of SPOTIFY_REFRESH_EVENTS) void onNativeEvent(ev, () => refresh()).then((u) => (dead ? u() : offs.push(u)));
     let last = Date.now();
     const onFocus = () => {
       if (document.visibilityState !== "visible" || Date.now() - last < 2000) return; // focus + visibility fire together
@@ -98,7 +126,7 @@ export function useSpotifyAuthRefresh(refresh: () => void) {
     document.addEventListener("visibilitychange", onFocus);
     return () => {
       dead = true;
-      off?.();
+      offs.forEach((u) => u());
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
     };

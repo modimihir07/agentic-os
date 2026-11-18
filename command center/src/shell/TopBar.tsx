@@ -19,7 +19,7 @@ export function TopBar() {
   const voiceState = useVoice((s) => s.state);
   // Derived on every render, never written back: the subtitle setting stays what the user typed.
   // "error" is a resting state (capture already stopped), so it reads STANDBY; the dot still shows red.
-  const status = headerSubtitle(identity.subtitle, wakeMode || (voiceState !== "idle" && voiceState !== "error"));
+  const status = headerSubtitle(identity.subtitle, wakeMode || (voiceState !== "idle" && voiceState !== "error"), voiceState === "holding");
 
   // The HUD's typed input autofocuses when the panel expands.
   const openCommand = () => useVoice.getState().setExpanded(true);

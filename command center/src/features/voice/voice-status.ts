@@ -18,6 +18,7 @@ export function toggleAction(state: VoiceState, heardSpeech: boolean): ToggleAct
     case "thinking":
       return "hard-stop";
     case "speaking":
+    case "holding": // the HUD's Resume button resumes; the mic button / Esc end everything
       return "stop-voice";
     default:
       return "start";
@@ -31,7 +32,7 @@ const TRAILING_ACTIVE = /\bACTIVE\s*$/i;
  * "TONY ACTIVE") swaps that word for ACTIVE/STANDBY; any other custom subtitle is kept
  * verbatim and the caller shows a separate state chip instead.
  */
-export function headerSubtitle(subtitle: string, live: boolean): { text: string; chip: boolean } {
+export function headerSubtitle(subtitle: string, live: boolean, holding = false): { text: string; chip: boolean } {
   if (!TRAILING_ACTIVE.test(subtitle)) return { text: subtitle, chip: true };
-  return { text: subtitle.replace(TRAILING_ACTIVE, live ? "ACTIVE" : "STANDBY"), chip: false };
+  return { text: subtitle.replace(TRAILING_ACTIVE, holding ? "HOLDING" : live ? "ACTIVE" : "STANDBY"), chip: false };
 }
