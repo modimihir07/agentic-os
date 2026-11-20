@@ -1,0 +1,49 @@
+{
+  "name": "agentic-os-command-center",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "predev": "node scripts/kill-port.mjs 1420 1421",
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "tauri": "tauri",
+    "desktop:dev": "tauri dev",
+    "desktop:build": "tauri build",
+    "icons": "tauri icon public/icon.svg",
+    "test": "vitest run",
+    "test:scripts": "node --test scripts/"
+  },
+  "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.2.5",
+    "@fontsource-variable/plus-jakarta-sans": "^5.2.5",
+    "@react-three/drei": "10.7.9",
+    "@react-three/fiber": "9.8.2",
+    "@ricky0123/vad-web": "^0.0.31",
+    "@tauri-apps/api": "^2.5.0",
+    "@tauri-apps/plugin-notification": "^2.8.1",
+    "idb-keyval": "^6.2.1",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^0.511.0",
+    "onnxruntime-web": "^1.31.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "0.186.1",
+    "zustand": "^5.0.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.7",
+    "@tauri-apps/cli": "^2.5.0",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "@types/three": "0.186.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "tailwindcss": "^4.1.7",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-pwa": "^1.0.0",
+    "vitest": "^3.2.4"
+  }
+}

@@ -7,7 +7,7 @@
     },
     {
       "pattern": "memory|remember|schedule|cron|telegram|discord|channel|notif",
-      "target": "hermes",
+      "target": "opencode",
       "priority": 10
     },
     {
@@ -24,7 +24,6 @@
   ],
   "agent_capabilities": {
     "opencode": ["code_generation", "file_operations", "git_management", "terminal_execution", "infrastructure_as_code", "testing", "debugging"],
-    "hermes": ["persistent_memory", "scheduled_tasks", "messaging_channels", "skill_hub", "voice", "browser_automation", "subagent_delegation"],
     "agy": ["web_search", "multi_modal_analysis", "document_understanding", "data_analysis", "research_synthesis", "reasoning"]
   },
   "handoff_protocol": {

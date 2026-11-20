@@ -1,0 +1,34 @@
+{
+  "devices": [
+    {
+      "id": "pc0000000000000000000000000000000000000a",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "DESKTOP-TEST01",
+      "type": "Computer",
+      "volume_percent": 64,
+      "supports_volume": true
+    },
+    {
+      "id": null,
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Ghost Device",
+      "type": "Unknown",
+      "volume_percent": null,
+      "supports_volume": false
+    },
+    {
+      "id": "ph0000000000000000000000000000000000000b",
+      "is_active": true,
+      "is_private_session": false,
+      "is_restricted": false,
+      "name": "Pixel 8",
+      "type": "Smartphone",
+      "volume_percent": 100,
+      "supports_volume": false
+    }
+  ]
+}

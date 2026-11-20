@@ -1,0 +1,19 @@
+{
+  "limit": 50,
+  "offset": 0,
+  "total": 5,
+  "next": null,
+  "items": [
+    {"added_at": "2026-10-01T10:00:00Z", "item": {
+      "type": "track", "name": "Tell Me", "uri": "spotify:track:1TellMeGrooveTheoryAbc", "artists": [{"name": "Groove Theory"}],
+      "album": {"name": "Groove Theory", "uri": "spotify:album:2AbCdEfGhIjKlMnOpQrStU", "release_date": "1995"}}},
+    {"added_at": "2026-10-02T10:00:00Z", "track": {
+      "type": "track", "name": "Smoke Signals", "uri": "spotify:track:0SmokeSignalsAbcdefghi", "artists": [{"name": "Phoebe Bridgers"}],
+      "album": {"name": "Stranger in the Alps", "uri": "spotify:album:0StrangerInTheAlpsAbcd"}}},
+    {"added_at": "2026-10-03T10:00:00Z", "item": null},
+    null,
+    {"added_at": "2026-10-04T10:00:00Z", "item": {
+      "type": "episode", "name": "A Podcast Episode", "uri": "spotify:episode:0APodcastEpisodeAbcdef",
+      "show": {"name": "Some Show"}, "release_date": "2026-09-30"}}
+  ]
+}

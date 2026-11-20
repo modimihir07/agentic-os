@@ -28,5 +28,5 @@ Synthesizes and compresses accumulated memory files. Removes redundant informati
 Consolidated memory with archived sections, updated summaries, and pruning report
 
 ## Agent Assignment
-- Primary: hermes
-- Fallback: opencode
+- Primary: opencode
+- Fallback: claude

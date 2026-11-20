@@ -1,0 +1,227 @@
+[
+  {
+    "desc": "explicit delegation verb + two-word name + connective, remainder becomes task",
+    "text": "hey tony, tell my booking agent to check my last five whatsapp messages",
+    "role": "booking",
+    "kind": "Named",
+    "taskContains": "check",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "explicit delegation verb (have) + single-word name",
+    "text": "can you have the coder fix the bug in the voice controller",
+    "role": "coder",
+    "kind": "Named",
+    "taskContains": "fix"
+  },
+  {
+    "desc": "explicit delegation verb (send) + single-word name, no agent/desk suffix",
+    "text": "send it to the ops team for a status check",
+    "role": "ops",
+    "kind": "Named"
+  },
+  {
+    "desc": "vocative address form: NAME (please)? VERB at the start of the utterance",
+    "text": "booking desk, please check my calendar for tomorrow",
+    "role": "booking",
+    "kind": "Named",
+    "taskContains": "check"
+  },
+  {
+    "desc": "vocative address form without comma or please",
+    "text": "coder fix the broken build",
+    "role": "coder",
+    "kind": "Named"
+  },
+  {
+    "desc": "name mentioned mid-sentence with no delegation verb pattern",
+    "text": "my booking agent hasn't replied yet",
+    "role": "booking",
+    "kind": "Named"
+  },
+  {
+    "desc": "a bare mention of an ambiguous trigger (ops names include finance)",
+    "text": "any update from finance on the invoice",
+    "role": "ops",
+    "kind": "Named"
+  },
+  {
+    "desc": "delegation verb present but no name follows — falls through to domain/default",
+    "text": "tell me a joke",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "domain trigger only: coder topic words",
+    "text": "can you check the tauri and rust build errors",
+    "role": "coder",
+    "kind": "Domain"
+  },
+  {
+    "desc": "domain trigger via whisper mangle 'what sapp' -> whatsapp",
+    "text": "what sapp messages came in today",
+    "role": "booking",
+    "kind": "Domain",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "domain trigger via whisper mangle 'whats up' -> whatsapp",
+    "text": "check whats up for new messages",
+    "role": "booking",
+    "kind": "Domain",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "number-word normalization feeding a multi-word domain phrase",
+    "text": "give me the last five messages",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "domain score tie broken by role order (booking before ops)",
+    "text": "schedule a reminder about my messages",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "designer domain trigger",
+    "text": "redo the color palette and layout for the landing page",
+    "role": "designer",
+    "kind": "Domain"
+  },
+  {
+    "desc": "librarian domain trigger (no overlap with its own name triggers)",
+    "text": "find document about that contract",
+    "role": "librarian",
+    "kind": "Domain"
+  },
+  {
+    "desc": "prompter domain trigger",
+    "text": "help me build a prompt for claude",
+    "role": "prompter",
+    "kind": "Domain"
+  },
+  {
+    "desc": "ops domain trigger",
+    "text": "pull up the invoice and the quote",
+    "role": "ops",
+    "kind": "Domain"
+  },
+  {
+    "desc": "nothing matches any trigger",
+    "text": "what's the weather like today",
+    "role": null,
+    "kind": "Default",
+    "direct": "weather"
+  },
+  {
+    "desc": "plain greeting, no triggers",
+    "text": "good morning",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "'book' is a substring of 'booking' but must not match as a whole-word trigger on its own",
+    "text": "please book a table for two tonight",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "'ui' domain trigger must not fire on 'quick' (substring collision guard)",
+    "text": "give me a quick summary of today",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "direct: a WhatsApp 'updates' question is Tony's live tool, whatever the domain match says",
+    "text": "any whatsapp updates",
+    "role": "booking",
+    "kind": "Domain",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "direct: 'what's new on whats app' (Whisper split)",
+    "text": "what's new on whats app",
+    "role": "booking",
+    "kind": "Domain",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "direct: 'anything on WhatsApp today'",
+    "text": "Anything on WhatsApp today?",
+    "role": "booking",
+    "kind": "Domain",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "direct: inbox check",
+    "text": "check my inbox",
+    "role": null,
+    "kind": "Default",
+    "direct": "gmail"
+  },
+  {
+    "desc": "direct: new emails from someone",
+    "text": "any new emails from my agent",
+    "role": null,
+    "kind": "Default",
+    "direct": "gmail"
+  },
+  {
+    "desc": "direct: rain question",
+    "text": "will it rain tomorrow",
+    "role": null,
+    "kind": "Default",
+    "direct": "weather"
+  },
+  {
+    "desc": "direct: now playing",
+    "text": "what's playing",
+    "role": null,
+    "kind": "Default",
+    "direct": "spotify"
+  },
+  {
+    "desc": "direct: an explicit delegation still names the agent (the caller keeps Named)",
+    "text": "ask the booking desk for any whatsapp updates",
+    "role": "booking",
+    "kind": "Named",
+    "direct": "whatsapp"
+  },
+  {
+    "desc": "not direct: a write aimed at WhatsApp",
+    "text": "reply to Sam on WhatsApp that I'm running late",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "not direct: 'message him' is a write",
+    "text": "message him on whatsapp that the shoot moved",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "not direct: drafting an email",
+    "text": "draft an email to my agent",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "not direct: 'message' in a coding request",
+    "text": "write a commit message",
+    "role": null,
+    "kind": "Default"
+  },
+  {
+    "desc": "not direct: 'what's up' alone is a greeting (Whisper still maps it to whatsapp for the domain)",
+    "text": "what's up",
+    "role": "booking",
+    "kind": "Domain"
+  },
+  {
+    "desc": "not direct: 'chat with' an agent",
+    "text": "chat with the designer about the layout",
+    "role": "designer",
+    "kind": "Named"
+  }
+]

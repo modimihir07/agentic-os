@@ -1,0 +1,16 @@
+{
+  "tracks": {"items": [
+    {"type": "track", "name": "Snowblood", "uri": "spotify:track:0SnowbloodErraAbcdefgh", "duration_ms": 245000,
+     "artists": [{"name": "Erra"}],
+     "album": {"name": "Erra", "uri": "spotify:album:0ErraSelfTitledAbcdefg", "release_date": "2021-03-19"}},
+    null
+  ]},
+  "artists": {"items": [
+    {"type": "artist", "name": "Erra", "uri": "spotify:artist:0ErraArtistIdAbcdefghi", "id": "0ErraArtistIdAbcdefghi"},
+    null
+  ]},
+  "albums": {"items": [null]},
+  "playlists": {"items": [
+    {"type": "playlist", "name": "This Is Erra", "uri": "spotify:playlist:0ThisIsErraPlaylistAbc", "owner": {"id": "spotify"}}
+  ]}
+}

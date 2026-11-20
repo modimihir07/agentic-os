@@ -1,0 +1,20 @@
+{
+  "tracks": {"items": [
+    null,
+    {"type": "track", "name": "Wet Paint", "uri": "spotify:track:0WetPaintBilmuriAbcdefg", "duration_ms": 201000,
+     "artists": [{"name": "Bilmuri", "uri": "spotify:artist:3BilmuriArtistIdAbcdeF"}],
+     "album": {"name": "Wet Paint", "uri": "spotify:album:0WetPaintAlbumAbcdefghi", "release_date": "2023-03-17"}},
+    {"type": "track", "name": "Talkin Bout", "uri": "spotify:track:0TalkinBoutBilmuriAbcd", "duration_ms": 188000,
+     "artists": [{"name": "Bilmuri"}],
+     "album": {"name": "Gnarloose", "uri": "spotify:album:0GnarlooseAlbumAbcdefgh", "release_date": "2021"}}
+  ]},
+  "artists": {"items": [
+    null,
+    {"type": "artist", "name": "Bilmuri", "uri": "spotify:artist:3BilmuriArtistIdAbcdeF", "id": "3BilmuriArtistIdAbcdeF"},
+    {"type": "artist", "name": "Bill Murray", "uri": "spotify:artist:0BillMurrayActorAbcdef", "id": "0BillMurrayActorAbcdef"}
+  ]},
+  "albums": {"items": [
+    {"type": "album", "name": "Gnarloose", "uri": "spotify:album:0GnarlooseAlbumAbcdefgh", "artists": [{"name": "Bilmuri"}]}
+  ]},
+  "playlists": {"items": [null]}
+}

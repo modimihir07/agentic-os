@@ -22,7 +22,7 @@ async function renderSettings() {
       <div class="card">
         <div class="card-header"><span class="card-title">🤖 Agent Preferences</span></div>
         <div class="grid grid-3">
-          ${['opencode', 'hermes', 'agy'].map(a => `
+          ${['opencode', 'agy'].map(a => `
             <div class="card" style="padding:14px">
               <div class="flex items-center gap-2 mb-2">
                 <div class="agent-dot ${prefs[a] && prefs[a].enabled !== false ? 'online' : 'offline'}" style="width:10px;height:10px"></div>
@@ -123,7 +123,6 @@ async function saveAllSettings() {
     const settings = {
       agent_preferences: {
         opencode: { enabled: document.getElementById('agent_opencode').checked, binary: document.getElementById('bin_opencode').value },
-        hermes: { enabled: document.getElementById('agent_hermes').checked, binary: document.getElementById('bin_hermes').value },
         agy: { enabled: document.getElementById('agent_agy').checked, binary: document.getElementById('bin_agy').value },
       },
       dashboard: {
@@ -167,7 +166,7 @@ async function resetSettings() {
 async function confirmReset() {
   const defaults = {
     theme: 'dark',
-    agent_preferences: { opencode: { enabled: true, binary: 'opencode' }, hermes: { enabled: true, binary: 'hermes' }, agy: { enabled: true, binary: 'agy' } },
+    agent_preferences: { opencode: { enabled: true, binary: 'opencode' }, agy: { enabled: true, binary: 'agy' } },
     dashboard: { port: 8080, host: '127.0.0.1', dark_mode: true },
     api_keys: { gemini: '', openrouter: '' },
     free_tier_limits: { gemini_flash: { requests_per_day: 1500, tokens_per_day: 1000000 }, openrouter_free: { requests_per_day: 100, tokens_per_day: 200000 } },

@@ -1,0 +1,23 @@
+{
+  "devices": [
+    {
+      "id": "tv0000000000000000000000000000000000000d",
+      "is_active": true,
+      "is_private_session": false,
+      "is_restricted": true,
+      "name": "Living Room TV",
+      "type": "TV",
+      "supports_volume": false
+    },
+    {
+      "id": "car000000000000000000000000000000000000e",
+      "is_active": false,
+      "is_private_session": false,
+      "is_restricted": true,
+      "name": "Car Stereo",
+      "type": "Automobile",
+      "volume_percent": 250,
+      "supports_volume": false
+    }
+  ]
+}

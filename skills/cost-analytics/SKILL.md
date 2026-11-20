@@ -9,7 +9,7 @@ tags: [cost, analytics, tracking, budget]
 # Cost Analytics
 
 ## Description
-Tracks token consumption and API costs across opencode, Hermes, and Gemini CLI. Computes daily/weekly/monthly projections and alerts when approaching free-tier limits.
+Tracks token consumption and API costs across opencode, agy, claude, Gemini CLI and llm. Computes daily/weekly/monthly projections and alerts when approaching free-tier limits.
 
 ## When to Use
 - After each agent API call (auto-triggered)

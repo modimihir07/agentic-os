@@ -1,0 +1,16 @@
+{
+  "name": "Tony Lockdown Command Center",
+  "short_name": "Tony HUD",
+  "description": "Distraction-free command center: Tony, calls & texts, markets, Play Place.",
+  "id": "./?view=hud",
+  "start_url": "./?view=hud&mode=lockdown",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#000000",
+  "background_color": "#000000",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

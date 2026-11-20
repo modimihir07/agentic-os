@@ -1,0 +1,24 @@
+{
+  "currently_playing": {
+    "type": "track", "name": "Tell Me", "uri": "spotify:track:1TellMeGrooveTheoryAbc", "duration_ms": 287000,
+    "artists": [{"name": "Groove Theory"}],
+    "album": {"name": "Groove Theory", "uri": "spotify:album:2AbCdEfGhIjKlMnOpQrStU", "release_date": "1995-10-24"}
+  },
+  "queue": [
+    {"type": "track", "name": "Wet Paint", "uri": "spotify:track:0WetPaintBilmuriAbcdefg", "artists": [{"name": "Bilmuri"}],
+     "album": {"name": "Wet Paint", "uri": "spotify:album:0WetPaintAlbumAbcdefghi"}},
+    {"type": "track", "name": "Snowblood", "uri": "spotify:track:0SnowbloodErraAbcdefgh", "artists": [{"name": "Erra"}],
+     "album": {"name": "Erra", "uri": "spotify:album:0ErraSelfTitledAbcdefg"}},
+    null,
+    {"type": "track", "name": "Tell Me", "uri": "spotify:track:1TellMeGrooveTheoryAbc", "artists": [{"name": "Groove Theory"}],
+     "album": {"name": "Groove Theory", "uri": "spotify:album:2AbCdEfGhIjKlMnOpQrStU"}},
+    {"type": "track", "name": "Wet Paint", "uri": "spotify:track:0WetPaintBilmuriAbcdefg", "artists": [{"name": "Bilmuri"}],
+     "album": {"name": "Wet Paint", "uri": "spotify:album:0WetPaintAlbumAbcdefghi"}},
+    {"type": "track", "name": "Snowblood", "uri": "spotify:track:0SnowbloodErraAbcdefgh", "artists": [{"name": "Erra"}],
+     "album": {"name": "Erra", "uri": "spotify:album:0ErraSelfTitledAbcdefg"}},
+    {"type": "track", "name": "Tell Me", "uri": "spotify:track:1TellMeGrooveTheoryAbc", "artists": [{"name": "Groove Theory"}],
+     "album": {"name": "Groove Theory", "uri": "spotify:album:2AbCdEfGhIjKlMnOpQrStU"}},
+    {"type": "track", "name": "Wet Paint", "uri": "spotify:track:0WetPaintBilmuriAbcdefg", "artists": [{"name": "Bilmuri"}],
+     "album": {"name": "Wet Paint", "uri": "spotify:album:0WetPaintAlbumAbcdefghi"}}
+  ]
+}

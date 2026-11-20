@@ -1,0 +1,19 @@
+{
+  "href": "https://api.spotify.com/v1/me/playlists?offset=0&limit=50",
+  "limit": 50,
+  "offset": 0,
+  "total": 6,
+  "next": null,
+  "items": [
+    {"id": "37i9dQZF1DXcBWIGoYBM5M", "uri": "spotify:playlist:37i9dQZF1DXcBWIGoYBM5M", "name": "Late Night",
+     "owner": {"id": "me_user", "display_name": "Me"}, "collaborative": false, "public": false,
+     "items": {"total": 12}, "snapshot_id": "snap1"},
+    null,
+    {"id": "1LateNightDriveAbcdefg", "uri": "spotify:playlist:1LateNightDriveAbcdefg", "name": "Late Night Drive",
+     "owner": {"id": "friend_user"}, "collaborative": true, "tracks": {"total": 30}, "snapshot_id": "snap2"},
+    {"name": "No Id Here", "owner": {"id": "me_user"}},
+    {"id": "5ABHKGoOzxkaa28ttQV9sE", "name": "Road Trip", "owner": {"id": "me_user"}, "collaborative": false},
+    {"id": "2LateNitePlaylistAbcde", "uri": "spotify:playlist:2LateNitePlaylistAbcde", "name": "Late Nite",
+     "owner": {"id": "me_user"}, "collaborative": false, "items": {"total": 3}}
+  ]
+}

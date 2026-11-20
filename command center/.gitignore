@@ -1,0 +1,11 @@
+node_modules/
+dist/
+dev-dist/
+src-tauri/target/
+src-tauri/gen/
+*.local
+*.tsbuildinfo
+
+# Local voice tooling (not part of the app)
+whisper.cpp/
+*.mp3
