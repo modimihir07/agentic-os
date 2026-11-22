@@ -1,19 +1,21 @@
 # Persistent Memory
 
 ## System
-- 3 agents configured: opencode, Hermes Agent, Gemini CLI
+- 3 agents configured: `opencode` (code/DevOps), `Hermes Agent` (memory/scheduling/channels), `agy CLI` (research/analysis)
+- Current version: **v4.0** (74 tests passing, FTS5 memory graph, diff viewer, chat uploads)
+- Next milestone: **v5.0** (Voice Command Center, Agent Studio, Autonomous Handoff, Gateway Auth)
 - Dashboard runs on FastAPI (Python) — localhost only
-- All skills follow _template/ convention
+- All skills follow `_template/` convention
 
 ## User
-- Name: User
-- Budget: Strictly free tiers
+- Name: modimihir07 (Mihir Modi)
+- Budget: Strictly free tiers (GCP Free, GitHub Student Pack, OpenRouter free models, Colab, Kaggle)
 
 ## Active Work
-- Building Agentic OS from scratch (May 17, 2026)
+- Agentic OS: v4.0 live, planning v5.0
 - CloudMart GCP DevOps project ongoing
 
 ## Technology Preferences
-- Preferred model: deepseek-v4-flash-free
-- Free tiers: GCP Free, GitHub Student Dev Pack, Colab, Kaggle
-- Knowledge management via markdown vaults
+- Preferred models: deepseek-v4-flash-free, Owl Alpha (OpenRouter), Antigravity
+- Free tiers first: no credit card lock-in
+- Knowledge management via markdown vaults (`brain/`)
